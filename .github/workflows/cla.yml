@@ -48,5 +48,7 @@ jobs:
           # PR opened by sync-on-sdk-release.yml (authored as
           # github-actions[bot] via the default GITHUB_TOKEN -- see that
           # workflow's header comment for why it doesn't need a separate App
-          # token), never need to sign a CLA.
-          allowlist: dependabot[bot],github-actions[bot]
+          # token), never need to sign a CLA. angelatgithub is the org/repo
+          # owner authoring commits on Algenta's own behalf, not an external
+          # contributor -- owner-authorized 2026-08-23.
+          allowlist: dependabot[bot],github-actions[bot],angelatgithub
