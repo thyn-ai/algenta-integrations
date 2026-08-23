@@ -1,25 +1,39 @@
 [project]
 name = "litellm-algenta"
-version = "0.0.1"
-description = "LiteLLM tool integration for Algenta (scaffolded — implementation pending)"
+version = "0.1.0"
+description = "LiteLLM MCP Gateway config generation for a self-hosted Algenta Engine: profile-aware allowed_tools/allowed_params templates, a config linter, and a real-proxy conformance test suite"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
 license-files = ["../../LICENSE"]
-keywords = ["algenta", "litellm", "agent", "tools", "decision"]
+keywords = ["algenta", "litellm", "mcp", "gateway", "agent", "tools", "decision"]
 classifiers = [
-    "Development Status :: 2 - Pre-Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Typing :: Typed",
 ]
-# The ONLY Algenta dependency any package in this repo may declare. See
-# scripts/check-no-engine-dependency.py, which enforces this on every PR.
+# This package deliberately has NO Algenta-owned dependency at all -- not even algenta-sdk. D4 is
+# architecturally different from the pydantic-ai/LangChain/Vercel-AI-SDK siblings: LiteLLM's MCP
+# Gateway is a proxy/gateway *server process* configured by YAML, not a library this package's
+# code imports and calls in-process, so there is no wrapper object that would need algenta-sdk's
+# HTTP/gRPC client. `algenta-sdk`'s own `DEFAULT_BASE_URL`/`MCP_ENDPOINT` constants both point at
+# Algenta's hosted cloud anyway (checked directly against the installed package), which is exactly
+# the wrong default for this repository's self-hosted-only positioning -- see the
+# `typescript/algenta-tools` sibling's README for the same reasoning, which reached the same
+# conclusion for the same reason. See scripts/check-no-engine-dependency.py, which enforces that
+# the *only* Algenta dependency any package here may declare is `algenta-sdk` -- declaring none at
+# all is trivially compliant.
+#
+# `pyyaml` is this package's one real, non-Algenta runtime dependency: `litellm_algenta.config`
+# builds and renders YAML, and works standalone (e.g. to generate a config fragment you hand to a
+# `litellm` process running somewhere else entirely) without needing `litellm` itself installed.
 dependencies = [
-    "algenta-sdk>=1.0.11",
+    "pyyaml>=6.0",
 ]
 
 [project.urls]
@@ -28,8 +42,33 @@ Documentation = "https://docs.algenta.ai"
 Repository = "https://github.com/thyn-ai/algenta-integrations"
 
 [project.optional-dependencies]
-dev = ["pytest", "pytest-asyncio"]
+# `litellm[proxy]` is a real, non-optional-in-spirit dependency of the *test suite*: the
+# conformance tests start a real `litellm --config ...` proxy subprocess and talk to it over real
+# HTTP -- never a mocked gateway (see tests/proxy_fixture.py). It is a dev extra rather than a
+# main dependency because a caller who only wants `build_mcp_server_entry`/`render_yaml` to
+# generate a config fragment for a `litellm` process running somewhere else (a different host, a
+# managed LiteLLM deployment) has no reason to pull in the entire proxy server package locally.
+# `fastmcp` is the test suite's stub Algenta MCP *server* (server-side support, unlike a plain MCP
+# client dependency) -- a real server on a real socket, not a mock. `httpx` drives the gateway's
+# REST convenience API (`/mcp-rest/tools/list`, `/mcp-rest/tools/call`) directly in tests, the same
+# surface a real backend integration would call.
+dev = [
+    "pytest",
+    "pytest-asyncio>=0.24",
+    "litellm[proxy]>=1.98.0",
+    "fastmcp>=3.4",
+    "httpx>=0.27",
+]
 
 [build-system]
 requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["litellm_algenta*"]
+
+[tool.setuptools.package-data]
+litellm_algenta = ["py.typed"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
