@@ -1,17 +1,58 @@
 /**
- * algenta-tools — scaffolded, implementation pending.
+ * algenta-tools -- Vercel AI SDK ("ai") tool integration for Algenta.
  *
- * This package will expose framework-agnostic tool-calling helpers that map
- * Algenta's MCP tool surface onto the profile contract in
- * ../../../../contracts/integration-tool-contract.json. No real tool
- * definitions exist yet — see the root README's Status & Roadmap section.
+ * `createAlgentaTools` builds a governed-execution-aware `ToolSet` from a self-hosted Algenta
+ * Engine's MCP tool surface: tool-profile filtering, never-model-facing field scrubbing, typed
+ * governed-execution receipts, and a mapping of the receipt's approval/denial/failure states
+ * onto AI SDK's own `needsApproval` / thrown-error primitives.
  *
- * The only Algenta dependency this package may ever declare is the
- * published `algenta-sdk` npm package (see package.json). It is imported
- * here only to prove the dependency wiring is real, not to implement
- * anything yet.
+ * See the package README for a runnable example, and
+ * `contracts/integration-tool-contract.json` in the `algenta-integrations` repository root for
+ * the tool-profile contract this package conforms to.
  */
-export { AlgentaClient } from "algenta-sdk";
 
-/** Placeholder — always false until a real implementation lands (D2/D5+). */
-export const IS_IMPLEMENTED = false;
+export {
+  DEFAULT_PROFILE,
+  EXECUTE_DECISION,
+  FULL_PROFILE_SENTINEL,
+  GET_CONTRACT,
+  LOG_DECISION,
+  NEVER_MODEL_FACING_FIELDS,
+  PLAN_DECISION,
+  QUERY_DATA,
+  RECOMMEND,
+  SIMULATE,
+  TOOL_PROFILES,
+  isToolProfile,
+  resolveProfileToolNames,
+  type ToolProfile,
+} from "./contract.js";
+
+export {
+  APPROVAL_STATES,
+  NAMED_POLICY_GATE_CODES,
+  denialReason,
+  governedExecutionReceiptSchema,
+  isDenied,
+  isPendingApproval,
+  isSuccess,
+  parseReceipt,
+  type ApprovalState,
+  type GovernedExecutionReceipt,
+} from "./receipts.js";
+
+export {
+  ALGENTA_BASE_URL_ENV_VAR,
+  DEFAULT_ALGENTA_BASE_URL,
+  connectAlgentaMCPClient,
+  resolveAlgentaBaseUrl,
+  type ConnectAlgentaMCPClientOptions,
+} from "./mcp-client.js";
+
+export {
+  createAlgentaTools,
+  scrubNeverModelFacingArgs,
+  stripNeverModelFacingSchema,
+  type AlgentaToolSet,
+  type CreateAlgentaToolsOptions,
+} from "./toolset.js";
