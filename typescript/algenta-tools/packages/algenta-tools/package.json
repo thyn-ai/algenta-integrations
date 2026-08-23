@@ -1,13 +1,16 @@
 {
   "name": "algenta-tools",
-  "version": "0.0.1",
-  "description": "Framework-agnostic tool-calling helpers for Algenta (scaffolded — implementation pending)",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "version": "0.1.0",
+  "description": "Vercel AI SDK tool integration for Algenta: a governed-execution-aware ToolSet wrapping a self-hosted Algenta Engine's MCP tool surface",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "require": "./dist/index.cjs"
     }
   },
   "files": [
@@ -15,16 +18,19 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsup",
     "lint": "tsc --noEmit",
-    "test": "echo \"no tests yet — scaffolded, implementation pending\" && exit 0"
+    "test": "vitest run"
   },
   "keywords": [
     "algenta",
     "tools",
     "agent",
     "tool-calling",
-    "decision"
+    "decision",
+    "ai-sdk",
+    "vercel",
+    "mcp"
   ],
   "homepage": "https://docs.algenta.ai",
   "repository": {
@@ -37,12 +43,23 @@
   },
   "license": "Apache-2.0",
   "dependencies": {
+    "@ai-sdk/mcp": "^2.0.36",
     "algenta-sdk": "^1.0.11"
   },
+  "peerDependencies": {
+    "ai": "^7.0.0",
+    "zod": "^4.0.0"
+  },
   "devDependencies": {
-    "typescript": "^7.0.2"
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@types/node": "^26.0.0",
+    "ai": "^7.0.77",
+    "tsup": "^8.5.1",
+    "typescript": "~5.6.3",
+    "vitest": "^4.1.11",
+    "zod": "^4.4.3"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22"
   }
 }

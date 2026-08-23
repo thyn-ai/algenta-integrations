@@ -24,7 +24,7 @@ tool surface onto the conventions of popular agent frameworks:
 | [`python/pydantic-ai-algenta`](./python/pydantic-ai-algenta) | pydantic-ai | Scaffolded, implementation pending |
 | [`python/langchain-algenta`](./python/langchain-algenta) | LangChain | Scaffolded, implementation pending |
 | [`python/litellm-algenta`](./python/litellm-algenta) | LiteLLM | Scaffolded, implementation pending |
-| [`typescript/algenta-tools`](./typescript/algenta-tools/packages/algenta-tools) | Framework-agnostic TS/JS tool-calling helpers | Scaffolded, implementation pending |
+| [`typescript/algenta-tools`](./typescript/algenta-tools/packages/algenta-tools) | Vercel AI SDK (`ai` v7) tool integration | Implemented |
 
 Every package depends on exactly one Algenta-owned thing: the already
 published, Apache-2.0 **`algenta-sdk`** client
@@ -91,18 +91,19 @@ allowed.
 
 ## Status & roadmap
 
-This repository is a **bootstrap scaffold (D0)**. Nothing beyond this
-scaffold is implemented yet — no package here has any real tool-calling
-logic, and none should be assumed to work end-to-end.
+This repository started as a **bootstrap scaffold (D0)**. Beyond the tracks
+marked ✅ below, nothing else here has real tool-calling logic yet, and none
+of those should be assumed to work end-to-end.
 
 | Track | Scope | Status |
 |---|---|---|
 | D0 | This repository's scaffold: governance files, CI, the no-engine-dependency gate, the tool-profile contract, workspace layout | ✅ Done |
 | D1 | `pydantic-ai-algenta` real implementation | 📋 Planned |
+| D2 | `typescript/algenta-tools` real implementation: a governed-execution-aware Vercel AI SDK (`ai` v7) `ToolSet` — tool-profile filtering, never-model-facing field scrubbing, typed governed-execution receipts, and a `needsApproval`-based approval-flow mapping | ✅ Done |
 | D3 | `langchain-algenta` real implementation | 📋 Planned |
 | D4 | `litellm-algenta` real implementation | 📋 Planned |
 | D9 | `demo/` — the 12-scenario conformance fixture set exercising every tool profile | 📋 Planned |
-| D2, D5–D8 | Additional integration surfaces reserved in the approved plan (TypeScript/JS tool-calling helpers under `typescript/algenta-tools` most likely land in one of these) | 📋 Planned — exact scope tracked in the approved plan, not restated here |
+| D5–D8 | Additional integration surfaces reserved in the approved plan | 📋 Planned — exact scope tracked in the approved plan, not restated here |
 
 Do not treat any package's presence in this repository as evidence it does
 anything yet — check the table above and each package's own README.
