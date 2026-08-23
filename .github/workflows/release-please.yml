@@ -1,0 +1,37 @@
+# release-please in MANIFEST MODE (release-please-config.json +
+# .release-please-manifest.json), covering all 4 real placeholder packages.
+#
+# What this workflow DOES: on every push to main, it opens or updates a
+# single pull request that bumps each changed package's version (per
+# Conventional Commits) and CHANGELOG.md, based on release-please-config.json
+# / .release-please-manifest.json. When a human merges that PR, release-please
+# tags the release(s) and creates GitHub Release(s).
+#
+# What this workflow explicitly does NOT do, on purpose, per the project
+# brief: publish anything to PyPI or npm. There is no PYPI_TOKEN or
+# NPM_TOKEN secret referenced anywhere in this repository, no OIDC Trusted
+# Publisher registration, and no `twine upload` / `npm publish` step in this
+# file or any other workflow here. This repository is private and no
+# framework integration is implemented yet (see the root README's Status &
+# Roadmap) -- wiring real publishing is an explicit, separate, owner-gated
+# decision for later, tracked as a follow-up, not an oversight.
+name: release-please
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ${{ fromJSON(vars.RUNNER_LABELS) }}
+    steps:
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+      # Intentionally nothing after this step. Do not add a publish job here
+      # -- see the header comment.

@@ -1,0 +1,103 @@
+# Tier-1, untrusted CI. Runs on every PR, including ones from forks (once this
+# repo is public — see the visibility note below). No secrets are referenced
+# anywhere in this file, on purpose.
+#
+# NOTE for whoever flips this repo's visibility to public: self-hosted fleet
+# runners (used below via vars.RUNNER_LABELS, since GitHub-hosted runners are
+# billing-blocked for this org) do not run jobs triggered by fork PRs on
+# PUBLIC repositories — the org's runner group has allows_public_repositories
+# set to false. That is a deliberate org-wide security posture, not a bug in
+# this file, and the established fix elsewhere in the org is to move
+# fork-triggered logic into a webhook-driven check rather than Actions. Do
+# not "fix" this by changing runner-group visibility as a side effect of an
+# unrelated PR.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  # The one check this entire repository exists to enforce. See
+  # scripts/check-no-engine-dependency.py's module docstring and
+  # scripts/test_check_no_engine_dependency.py for the proof it actually
+  # catches a violation (not just a script nobody exercised).
+  no-engine-dependency:
+    runs-on: ${{ fromJSON(vars.RUNNER_LABELS) }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - name: Fleet Python 3.14 (pre-provisioned tool cache)
+        run: |
+          echo "$RUNNER_TOOL_CACHE/Python/3.14.7/arm64/bin" >> "$GITHUB_PATH"
+          echo "PYTHONNOUSERSITE=1" >> "$GITHUB_ENV"
+      - name: Run the checker against this repository
+        run: python scripts/check-no-engine-dependency.py --root .
+      - name: Run the checker's own regression tests (proves it catches violations)
+        run: python scripts/test_check_no_engine_dependency.py
+
+  python:
+    runs-on: ${{ fromJSON(vars.RUNNER_LABELS) }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - name: Fleet Python 3.14 (pre-provisioned tool cache)
+        run: |
+          echo "$RUNNER_TOOL_CACHE/Python/3.14.7/arm64/bin" >> "$GITHUB_PATH"
+          echo "PYTHONNOUSERSITE=1" >> "$GITHUB_ENV"
+      - name: Install uv
+        run: python -m pip install --quiet --disable-pip-version-check uv
+      - name: Sync the workspace (installs the REAL published algenta-sdk from PyPI)
+        working-directory: python
+        run: uv sync --all-packages
+      - name: Validate the shared tool-profile contract (stub today, see script header)
+        # Stdlib-only script -- no venv needed, but PATH already has fleet
+        # Python from the step above.
+        run: python scripts/check-parity.py
+      # No package under python/ has any implementation or tests yet (D1/D3/D4
+      # are still "planned" -- see README#status--roadmap), so there is
+      # nothing for pytest to collect. This step is a placeholder that will
+      # become `uv run --project python pytest python -v` the moment the
+      # first real test file lands; it is written now so that PR doesn't also
+      # have to touch this workflow.
+      - name: Placeholder for package tests (none exist yet)
+        run: |
+          echo "No tests exist yet under python/ -- pydantic-ai-algenta, langchain-algenta, and litellm-algenta are all scaffolded-implementation-pending (see CONTRIBUTING.md). Nothing to run."
+
+  typescript:
+    runs-on: ${{ fromJSON(vars.RUNNER_LABELS) }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: "20"
+          # setup-node's cache:npm tars up the runner's entire global npm cache
+          # dir every run. On a persistent self-hosted runner that cache never
+          # resets across jobs/repos, so it balloons unbounded -- same fix as
+          # sibling repos' ci.yml.
+          package-manager-cache: false
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        with:
+          # Matches the "packageManager" pin in typescript/algenta-tools/package.json.
+          version: 9
+      - name: Install (installs the REAL published algenta-sdk from npm)
+        working-directory: typescript/algenta-tools
+        run: pnpm install --frozen-lockfile
+      - name: Build + lint + test every TS package (turbo)
+        working-directory: typescript/algenta-tools
+        run: pnpm turbo run build lint test
+      - name: Validate the shared tool-profile contract (stub today, see script header)
+        run: npx --yes tsx@4 scripts/check-parity.ts
+
+  # contracts/integration-tool-contract.json's own JSON-syntax validity is
+  # covered as a side effect of both check-parity.py and check-parity.ts
+  # (both refuse to run on a malformed contract file) -- no separate job
+  # needed for that alone.

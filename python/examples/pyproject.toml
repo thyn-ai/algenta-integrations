@@ -1,0 +1,10 @@
+[project]
+name = "algenta-integrations-examples"
+version = "0.0.0"
+description = "Placeholder for runnable examples of the Python framework-integration packages. Never published."
+requires-python = ">=3.10"
+dependencies = []
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"

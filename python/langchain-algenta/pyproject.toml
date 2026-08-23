@@ -1,0 +1,35 @@
+[project]
+name = "langchain-algenta"
+version = "0.0.1"
+description = "LangChain tool integration for Algenta (scaffolded — implementation pending)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+license-files = ["../../LICENSE"]
+keywords = ["algenta", "langchain", "agent", "tools", "decision"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+# The ONLY Algenta dependency any package in this repo may declare. See
+# scripts/check-no-engine-dependency.py, which enforces this on every PR.
+dependencies = [
+    "algenta-sdk>=1.0.11",
+]
+
+[project.urls]
+Homepage = "https://algenta.ai"
+Documentation = "https://docs.algenta.ai"
+Repository = "https://github.com/thyn-ai/algenta-integrations"
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-asyncio"]
+
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"

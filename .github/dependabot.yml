@@ -1,0 +1,60 @@
+version: 2
+updates:
+  # Per the coordinator's explicit ask: daily (not weekly) checks specifically
+  # for the algenta-sdk PyPI package, since staying current with the
+  # published SDK is the whole point of this repo existing. `allow` scopes
+  # each entry to that one dependency name so other, ordinary transitive
+  # deps in these placeholder packages don't also get bumped daily.
+  - package-ecosystem: "pip"
+    directory: "/python/pydantic-ai-algenta"
+    schedule:
+      interval: "daily"
+    allow:
+      - dependency-name: "algenta-sdk"
+    commit-message:
+      prefix: "chore(pydantic-ai-algenta)"
+  - package-ecosystem: "pip"
+    directory: "/python/langchain-algenta"
+    schedule:
+      interval: "daily"
+    allow:
+      - dependency-name: "algenta-sdk"
+    commit-message:
+      prefix: "chore(langchain-algenta)"
+  - package-ecosystem: "pip"
+    directory: "/python/litellm-algenta"
+    schedule:
+      interval: "daily"
+    allow:
+      - dependency-name: "algenta-sdk"
+    commit-message:
+      prefix: "chore(litellm-algenta)"
+
+  # Same ask, for the published TS-SDK equivalent -- also named "algenta-sdk"
+  # on npm (verified: https://www.npmjs.com/package/algenta-sdk), not a
+  # @thyn-ai/-scoped name.
+  - package-ecosystem: "npm"
+    directory: "/typescript/algenta-tools/packages/algenta-tools"
+    schedule:
+      interval: "daily"
+    allow:
+      - dependency-name: "algenta-sdk"
+    commit-message:
+      prefix: "chore(algenta-tools)"
+
+  # Everything else (dev tooling, GitHub Actions) stays on a normal weekly
+  # cadence -- no reason to check turbo/typescript/tsx daily.
+  - package-ecosystem: "npm"
+    directory: "/typescript/algenta-tools"
+    schedule:
+      interval: "weekly"
+    ignore:
+      - dependency-name: "algenta-sdk" # covered daily by the entry above
+    commit-message:
+      prefix: "chore(deps)"
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore(ci)"

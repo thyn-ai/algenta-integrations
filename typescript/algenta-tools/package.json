@@ -1,0 +1,24 @@
+{
+  "name": "algenta-tools-workspace",
+  "version": "0.0.0",
+  "private": true,
+  "description": "pnpm + turbo workspace root for Algenta's TypeScript/JS tool-calling integration packages. Not published — see packages/algenta-tools for the real package.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/thyn-ai/algenta-integrations.git",
+    "directory": "typescript/algenta-tools"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "lint": "turbo run lint"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "packageManager": "pnpm@9.15.0"
+}

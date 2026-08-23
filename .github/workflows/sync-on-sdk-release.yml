@@ -1,0 +1,188 @@
+# Keeps every package in this repository pinned to the latest published
+# `algenta-sdk` (PyPI + npm). This is the RECEIVING side only. See the
+# "SENDING SIDE (not implemented here)" section below for what
+# thyn-ai/algenta-sdk still needs, as a separate, explicitly out-of-scope
+# follow-up.
+#
+# TWO TRIGGERS, sharing one job, chosen deliberately:
+#
+#   1. `repository_dispatch` (type: "algenta-sdk-released") -- reacts
+#      immediately once the sending side exists and fires it. Expected
+#      payload: `{"tag": "sdk-v1.2.3", "version": "1.2.3"}` (matching the
+#      `sdk-v*` tag format thyn-ai/algenta-sdk's own release.yml already
+#      uses). `version` is read directly from the payload; `tag` is carried
+#      through only for the PR title/body.
+#
+#   2. `schedule` (nightly) -- the lower-friction fallback. As of this
+#      workflow's creation, thyn-ai/algenta-sdk's release.yml does not send
+#      any repository_dispatch to anywhere -- there is no existing
+#      precedent for it, and wiring the sending side is explicitly a
+#      separate follow-up in a different repo with its own review process
+#      (not done as part of this bootstrap). Without a second trigger, this
+#      workflow would be full built but would never actually run until
+#      someone else's future PR in a different repo lands. The nightly
+#      schedule needs zero coordination with that repo, works starting
+#      today, and self-heals if a future dispatch is ever missed or
+#      delayed -- it just asks "what's actually published right now" via
+#      scripts/latest-published-algenta-sdk-version.py. Bias here is
+#      toward "simple and reliable" over "sophisticated," per the explicit
+#      instruction this workflow was scoped under.
+#
+# Either path converges on the same steps: bump every package's algenta-sdk
+# pin (scripts/bump-algenta-sdk-version.py), refresh lockfiles, run the full
+# check suite, and open a PR if anything actually changed. NOTHING in this
+# workflow auto-merges that PR -- see the note above the final job step.
+#
+# ── SENDING SIDE (not implemented here) ─────────────────────────────────
+# For trigger #1 to ever fire, thyn-ai/algenta-sdk's own release.yml needs a
+# new step, added in THAT repo (not this one), that POSTs a
+# repository_dispatch to this repo after a successful publish:
+#
+#   curl -sS -X POST \
+#     -H "Authorization: Bearer <token>" \
+#     -H "Accept: application/vnd.github+json" \
+#     https://api.github.com/repos/thyn-ai/algenta-integrations/dispatches \
+#     -d '{"event_type":"algenta-sdk-released","client_payload":{"tag":"sdk-v1.2.3","version":"1.2.3"}}'
+#
+# The <token> should be a short-lived installation token for a GitHub App
+# scoped to `contents: read` on thyn-ai/algenta-sdk (to run) and granted
+# access to trigger dispatches on thyn-ai/algenta-integrations -- the same
+# create-github-app-token pattern already used by decision-engine's (the
+# private engine repo's) sync-public-sdk.yml for its own cross-repo PR, not
+# a long-lived PAT. That change belongs in thyn-ai/algenta-sdk's own PR
+# review process and is intentionally not made here.
+name: sync-on-sdk-release
+
+on:
+  repository_dispatch:
+    types: [algenta-sdk-released]
+  schedule:
+    - cron: "13 3 * * *" # nightly
+  workflow_dispatch: {} # manual trigger, e.g. to test this workflow itself
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ${{ fromJSON(vars.RUNNER_LABELS) }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: true # this job commits + pushes a branch within THIS repo
+
+      - name: Fleet Python 3.14 (pre-provisioned tool cache)
+        run: |
+          echo "$RUNNER_TOOL_CACHE/Python/3.14.7/arm64/bin" >> "$GITHUB_PATH"
+          echo "PYTHONNOUSERSITE=1" >> "$GITHUB_ENV"
+
+      - name: Determine target algenta-sdk version
+        id: version
+        env:
+          DISPATCH_VERSION: ${{ github.event.client_payload.version }}
+          DISPATCH_TAG: ${{ github.event.client_payload.tag }}
+        run: |
+          set -euo pipefail
+          if [ -n "${DISPATCH_VERSION:-}" ]; then
+            VERSION="$DISPATCH_VERSION"
+            SOURCE="repository_dispatch (${DISPATCH_TAG:-no tag in payload})"
+          else
+            VERSION="$(python scripts/latest-published-algenta-sdk-version.py)"
+            SOURCE="scheduled check of PyPI + npm"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "source=$SOURCE" >> "$GITHUB_OUTPUT"
+          echo "Target algenta-sdk version: $VERSION (via $SOURCE)"
+
+      - name: Bump every package's algenta-sdk pin
+        run: python scripts/bump-algenta-sdk-version.py --version "${{ steps.version.outputs.version }}"
+
+      - name: Check whether anything actually changed
+        id: diff
+        run: |
+          if git diff --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Already pinned to ${{ steps.version.outputs.version }} everywhere -- nothing to do."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install uv
+        if: steps.diff.outputs.changed == 'true'
+        run: python -m pip install --quiet --disable-pip-version-check uv
+
+      - name: Refresh Python lockfile
+        if: steps.diff.outputs.changed == 'true'
+        working-directory: python
+        run: uv lock
+
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        if: steps.diff.outputs.changed == 'true'
+        with:
+          node-version: "20"
+          package-manager-cache: false
+
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        if: steps.diff.outputs.changed == 'true'
+        with:
+          version: 9
+
+      - name: Refresh TypeScript lockfile
+        if: steps.diff.outputs.changed == 'true'
+        working-directory: typescript/algenta-tools
+        run: pnpm install --lockfile-only
+
+      # ── Run the full check + conformance suite against the bumped pin ──
+      - name: check-no-engine-dependency (+ its own regression tests)
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          python scripts/check-no-engine-dependency.py --root .
+          python scripts/test_check_no_engine_dependency.py
+
+      - name: Python workspace -- install + parity stub + tests (none yet)
+        if: steps.diff.outputs.changed == 'true'
+        working-directory: python
+        run: |
+          uv sync --all-packages
+          uv run python ../scripts/check-parity.py
+
+      - name: TypeScript workspace -- install + build + lint + test + parity stub
+        if: steps.diff.outputs.changed == 'true'
+        working-directory: typescript/algenta-tools
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm turbo run build lint test
+          npx --yes tsx@4 ../../scripts/check-parity.ts
+
+      # ── Open the PR. NOT auto-merged. ──────────────────────────────────
+      # This org has an established "green CI -> admin-merge without
+      # waiting for per-PR sign-off" convention for some repos, but that
+      # was never confirmed for this brand-new, still-private, still
+      # entirely-scaffolded repo. Leaving this as a normal PR for a human
+      # (or a separate, explicitly-approved auto-merge rule added later)
+      # rather than assuming the convention transfers here by default.
+      - name: Open the version-bump PR
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+          SOURCE: ${{ steps.version.outputs.source }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          BRANCH="sync/algenta-sdk-v${VERSION}"
+          git checkout -b "$BRANCH"
+          git add -A
+          git commit -m "chore(deps): bump algenta-sdk to ${VERSION}"
+          git push origin "$BRANCH" --force
+          if gh pr view "$BRANCH" --json state --jq '.state' 2>/dev/null | grep -q OPEN; then
+            echo "PR for $BRANCH already open -- push above updated it."
+          else
+            gh pr create \
+              --base main \
+              --head "$BRANCH" \
+              --title "chore(deps): bump algenta-sdk to ${VERSION}" \
+              --body "Automated bump of every package's \`algenta-sdk\` pin to \`${VERSION}\`, detected via ${SOURCE}. Full check + conformance suite ran green in this workflow before opening this PR. Does NOT auto-merge -- a human (or CODEOWNERS review) needs to merge this."
+          fi
