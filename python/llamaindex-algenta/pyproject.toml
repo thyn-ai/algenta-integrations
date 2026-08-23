@@ -1,0 +1,75 @@
+[project]
+name = "llamaindex-algenta"
+version = "0.1.0"
+description = "LlamaIndex tool integration for Algenta: a governed-execution-aware FunctionTool list wrapping a self-hosted Algenta Engine's MCP tool surface"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+license-files = ["../../LICENSE"]
+keywords = ["algenta", "llama-index", "llamaindex", "agent", "tools", "decision", "mcp"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Typing :: Typed",
+]
+# NOT `algenta-sdk`. This package never imports it: `create_algenta_tools` talks to the
+# caller's own self-hosted Algenta MCP endpoint directly via `llama_index.tools.mcp`'s own
+# `BasicMCPClient` -- the same reason `maf-algenta` (D5) and `typescript/algenta-tools` (D2)
+# have no `algenta-sdk` dependency either (see the root README's "Every package may depend on
+# at most one Algenta-owned thing" paragraph). Declaring it anyway would be exactly the
+# leftover-placeholder-dependency mistake an adversarial review caught on this repository's
+# other packages.
+#
+# `llama-index-tools-mcp`, NOT the `llama-index` umbrella metapackage: verified directly
+# against its installed `.dist-info/METADATA` that its own `Requires-Dist` is only
+# `llama-index-core` + `mcp` + `pydantic` -- `pip install llama-index-core llama-index-tools-mcp`
+# never pulls in every model-provider SDK the full `llama-index` metapackage depends on, the
+# same "only the surface this package actually needs" reasoning `pydantic-ai-slim[mcp]` (D1)
+# and `agent-framework-core` (D5) already document for their own frameworks.
+#
+# `mcp<2.0.0` is a real, currently-live, verified-live pin, not a defensive guess: with
+# `mcp==2.0.0` (the version that `pip install llama-index-core llama-index-tools-mcp` resolves
+# to today, since `llama-index-tools-mcp` 0.5.0's own `Requires-Dist` is `mcp<3,>=2.0.0`), every
+# `BasicMCPClient` HTTP call throws `ValueError: not enough values to unpack (expected 3, got 2)`
+# from `llama_index/tools/mcp/client.py`'s `_run_session` -- that code still unpacks
+# `mcp.client.streamable_http.streamable_http_client(...)`'s yield as a 3-tuple
+# `(read, write, _)`, but installed `mcp==2.0.0`'s `streamable_http_client` now yields a 2-tuple.
+# Pinning `mcp<2.0.0` here (mirroring what `llama-index-tools-mcp` 0.4.8 itself required before
+# 0.5.0 bumped its own `mcp` floor) makes the dependency resolver pick `llama-index-tools-mcp`
+# 0.4.8 instead, whose HTTP transport is verified working end-to-end against a real server. A
+# stdio transport also works around this on 0.5.0/mcp==2.0.0 (splat-unpacked, not fixed-arity),
+# but self-hosted Algenta engines are reached over HTTP in every sibling package's design, so
+# pinning `mcp<2.0.0` is the realistic fix here, not "use stdio instead."
+dependencies = [
+    "llama-index-core>=0.13.0,<0.15",
+    "llama-index-tools-mcp>=0.4.0,<0.6",
+    "mcp<2.0.0",
+]
+
+[project.urls]
+Homepage = "https://algenta.ai"
+Documentation = "https://docs.algenta.ai"
+Repository = "https://github.com/thyn-ai/algenta-integrations"
+
+[project.optional-dependencies]
+# `fastmcp` (full, not just the client-only surface `llama-index-tools-mcp` already needs) is a
+# test-only dependency: the test suite's stub Algenta MCP server (tests/stub_server.py) is a
+# real `fastmcp.FastMCP` *server*, which needs fastmcp's server-side support. Never imported by
+# any non-test module in this package. Verified installable and working alongside the `mcp<2.0.0`
+# pin above (fastmcp 3.x's own floor is satisfied by mcp 1.29.0).
+dev = ["pytest", "pytest-asyncio", "fastmcp>=3"]
+
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["llamaindex_algenta*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
