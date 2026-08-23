@@ -1,25 +1,32 @@
 [project]
 name = "pydantic-ai-algenta"
-version = "0.0.1"
-description = "pydantic-ai tool integration for Algenta (scaffolded — implementation pending)"
+version = "0.1.0"
+description = "pydantic-ai tool integration for Algenta: a governed-execution-aware toolset wrapping a self-hosted Algenta Engine's MCP tool surface"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
 license-files = ["../../LICENSE"]
-keywords = ["algenta", "pydantic-ai", "agent", "tools", "decision"]
+keywords = ["algenta", "pydantic-ai", "agent", "tools", "decision", "mcp"]
 classifiers = [
-    "Development Status :: 2 - Pre-Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Typing :: Typed",
 ]
 # The ONLY Algenta dependency any package in this repo may declare. See
-# scripts/check-no-engine-dependency.py, which enforces this on every PR.
+# scripts/check-no-engine-dependency.py, which enforces this on every PR. The other dependency
+# here, pydantic-ai-slim, is the second (and last) package this integration is allowed to depend
+# on -- see the repository root README and this package's own README for why `[mcp]` (which
+# pulls in fastmcp's client) rather than the full `pydantic-ai` metapackage: this package only
+# needs the agent/toolset/MCP-client surface, not every model provider SDK `pydantic-ai` also
+# depends on.
 dependencies = [
     "algenta-sdk>=1.0.11",
+    "pydantic-ai-slim[mcp]>=2.33.0",
 ]
 
 [project.urls]
@@ -28,8 +35,24 @@ Documentation = "https://docs.algenta.ai"
 Repository = "https://github.com/thyn-ai/algenta-integrations"
 
 [project.optional-dependencies]
-dev = ["pytest", "pytest-asyncio"]
+# `fastmcp` (full, not the `[client]`-only extra `pydantic-ai-slim[mcp]` already pulls in) is a
+# test-only dependency: the test suite's stub Algenta MCP server (tests/stub_server.py) is a
+# real `fastmcp.FastMCP` *server*, which needs fastmcp's server-side support. Never imported by
+# any non-test module in this package.
+#
+# `anyio` (not `pytest-anyio`, which is a deliberately-empty placeholder package on PyPI --
+# "The pytest anyio plugin is built into anyio. You don't need this package.", per its own
+# metadata) provides the `pytest.mark.anyio` plugin used for async tests. It also already
+# arrives transitively via `pydantic-ai-slim`, but is listed explicitly since the test suite
+# depends on its pytest plugin directly, not just on `anyio` the async library.
+dev = ["pytest", "anyio", "fastmcp>=3"]
 
 [build-system]
 requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["pydantic_ai_algenta*"]
+
+[tool.pytest.ini_options]
+anyio_mode = "auto"
