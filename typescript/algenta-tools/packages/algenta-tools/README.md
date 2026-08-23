@@ -27,11 +27,16 @@ npm install algenta-tools ai zod
 ```
 
 `ai` (`^7.0.0`) and `zod` (`^4.0.0`) are peer dependencies — you already have them in any project
-using the AI SDK. This package depends on exactly one other thing: the published
-[`algenta-sdk`](https://www.npmjs.com/package/algenta-sdk) npm package (plus `@ai-sdk/mcp`, the
-AI SDK's own current MCP client package — see [Why `@ai-sdk/mcp` and not
-`ai`](#why-ai-sdkmcp-and-not-ai-itself) below). It never depends on, imports, or bundles any part
-of the Algenta Engine itself.
+using the AI SDK. This package's only real dependency is
+[`@ai-sdk/mcp`](https://www.npmjs.com/package/@ai-sdk/mcp), the AI SDK's own current MCP client
+package (see [Why `@ai-sdk/mcp` and not `ai`](#why-ai-sdkmcp-and-not-ai-itself) below). It does
+**not** depend on the published `algenta-sdk` npm package — that package is a thin HTTP/gRPC
+client for Algenta's REST-shaped API surface (datasets, runtime, simulations), not an MCP client,
+so it has nothing this package's MCP-protocol tool-calling path would use (see [Why not reuse
+`algenta-sdk`'s `MCP_ENDPOINT`/`DEFAULT_BASE_URL`
+constants](#why-not-reuse-algenta-sdks-mcp_endpointdefault_base_url-constants) below for the one
+overlap that was considered and rejected). This package never depends on, imports, or bundles any
+part of the Algenta Engine itself.
 
 ## Self-hosted-first
 
@@ -179,7 +184,10 @@ exactly the default this package must never use (see [Self-hosted-first](#self-h
 above and the contract's `self_hosted_only_note`). `createAlgentaTools` therefore defines its own
 `DEFAULT_ALGENTA_BASE_URL = "http://localhost:8000/mcp"`, matching the sibling
 `pydantic-ai-algenta` package's own default, instead of importing a constant from `algenta-sdk`
-that would silently point every unconfigured caller at Algenta's cloud.
+that would silently point every unconfigured caller at Algenta's cloud. This was the only thing
+`algenta-sdk` had that overlapped with this package's job at all, and it turned out to be exactly
+the wrong default — so this package does not declare `algenta-sdk` as a dependency (see
+[Install](#install) above).
 
 ## Why a factory function and not a class?
 
