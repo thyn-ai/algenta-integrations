@@ -69,25 +69,60 @@ jobs:
         # Stdlib-only script -- no venv needed, but PATH already has fleet
         # Python from the step above.
         run: python scripts/check-parity.py
-      # pydantic-ai-algenta (D1) landed with real tests; langchain-algenta/litellm-algenta are
-      # still scaffolded-implementation-pending, per CONTRIBUTING.md. Explicit package dirs
-      # (never `.`) so this doesn't recurse into `.venv`'s installed site-packages. pytest exits
-      # 5, not 0, when zero tests are collected across every given path -- true today since none
-      # of the three packages have tests on this branch alone. Tolerate exactly that code (an
-      # all-scaffolds day is not a CI failure); any other nonzero exit (a real test failure or a
-      # collection error) still fails the build.
-      - name: Run package tests
+      # ONE pytest PROCESS PER PACKAGE -- deliberately not a single invocation over several
+      # package dirs. Every package's suite is laid out as `<pkg>/tests/` with a `tests/__init__.py`
+      # (load-bearing: the suites use relative imports like `from .stub_server import ...`), so in
+      # one shared pytest run two packages both resolve to the module name `tests.conftest` and
+      # collection dies with `ImportPathMismatchError` before a single test executes. That is a
+      # real, CI-reproduced failure, not a theoretical one, and it gets worse with each package:
+      # pydantic-ai-algenta and langchain-algenta already share NINE identical test filenames
+      # (conftest.py, helpers.py, stub_server.py and six test_*.py).
+      #
+      # Rejected alternatives, each actually tried and observed to fail:
+      #   * `--import-mode=importlib` alone -> still `tests.conftest` for both (pytest derives the
+      #     name by walking up `__init__.py` files), dies with "Plugin already registered under a
+      #     different name".
+      #   * dropping `tests/__init__.py` (with or without importlib) -> breaks the suites' own
+      #     relative imports: "attempted relative import with no known parent package".
+      # Separate processes give each package its own interpreter and module namespace, which is
+      # also what an independently-releasable package should be tested under anyway.
+      #
+      # Package list is DISCOVERED, not hardcoded, so a newly-implemented package is picked up
+      # without touching this workflow. pytest exits 5 (not 0) when a package collects zero tests
+      # -- true for any still-scaffolded package -- so tolerate exactly 5 per package; any other
+      # nonzero exit (a real failure or a collection error) fails the build, and the first such
+      # code is preserved rather than masked by a later passing package.
+      - name: Run package tests (one pytest process per package)
         working-directory: python
         run: |
-          set +e
-          uv run pytest pydantic-ai-algenta langchain-algenta litellm-algenta -v
-          code=$?
-          set -e
-          if [ "$code" -ne 0 ] && [ "$code" -ne 5 ]; then
-            echo "pytest failed with exit code $code"
-            exit "$code"
+          set -euo pipefail
+          overall=0
+          found=0
+          for pkg in */; do
+            pkg="${pkg%/}"
+            [ -f "$pkg/pyproject.toml" ] || continue
+            found=$((found + 1))
+            echo "::group::pytest $pkg"
+            set +e
+            uv run pytest "$pkg" -v
+            code=$?
+            set -e
+            echo "::endgroup::"
+            if [ "$code" -eq 0 ]; then
+              echo "$pkg: passed"
+            elif [ "$code" -eq 5 ]; then
+              echo "$pkg: no tests collected yet (scaffolded) -- tolerated"
+            else
+              echo "$pkg: FAILED with exit code $code"
+              [ "$overall" -eq 0 ] && overall=$code
+            fi
+          done
+          if [ "$found" -eq 0 ]; then
+            echo "No python packages discovered under python/ -- the discovery glob is wrong."
+            exit 1
           fi
-          exit 0
+          echo "Ran $found package(s)."
+          exit "$overall"
 
   typescript:
     runs-on: ${{ fromJSON(vars.RUNNER_LABELS) }}
