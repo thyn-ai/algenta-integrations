@@ -60,15 +60,25 @@ jobs:
         # Stdlib-only script -- no venv needed, but PATH already has fleet
         # Python from the step above.
         run: python scripts/check-parity.py
-      # No package under python/ has any implementation or tests yet (D1/D3/D4
-      # are still "planned" -- see README#status--roadmap), so there is
-      # nothing for pytest to collect. This step is a placeholder that will
-      # become `uv run --project python pytest python -v` the moment the
-      # first real test file lands; it is written now so that PR doesn't also
-      # have to touch this workflow.
-      - name: Placeholder for package tests (none exist yet)
+      # pydantic-ai-algenta (D1) landed with real tests; langchain-algenta/litellm-algenta are
+      # still scaffolded-implementation-pending, per CONTRIBUTING.md. Explicit package dirs
+      # (never `.`) so this doesn't recurse into `.venv`'s installed site-packages. pytest exits
+      # 5, not 0, when zero tests are collected across every given path -- true today since none
+      # of the three packages have tests on this branch alone. Tolerate exactly that code (an
+      # all-scaffolds day is not a CI failure); any other nonzero exit (a real test failure or a
+      # collection error) still fails the build.
+      - name: Run package tests
+        working-directory: python
         run: |
-          echo "No tests exist yet under python/ -- pydantic-ai-algenta, langchain-algenta, and litellm-algenta are all scaffolded-implementation-pending (see CONTRIBUTING.md). Nothing to run."
+          set +e
+          uv run pytest pydantic-ai-algenta langchain-algenta litellm-algenta -v
+          code=$?
+          set -e
+          if [ "$code" -ne 0 ] && [ "$code" -ne 5 ]; then
+            echo "pytest failed with exit code $code"
+            exit "$code"
+          fi
+          exit 0
 
   typescript:
     runs-on: ${{ fromJSON(vars.RUNNER_LABELS) }}
