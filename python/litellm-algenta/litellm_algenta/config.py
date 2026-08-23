@@ -162,7 +162,7 @@ def build_mcp_server_entry(
     server_name: str = DEFAULT_SERVER_NAME,
     base_url_env_var: str = DEFAULT_BASE_URL_ENV_VAR,
     base_url: str | None = None,
-    transport: Literal["http", "sse", "stdio"] = DEFAULT_TRANSPORT,
+    transport: Literal["http", "sse"] = DEFAULT_TRANSPORT,
     description: str | None = None,
     auth_type: AuthType = "bearer_token",
     authentication_token_env_var: str | None = DEFAULT_TOKEN_ENV_VAR,
@@ -182,6 +182,18 @@ def build_mcp_server_entry(
             a test fixture pointed at a local stub).
         base_url: An explicit literal URL, escaping the env-var indirection. Rejected by
             `lint_mcp_server_entry` if it looks like an Algenta-hosted address.
+        transport: `"http"` (streamable-http, the default and the only transport this package's
+            own tests exercise) or `"sse"` -- both are URL-addressed, so both fit this function's
+            `url`-based shape. **Deliberately excludes `"stdio"`**: LiteLLM's real `stdio`
+            transport is configured via a `command`/`args`/`env` shape
+            (`litellm.types.mcp.MCPStdioConfig`, confirmed by reading
+            `mcp_server_manager.py`'s `stdio_config` construction), not a `url` at all -- there is
+            no sane way for this function to honor a `transport="stdio"` request through the
+            `url`/`base_url_env_var` parameters it actually has, and silently emitting a `url` key
+            on a `stdio` entry would produce a config that means nothing to LiteLLM. Pass
+            `extra_server_fields={"command": ..., "args": [...], "env": {...}}` together with a
+            hand-built fragment instead if you need `stdio` (out of scope for this package's own
+            self-hosted-over-HTTP positioning, but not blocked).
         auth_type: One of LiteLLM's real `auth_type` values (`AuthType`). Only the
             static-credential modes (`bearer_token`/`api_key`/`basic`/`token`) use
             `authentication_token_env_var`; `oauth2` requires `oauth2_flow` (LiteLLM itself
@@ -210,9 +222,23 @@ def build_mcp_server_entry(
         `merge_into_config_file`.
 
     Raises:
-        ConfigError: `profile` is not a real profile name; `auth_type == "oauth2"` with no (or an
-            invalid) `oauth2_flow`; or `extra_server_fields` collides with a field already set.
+        ConfigError: `profile` is not a real profile name; `transport` is `"stdio"` (or any other
+            value this function's `url`-based shape can't express -- see the `transport` arg
+            above); `auth_type == "oauth2"` with no (or an invalid) `oauth2_flow`; or
+            `extra_server_fields` collides with a field already set.
     """
+    if transport not in ("http", "sse"):
+        raise ConfigError(
+            f"transport={transport!r} is not supported by this function's url-based shape "
+            "(only 'http' and 'sse' are -- both are URL-addressed). 'stdio' in particular needs "
+            "a command/args/env shape (litellm.types.mcp.MCPStdioConfig), which this function "
+            "does not build; construct that fragment by hand with extra_server_fields instead of "
+            "asking this function to emit a meaningless url for it. This check runs even though "
+            "the type annotation already narrows the accepted values, since Python does not "
+            "enforce Literal types at runtime and a caller who bypasses type checking must not "
+            "silently get back a config that means nothing to LiteLLM."
+        )
+
     entry: dict[str, Any] = {
         "url": base_url if base_url is not None else f"os.environ/{base_url_env_var}",
         "transport": transport,
@@ -364,6 +390,14 @@ def lint_mcp_server_entry(fragment: dict[str, Any]) -> list[str]:
                 f"mcp_servers.{name}: url {url!r} looks like an Algenta-hosted endpoint, not a "
                 f"self-hosted one -- every package in this repository must default to the "
                 f"caller's own deployment."
+            )
+
+        if entry.get("transport") == "stdio" and "url" in entry:
+            violations.append(
+                f"mcp_servers.{name}: transport='stdio' but a 'url' key is set -- LiteLLM's real "
+                f"stdio transport is configured via command/args/env (litellm.types.mcp."
+                f"MCPStdioConfig), not a url; a url alongside transport='stdio' means nothing to "
+                f"LiteLLM and this entry will not do what its 'url' value implies."
             )
 
     return violations
