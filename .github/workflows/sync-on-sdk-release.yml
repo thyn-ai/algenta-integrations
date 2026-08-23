@@ -143,8 +143,12 @@ jobs:
       - name: Python workspace -- install + parity stub + tests (none yet)
         if: steps.diff.outputs.changed == 'true'
         working-directory: python
+        # --all-extras: pytest/pytest-asyncio/anyio only live under each package's `dev`
+        # optional-dependencies extra. Without it `.venv/bin/pytest` never exists, so a future
+        # `uv run pytest` here would silently fall back to whatever pytest happens to be on
+        # PATH -- see ci.yml's "Run package tests" step for the real bug this caused there.
         run: |
-          uv sync --all-packages
+          uv sync --all-packages --all-extras
           uv run python ../scripts/check-parity.py
 
       - name: TypeScript workspace -- install + build + lint + test + parity stub
