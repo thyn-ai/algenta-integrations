@@ -12,6 +12,7 @@ members = [
     "pydantic-ai-algenta",
     "langchain-algenta",
     "litellm-algenta",
+    "maf-algenta",
     "examples",
 ]
 

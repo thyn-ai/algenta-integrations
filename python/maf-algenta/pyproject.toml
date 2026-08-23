@@ -1,0 +1,72 @@
+[project]
+name = "maf-algenta"
+version = "0.1.0"
+description = "Microsoft Agent Framework (MAF) tool integration for Algenta: a governed-execution-aware FunctionTool list wrapping a self-hosted Algenta Engine's MCP tool surface"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+license-files = ["../../LICENSE"]
+keywords = ["algenta", "agent-framework", "maf", "agent", "tools", "decision", "mcp"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Typing :: Typed",
+]
+# NOT `algenta-sdk`. This package never imports it: `create_algenta_tools` talks to the caller's
+# self-hosted Algenta MCP endpoint directly via `agent_framework.MCPStreamableHTTPTool`, the same
+# reason `typescript/algenta-tools` (D2) has no `algenta-sdk` dependency either (see the root
+# README's "Every package may depend on at most one Algenta-owned thing" paragraph) -- declaring
+# it anyway would be exactly the leftover-placeholder-dependency mistake an adversarial review
+# caught on this repository's other packages; see this package's own README for the full note.
+#
+# `agent-framework-core` (real PyPI package, 1.15.0 confirmed installed and exercised while
+# building this package), not the `agent-framework` umbrella package -- verified directly against
+# PyPI metadata that `agent-framework==1.15.0`'s *only* dependency is `agent-framework-core[all]`,
+# whose `[all]` extra unconditionally drags in the Foundry-hosting bridge
+# (`agent-framework-foundry-hosting`) and pre-release `azure-ai-agentserver-*` packages this
+# package has no use for and does not want on its dependency graph (Part A of this track is MAF
+# standalone -- no Azure/Foundry adapters; see `foundry/README.md` for the deliberately separate
+# Part B). `agent-framework-core` with no extras provides every symbol this package actually
+# imports (`MCPStreamableHTTPTool`, `FunctionTool`, `MiddlewareFailure`, `Agent`, ...) -- verified
+# directly: `pip install agent-framework-core` alone (no `mcp` extra either -- see below) resolves
+# cleanly with only ordinary, non-pre-release dependencies.
+#
+# `mcp` (the base Model Context Protocol SDK) is a real, non-optional runtime dependency here,
+# not just a test dependency: `agent-framework-core` does not declare `mcp` as one of its own
+# dependencies at all (confirmed directly against its installed metadata) -- it imports `mcp`
+# lazily, only when an `MCPTool` subclass actually connects. Since `create_algenta_tools`'s
+# primary code path always builds and connects one, this package must declare `mcp` itself or
+# risk an `ImportError` at the caller's runtime that this package's own `pyproject.toml` should
+# have prevented.
+dependencies = [
+    "agent-framework-core>=1.15.0",
+    "mcp>=1.29.0",
+]
+
+[project.urls]
+Homepage = "https://algenta.ai"
+Documentation = "https://docs.algenta.ai"
+Repository = "https://github.com/thyn-ai/algenta-integrations"
+
+[project.optional-dependencies]
+# `uvicorn` serves the test suite's stub Algenta MCP server (tests/stub_server.py -- a real
+# `mcp.server.fastmcp.FastMCP` server, not a mock of anything in `agent_framework`'s internals)
+# over a real local HTTP socket. Not needed by this package's own runtime code, which only ever
+# acts as an MCP *client* (`mcp` itself is a main dependency, see above, precisely because the
+# client role is not test-only).
+dev = ["pytest", "pytest-asyncio", "uvicorn>=0.34"]
+
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["maf_algenta*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
