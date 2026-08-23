@@ -1,6 +1,6 @@
 {
-  "python/pydantic-ai-algenta": "0.0.1",
+  "python/pydantic-ai-algenta": "0.1.0",
   "python/langchain-algenta": "0.0.1",
   "python/litellm-algenta": "0.0.1",
-  "typescript/algenta-tools/packages/algenta-tools": "0.0.1"
+  "typescript/algenta-tools/packages/algenta-tools": "0.1.0"
 }
