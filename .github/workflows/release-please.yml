@@ -11,16 +11,47 @@
 # brief: publish anything to PyPI or npm. There is no PYPI_TOKEN or
 # NPM_TOKEN secret referenced anywhere in this repository, no OIDC Trusted
 # Publisher registration, and no `twine upload` / `npm publish` step in this
-# file or any other workflow here. This repository is private and no
-# framework integration is implemented yet (see the root README's Status &
-# Roadmap) -- wiring real publishing is an explicit, separate, owner-gated
-# decision for later, tracked as a follow-up, not an oversight.
+# file or any other workflow here. This repository is private and
+# wiring real publishing is an explicit, separate, owner-gated decision for
+# later, tracked as a follow-up, not an oversight.
+#
+# ── WHY THIS NEEDS A GITHUB APP TOKEN (not the default GITHUB_TOKEN) ─────
+# release-please's whole job is to open a pull request. The default
+# GITHUB_TOKEN cannot do that here: this org's ENTERPRISE policy disables
+# "Allow GitHub Actions to create and approve pull requests", which fails
+# the run with `GitHub Actions is not permitted to create or approve pull
+# requests`. That is an enterprise-level setting -- confirmed by API, a
+# repo-level `PUT /actions/permissions/workflow` is rejected with 409 "The
+# enterprise does not allow GitHub Actions to create or approve pull
+# requests" -- so it cannot be toggled per-repo or per-org, and it should
+# NOT be: the same single GitHub setting that would let Actions *create*
+# PRs also lets Actions *approve* them, which would undercut this repo's
+# required-review ruleset.
+#
+# The org's established way around this is a scoped GitHub App token, the
+# same pattern thyn-ai/algenta's `sync-public-sdk.yml` already uses in
+# production (its PRs on thyn-ai/algenta-sdk are authored by
+# `app/algenta-sdk-sync`). An App is not "Actions" as far as that policy is
+# concerned, and its permissions are narrow and auditable -- unlike a
+# long-lived personal access token, which is what a sibling repo resorted
+# to and is deliberately NOT copied here.
+#
+# ── UNTIL THE SECRETS EXIST, THIS SKIPS RATHER THAN FAILS ────────────────
+# The two App secrets below are not configured in this repository yet
+# (owner action -- see the repo README / project notes). Rather than leave
+# a permanently-red workflow on every push to main, the steps below no-op
+# with an explicit notice when the credentials are absent, and start
+# working the moment they are added. This is a deliberate "not configured
+# yet" signal, NOT an error being swallowed: if the credentials ARE present
+# and release-please then fails for a real reason, the run fails normally.
 name: release-please
 
 on:
   push:
     branches: [main]
 
+# Left as-is for the no-credential path; the real work below runs with the
+# App installation token instead of this token (see the header).
 permissions:
   contents: write
   pull-requests: write
@@ -29,8 +60,57 @@ jobs:
   release-please:
     runs-on: ${{ fromJSON(vars.RUNNER_LABELS) }}
     steps:
-      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+      # `secrets` is not available in a job-level `if:` (GitHub only exposes
+      # github/needs/vars/inputs there), so the presence check has to be a
+      # step that later steps condition on.
+      - name: Check whether the release-please App credentials are configured
+        id: creds
+        env:
+          APP_ID: ${{ secrets.ALGENTA_SDK_SYNC_APP_ID }}
+          APP_PRIVATE_KEY: ${{ secrets.ALGENTA_SDK_SYNC_APP_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -n "${APP_ID:-}" ] && [ -n "${APP_PRIVATE_KEY:-}" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Explain the skip (credentials not configured)
+        if: steps.creds.outputs.configured != 'true'
+        run: |
+          {
+            echo "### release-please skipped -- App credentials not configured"
+            echo
+            echo "This repository has no \`ALGENTA_SDK_SYNC_APP_ID\` /"
+            echo "\`ALGENTA_SDK_SYNC_APP_PRIVATE_KEY\` secret, so there is no token that is"
+            echo "allowed to open a pull request here (the enterprise policy blocks the default"
+            echo "\`GITHUB_TOKEN\` from creating PRs -- see this workflow file's header)."
+            echo
+            echo "No version-bump PR was opened. Nothing else in CI depends on this, and no"
+            echo "package in this repository is published yet, so this is not blocking."
+            echo
+            echo "To turn release PRs on: grant the existing \`algenta-sdk-sync\` GitHub App"
+            echo "access to this repository, then add its App ID and private key as the two"
+            echo "secrets named above."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Mint a scoped App installation token
+        id: app-token
+        if: steps.creds.outputs.configured == 'true'
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
+          app-id: ${{ secrets.ALGENTA_SDK_SYNC_APP_ID }}
+          private-key: ${{ secrets.ALGENTA_SDK_SYNC_APP_PRIVATE_KEY }}
+          owner: thyn-ai
+          # Scoped to this repository only -- the App is installed on other
+          # repos too and this token has no business reaching them.
+          repositories: algenta-integrations
+
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        if: steps.creds.outputs.configured == 'true'
+        with:
+          token: ${{ steps.app-token.outputs.token }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
       # Intentionally nothing after this step. Do not add a publish job here
