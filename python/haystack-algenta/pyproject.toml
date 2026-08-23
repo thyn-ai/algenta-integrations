@@ -1,0 +1,62 @@
+[project]
+name = "haystack-algenta"
+version = "0.1.0"
+description = "Haystack tool integration for Algenta: a governed-execution-aware wrapper around Haystack's own MCPToolset, plus an Agent hook pair mapping the governed-execution receipt onto Haystack's real human-in-the-loop and hook primitives"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+license-files = ["../../LICENSE"]
+keywords = ["algenta", "haystack", "deepset", "agent", "tools", "decision", "mcp"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Typing :: Typed",
+]
+# NOT `algenta-sdk`. This package never imports it: `create_algenta_tools` talks to the caller's
+# self-hosted Algenta MCP endpoint directly via `haystack_integrations.tools.mcp.MCPToolset`, the
+# same reason `maf-algenta` (D5) and `typescript/algenta-tools` (D2) have no `algenta-sdk`
+# dependency either. Declaring it anyway -- without importing it anywhere in this package's own
+# source -- would repeat the exact leftover-placeholder-dependency mistake an adversarial review
+# is on record catching elsewhere in this repository's D2/D4 history (see this package's own
+# README's "Why no `algenta-sdk` dependency" section).
+#
+# `mcp-haystack` (PyPI package name; import namespace `haystack_integrations.tools.mcp`) is a
+# SEPARATE package from `haystack-ai` -- confirmed directly by grepping an installed `haystack-ai`
+# 3.0.0 tree for any `mcp` module (none exists there). `MCPToolset`/`StreamableHttpServerInfo`
+# live only in `mcp-haystack`, so this package depends on both `haystack-ai` (core `Tool`/
+# `Toolset`/`Agent`/the human-in-the-loop hooks) and `mcp-haystack` (the real MCP client this
+# package wraps) explicitly, rather than assuming the umbrella `haystack-ai` package covers MCP.
+#
+# `mcp` (the base Model Context Protocol SDK) is declared directly too: `mcp-haystack` depends on
+# it transitively, but this package's own test suite builds a real `mcp.server.fastmcp.FastMCP`
+# stub server, so it is a genuine (if test-oriented) part of this package's own dependency
+# surface, not merely inherited.
+dependencies = [
+    "haystack-ai>=3.0.0",
+    "mcp-haystack>=1.4.0",
+    "mcp>=1.29.0",
+]
+
+[project.urls]
+Homepage = "https://algenta.ai"
+Documentation = "https://docs.algenta.ai"
+Repository = "https://github.com/thyn-ai/algenta-integrations"
+
+[project.optional-dependencies]
+# `uvicorn` serves the test suite's stub Algenta MCP server (tests/stub_server.py -- a real
+# `mcp.server.fastmcp.FastMCP` server, not a mock of anything in `haystack`'s internals) over a
+# real local HTTP socket. Not needed by this package's own runtime code, which only ever acts as
+# an MCP *client*.
+dev = ["pytest", "uvicorn>=0.34"]
+
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["haystack_algenta*"]
