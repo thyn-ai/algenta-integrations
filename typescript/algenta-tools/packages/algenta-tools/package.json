@@ -43,8 +43,7 @@
   },
   "license": "Apache-2.0",
   "dependencies": {
-    "@ai-sdk/mcp": "^2.0.36",
-    "algenta-sdk": "^1.0.11"
+    "@ai-sdk/mcp": "^2.0.36"
   },
   "peerDependencies": {
     "ai": "^7.0.0",

@@ -26,14 +26,19 @@ tool surface onto the conventions of popular agent frameworks:
 | [`python/litellm-algenta`](./python/litellm-algenta) | LiteLLM | Scaffolded, implementation pending |
 | [`typescript/algenta-tools`](./typescript/algenta-tools/packages/algenta-tools) | Vercel AI SDK (`ai` v7) tool integration | Implemented |
 
-Every package depends on exactly one Algenta-owned thing: the already
+Every package may depend on at most one Algenta-owned thing: the already
 published, Apache-2.0 **`algenta-sdk`** client
 ([PyPI](https://pypi.org/project/algenta-sdk/) /
 [npm](https://www.npmjs.com/package/algenta-sdk), source at
 [`thyn-ai/algenta-sdk`](https://github.com/thyn-ai/algenta-sdk)) — a thin
-HTTP/MCP client with zero engine source in it. **The Algenta Engine itself
-is closed-source and lives in a separate, private repository. It is never
-vendored, imported, or depended on here, in any form** — see
+HTTP/gRPC client with zero engine source in it. No package may depend on any
+other Algenta-named package, and no package may depend on `algenta-sdk` for
+anything that would point it at Algenta's hosted cloud instead of the
+caller's own self-hosted engine (`typescript/algenta-tools` talks MCP
+directly via `@ai-sdk/mcp` and, for that reason, has no `algenta-sdk`
+dependency at all — see that package's own README for why). **The Algenta
+Engine itself is closed-source and lives in a separate, private repository.
+It is never vendored, imported, or depended on here, in any form** — see
 [Enforcement](#enforcement-not-just-a-policy-note) below.
 
 ## Self-hosted-only positioning
