@@ -23,7 +23,7 @@ tool surface onto the conventions of popular agent frameworks:
 |---|---|---|
 | [`python/pydantic-ai-algenta`](./python/pydantic-ai-algenta) | pydantic-ai | Implemented |
 | [`python/langchain-algenta`](./python/langchain-algenta) | LangChain / LangGraph | Implemented |
-| [`python/litellm-algenta`](./python/litellm-algenta) | LiteLLM | Scaffolded, implementation pending |
+| [`python/litellm-algenta`](./python/litellm-algenta) | LiteLLM (MCP Gateway config, not a library) | Implemented (config + docs + real-proxy tests) |
 | [`typescript/algenta-tools`](./typescript/algenta-tools/packages/algenta-tools) | Vercel AI SDK (`ai` v7) tool integration | Implemented |
 
 Every package may depend on at most one Algenta-owned thing: the already
@@ -106,7 +106,7 @@ of those should be assumed to work end-to-end.
 | D1 | `pydantic-ai-algenta` real implementation: a governed-execution-aware `WrapperToolset` over pydantic-ai's own `MCPToolset` — tool-profile filtering, never-model-facing field scrubbing, typed governed-execution receipts, and an `ApprovalRequired`/`ToolDenied`/`ToolFailed` approval-flow mapping | ✅ Done |
 | D2 | `typescript/algenta-tools` real implementation: a governed-execution-aware Vercel AI SDK (`ai` v7) `ToolSet` — tool-profile filtering, never-model-facing field scrubbing, typed governed-execution receipts, and a `needsApproval`-based approval-flow mapping | ✅ Done |
 | D3 | `langchain-algenta` real implementation: a governed-execution-aware LangChain/LangGraph tool list — tool-profile filtering, never-model-facing field scrubbing, typed governed-execution receipts, and a native `langgraph.types.interrupt()`-based approval-flow mapping (with an honest fallback accounting for when no checkpointer is present) | ✅ Done |
-| D4 | `litellm-algenta` real implementation | 📋 Planned |
+| D4 | `litellm-algenta` real implementation -- LiteLLM's MCP Gateway is a proxy/gateway process configured by YAML, not a library to wrap, so "real implementation" here means: a config generator/linter mapping the shared profile contract onto LiteLLM's real, verified `allowed_tools`/`allowed_params` enforcement, ready-to-use per-profile config templates, and a conformance suite that runs a real `litellm` proxy process against a real stub MCP server (never mocked) | ✅ Done (Lane 1 -- config/gateway integration; Lane 2, an upstreamed `CustomLLM` provider PR to the litellm OSS repo itself, is out of scope for this repository) |
 | D9 | `demo/` — the 12-scenario conformance fixture set exercising every tool profile | 📋 Planned |
 | D5–D8 | Additional integration surfaces reserved in the approved plan | 📋 Planned — exact scope tracked in the approved plan, not restated here |
 
@@ -128,9 +128,11 @@ anything yet — check the table above and each package's own README.
 
 ### Explicitly deferred (not gaps — deliberate scope boundaries)
 
-- **No real framework integration.** pydantic-ai, LangChain, LiteLLM, and
-  the TypeScript tool-calling helpers are all "scaffolded, implementation
-  pending." That's D1/D3/D4/D2+'s job, not this bootstrap's.
+- **No real framework integration beyond D1-D4.** pydantic-ai, LangChain,
+  LiteLLM, and the TypeScript tool-calling helpers (D1-D4) now have real
+  implementations -- see the Status & Roadmap table above for exactly what
+  each one is. `demo/`'s conformance fixture set (D9) and whatever
+  additional integration surfaces D5-D8 turn out to cover remain planned.
 - **No publishing.** `.github/workflows/auto-release.yml` computes per-package
   semantic-version bumps from Conventional Commits and pushes them straight to
   main, tagging a GitHub Release per bumped package (zero PR — see
