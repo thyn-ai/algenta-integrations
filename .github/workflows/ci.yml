@@ -60,15 +60,14 @@ jobs:
         # Stdlib-only script -- no venv needed, but PATH already has fleet
         # Python from the step above.
         run: python scripts/check-parity.py
-      # No package under python/ has any implementation or tests yet (D1/D3/D4
-      # are still "planned" -- see README#status--roadmap), so there is
-      # nothing for pytest to collect. This step is a placeholder that will
-      # become `uv run --project python pytest python -v` the moment the
-      # first real test file lands; it is written now so that PR doesn't also
-      # have to touch this workflow.
-      - name: Placeholder for package tests (none exist yet)
-        run: |
-          echo "No tests exist yet under python/ -- pydantic-ai-algenta, langchain-algenta, and litellm-algenta are all scaffolded-implementation-pending (see CONTRIBUTING.md). Nothing to run."
+      # pydantic-ai-algenta (D1) landed with real tests; langchain-algenta/litellm-algenta are
+      # still scaffolded-implementation-pending, per CONTRIBUTING.md, and simply contribute zero
+      # collected tests today -- pytest exits 0 on a directory with none, so this one invocation
+      # covers whichever packages under python/ currently have tests without needing to list
+      # them, and picks up each new package's tests automatically as it lands.
+      - name: Run package tests
+        working-directory: python
+        run: uv run pytest . -v
 
   typescript:
     runs-on: ${{ fromJSON(vars.RUNNER_LABELS) }}
