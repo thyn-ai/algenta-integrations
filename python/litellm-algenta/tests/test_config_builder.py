@@ -106,6 +106,25 @@ def test_unknown_profile_raises() -> None:
         build_mcp_server_entry(profile="admin")  # type: ignore[arg-type]
 
 
+def test_stdio_transport_raises_instead_of_emitting_a_meaningless_url() -> None:
+    # transport="stdio" is excluded from the type annotation, but Python doesn't enforce
+    # Literal types at runtime -- a caller who bypasses type checking (or plain string input from
+    # a config file) must not silently get back a config with a "url" key that means nothing to
+    # LiteLLM's real stdio transport (which needs command/args/env instead).
+    with pytest.raises(ConfigError, match="stdio"):
+        build_mcp_server_entry(transport="stdio")  # type: ignore[arg-type]
+
+
+def test_lint_flags_stdio_transport_with_a_url_key() -> None:
+    fragment = {
+        "mcp_servers": {
+            "x": {"url": "os.environ/ALGENTA_MCP_URL", "transport": "stdio", "allowed_tools": []}
+        }
+    }
+    violations = lint_mcp_server_entry(fragment)
+    assert any("stdio" in v and "url" in v for v in violations)
+
+
 def test_render_yaml_round_trips_through_yaml_parser() -> None:
     fragment = build_mcp_server_entry(profile="execute", server_name="algenta")
     rendered = render_yaml(fragment)
