@@ -25,6 +25,7 @@ tool surface onto the conventions of popular agent frameworks:
 | [`python/langchain-algenta`](./python/langchain-algenta) | LangChain / LangGraph | Implemented |
 | [`python/litellm-algenta`](./python/litellm-algenta) | LiteLLM (MCP Gateway config, not a library) | Implemented (config + docs + real-proxy tests) |
 | [`python/maf-algenta`](./python/maf-algenta) | Microsoft Agent Framework (standalone, self-hosted MCP) | Implemented |
+| [`python/haystack-algenta`](./python/haystack-algenta) | Haystack (`haystack-ai` + `mcp-haystack`'s own `MCPToolset`) | Implemented -- Haystack slice of D6 only, see below |
 | [`typescript/algenta-tools`](./typescript/algenta-tools/packages/algenta-tools) | Vercel AI SDK (`ai` v7) tool integration | Implemented |
 
 `python/maf-algenta` is deliberately about **Microsoft Agent Framework only** -- a real,
@@ -115,8 +116,9 @@ of those should be assumed to work end-to-end.
 | D3 | `langchain-algenta` real implementation: a governed-execution-aware LangChain/LangGraph tool list — tool-profile filtering, never-model-facing field scrubbing, typed governed-execution receipts, and a native `langgraph.types.interrupt()`-based approval-flow mapping (with an honest fallback accounting for when no checkpointer is present) | ✅ Done |
 | D4 | `litellm-algenta` real implementation -- LiteLLM's MCP Gateway is a proxy/gateway process configured by YAML, not a library to wrap, so "real implementation" here means: a config generator/linter mapping the shared profile contract onto LiteLLM's real, verified `allowed_tools`/`allowed_params` enforcement, ready-to-use per-profile config templates, and a conformance suite that runs a real `litellm` proxy process against a real stub MCP server (never mocked) | ✅ Done (Lane 1 -- config/gateway integration; Lane 2, an upstreamed `CustomLLM` provider PR to the litellm OSS repo itself, is out of scope for this repository) |
 | D5 | Microsoft Agent Framework **and** Microsoft Foundry, two different deliverables under one track — Lane 1 (`python/maf-algenta`): a real, tested, governed-execution-aware `create_algenta_tools` wrapping MAF's own `MCPStreamableHTTPTool`, `approval_mode`, and `MiddlewareFailure` primitives, built and verified to the same bar as D1–D4. Lane 2 (`python/maf-algenta/foundry/`): Entra app-registration Bicep template + `azd ai connection create`/Toolbox artifacts for registering Algenta's self-hosted MCP endpoint with a live Foundry project — accurate, schema-checked, and cited against current Microsoft Learn docs, but **explicitly not independently verified against a live Foundry project** (none is available in this environment) and never claimed as such. | ✅ Lane 1 done · 📋 Lane 2 out of scope for independent verification (owner-applied) |
+| D6 | Five separate deliverables under one label: n8n, Haystack, LlamaIndex, Ray Serve, and vLLM. Only the **Haystack slice** is done here (`python/haystack-algenta`): a real, tested, governed-execution-aware `create_algenta_tools` wrapping Haystack's own `MCPToolset` (tool-profile filtering via its native `tool_names=`, two-layer never-model-facing scrubbing via a rebuilt `Tool`) plus `build_algenta_governance_hooks`, an `Agent` `before_tool`/`after_tool` hook pair mapping the receipt contract onto Haystack's real `ConfirmationHook` and `after_tool` hook seam — built and verified to the same bar as D1–D5. n8n, LlamaIndex, Ray Serve, and vLLM are **not started** — do not assume any of the four has real tool-calling logic because this row exists. | ✅ Haystack slice done · 📋 n8n / LlamaIndex / Ray Serve / vLLM not started |
 | D9 | `demo/` — the 12-scenario conformance fixture set exercising every tool profile | 📋 Planned |
-| D6–D8 | Additional integration surfaces reserved in the approved plan | 📋 Planned — exact scope tracked in the approved plan, not restated here |
+| D7–D8 | Additional integration surfaces reserved in the approved plan | 📋 Planned — exact scope tracked in the approved plan, not restated here |
 
 Do not treat any package's presence in this repository as evidence it does
 anything yet — check the table above and each package's own README.
@@ -136,11 +138,14 @@ anything yet — check the table above and each package's own README.
 
 ### Explicitly deferred (not gaps — deliberate scope boundaries)
 
-- **No real framework integration beyond D1-D4.** pydantic-ai, LangChain,
-  LiteLLM, and the TypeScript tool-calling helpers (D1-D4) now have real
-  implementations -- see the Status & Roadmap table above for exactly what
-  each one is. `demo/`'s conformance fixture set (D9) and whatever
-  additional integration surfaces D5-D8 turn out to cover remain planned.
+- **No real framework integration beyond D1-D6 (Haystack slice).** pydantic-ai,
+  LangChain, LiteLLM, the TypeScript tool-calling helpers, Microsoft Agent
+  Framework, and now Haystack (D1-D5, and the Haystack slice of D6) all have
+  real implementations -- see the Status & Roadmap table above for exactly
+  what each one is. D6's other four deliverables (n8n, LlamaIndex, Ray Serve,
+  vLLM) are **not started** despite sharing the D6 label with Haystack.
+  `demo/`'s conformance fixture set (D9) and whatever additional integration
+  surfaces D7-D8 turn out to cover remain planned.
 - **No publishing.** `.github/workflows/auto-release.yml` computes per-package
   semantic-version bumps from Conventional Commits and pushes them straight to
   main, tagging a GitHub Release per bumped package (zero PR — see

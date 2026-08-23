@@ -13,6 +13,7 @@ members = [
     "langchain-algenta",
     "litellm-algenta",
     "maf-algenta",
+    "haystack-algenta",
     "examples",
 ]
 
