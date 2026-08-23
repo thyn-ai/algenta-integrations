@@ -1,0 +1,15 @@
+name: Question
+description: Ask a usage question about a framework-integration package.
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        For faster answers, consider https://algenta.ai/discord instead —
+        this template is here for questions worth keeping searchable.
+  - type: textarea
+    id: question
+    attributes:
+      label: Your question
+    validations:
+      required: true

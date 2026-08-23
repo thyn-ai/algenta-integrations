@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+uv.lock.tmp
+
+# Node / TypeScript
+node_modules/
+**/dist/
+*.tsbuildinfo
+npm-debug.log*
+.turbo/
+.pnpm-store/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+
+# release-please working state
+.release-please-manifest.json.tmp

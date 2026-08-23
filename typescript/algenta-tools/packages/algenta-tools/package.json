@@ -1,0 +1,48 @@
+{
+  "name": "algenta-tools",
+  "version": "0.0.1",
+  "description": "Framework-agnostic tool-calling helpers for Algenta (scaffolded — implementation pending)",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "lint": "tsc --noEmit",
+    "test": "echo \"no tests yet — scaffolded, implementation pending\" && exit 0"
+  },
+  "keywords": [
+    "algenta",
+    "tools",
+    "agent",
+    "tool-calling",
+    "decision"
+  ],
+  "homepage": "https://docs.algenta.ai",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/thyn-ai/algenta-integrations.git",
+    "directory": "typescript/algenta-tools/packages/algenta-tools"
+  },
+  "bugs": {
+    "url": "https://github.com/thyn-ai/algenta-integrations/issues"
+  },
+  "license": "Apache-2.0",
+  "dependencies": {
+    "algenta-sdk": "^1.0.11"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

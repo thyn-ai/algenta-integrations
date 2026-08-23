@@ -1,0 +1,19 @@
+name: Integration capability request
+description: >-
+  Request a new capability a framework-integration package doesn't expose
+  today, or a new framework you'd like integrated.
+labels: ["capability-request"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What capability (or framework) do you want?
+      description: Describe the use case, not just the API shape you'd guess at.
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why isn't an existing package/tool sufficient?
+    validations:
+      required: false

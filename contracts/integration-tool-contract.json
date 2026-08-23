@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/thyn-ai/algenta-integrations/contracts/integration-tool-contract.json",
+  "contract_version": "0.1.0",
+  "status": "draft — D0 bootstrap. No framework package implements this yet; see the root README's Status & Roadmap section.",
+  "title": "Algenta integration tool-profile contract",
+  "description": [
+    "Every framework-integration package in this repository (pydantic-ai, LangChain, LiteLLM,",
+    "TypeScript/JS tool-calling helpers, and anything added later) must map Algenta's MCP tool",
+    "surface onto a model-facing 'tool profile' that conforms to this document. A package MUST",
+    "NOT invent its own profile boundaries, its own default profile, or its own name for a tool",
+    "already named here. scripts/check-parity.py and scripts/check-parity.ts exist to verify that",
+    "every language's package actually agrees with this file (they are stubs today; D1+ fills",
+    "in the real per-language introspection)."
+  ],
+  "provenance_note": [
+    "Tool names below are Algenta's public MCP tool-registry names, exactly as exposed over",
+    "stdio/HTTP/`/mcp/*` by a self-hosted Algenta Engine (verified against the engine's own",
+    "MCP tool registry vocabulary and its published examples/ integration snippets, which are",
+    "part of the public protocol surface). This file contains no engine implementation and no",
+    "engine source of any kind -- only the already-public tool names and the JSON-Schema shape",
+    "of the safety-relevant fields on the execute-tier tool. A tool NAME and its request/response",
+    "SCHEMA are the public interface; the code that implements them is not, and is not present",
+    "anywhere in this repository."
+  ],
+  "self_hosted_only_note": [
+    "Every tool in every profile below is called against the CALLER'S OWN self-hosted Algenta",
+    "Engine over HTTP or MCP at request time (see ALGENTA_BASE_URL / self-hosted `/mcp`).",
+    "No package in this repository bundles, embeds, or talks to a hosted-by-Algenta engine",
+    "by default."
+  ],
+  "external_tool_name_convention": {
+    "description": [
+      "Some model-calling frameworks (e.g. OpenAI/Azure Assistants function calling) require a",
+      "single flat, globally-unique tool name and do not support MCP-style namespacing. When an",
+      "integration package must flatten a tool for such a framework, it MUST prefix the MCP tool",
+      "name with 'algenta_' (e.g. MCP tool 'get_contract' -> external tool name 'algenta_get_contract';",
+      "MCP tool 'query_data' -> 'algenta_query_dataset' or similar). This convention is already used",
+      "in the engine's own published framework examples (see e.g. an Azure AI Studio integration's",
+      "algenta_query_tool_definition.json / algenta_contract_tool_definition.json) and packages here",
+      "must follow it rather than inventing a different flattened name per framework."
+    ],
+    "pattern": "^algenta_[a-z0-9_]+$"
+  },
+  "mcp_tool_reference": {
+    "get_contract": {
+      "category": "observability",
+      "description": "Fetch the live, machine-readable capability/discovery contract for the connected engine. Always call this before other tools that depend on discovering datasets or capabilities."
+    },
+    "query_data": {
+      "category": "query_and_ingest",
+      "aliases": ["query_batch"],
+      "description": "Run one governed exact query (or an exact-query batch) against an authorized, connected dataset."
+    },
+    "simulate": {
+      "category": "decisions",
+      "description": "Run a Monte Carlo / decision simulation over a scenario definition and return a decision envelope (recommendation, confidence, metrics)."
+    },
+    "recommend": {
+      "category": "decisions",
+      "description": "Return a governed recommendation for a decision scenario without a full simulation run."
+    },
+    "plan_decision": {
+      "category": "decisions",
+      "description": "Produce a proposed, not-yet-committed decision plan (plan_hash included) for human or downstream governance review."
+    },
+    "log_decision": {
+      "category": "decision_memory",
+      "description": "Persist a decision record (and its rationale) to decision memory for audit and later outcome recording. Does not execute anything."
+    },
+    "execute_decision": {
+      "category": "decisions",
+      "description": "Dispatch one already-planned, already-logged decision for real-world execution (e.g. a webhook delivery) and persist the execution receipt.",
+      "safety_critical": true
+    }
+  },
+  "profiles": {
+    "observe": {
+      "default": true,
+      "description": "Read-only situational awareness. The default profile for every integration package unless a caller explicitly opts into a higher profile.",
+      "tools": ["get_contract", "query_data", "simulate", "recommend"]
+    },
+    "govern": {
+      "extends": "observe",
+      "description": "Adds the ability to propose and record decisions, without ever executing them.",
+      "adds_tools": ["plan_decision", "log_decision"]
+    },
+    "execute": {
+      "extends": "govern",
+      "description": "Adds real-world execution of an already-planned, already-logged decision. This profile MUST NOT be enabled by default and MUST NOT be reachable by a model without every gate below satisfied.",
+      "adds_tools": ["execute_decision"],
+      "requires_all_of": [
+        "explicit server-side enablement (the self-hosted engine operator has turned execute-tier tools on for this API key/role -- an integration package cannot itself turn this on)",
+        "caller role/permission check passes on the engine side",
+        "an out-of-band policy approval already recorded against the plan_hash being executed",
+        "a caller-supplied idempotency key on the execute_decision call",
+        "the plan_hash of an already-planned (plan_decision) and already-logged (log_decision) decision -- execute_decision may not originate a new, unplanned action",
+        "a single-use nonce, to make replay of a captured execute_decision call a no-op on the engine side"
+      ],
+      "never_model_facing_fields": [
+        "force",
+        "override_safety"
+      ],
+      "never_model_facing_note": "These two fields exist on execute_decision's schema for operator/break-glass use only. No integration package may expose them as a parameter the model can set -- not in a tool schema, not via a kwarg the model's function-call arguments can reach, not via a default that resolves to true. If a human operator needs to set them, that happens outside the model-facing tool call entirely."
+    },
+    "full": {
+      "description": "Opt-in complete tool registry (all ~117 MCP tools across all 12 categories: data onboarding, data access, schema discovery, query & ingest, LLM utilities, runtime libraries, decisions, agent runtime, control plane, observability, decision memory, triggers). Intended for admin/ops tooling and advanced users, never a model-facing default.",
+      "tools": "*",
+      "opt_in_only": true
+    }
+  },
+  "conformance": {
+    "description": "A framework-integration package conforms to this contract if, for every supported profile, the set of tools it exposes to the model matches this file's 'tools'/'adds_tools' exactly (no additions, no omissions), the default profile is 'observe' unless the caller explicitly requests otherwise, and 'execute' is never reachable without all of 'requires_all_of' being enforced server-side.",
+    "checked_by": ["scripts/check-parity.py", "scripts/check-parity.ts"]
+  }
+}

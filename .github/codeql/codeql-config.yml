@@ -1,0 +1,8 @@
+name: Algenta Integrations source
+
+paths-ignore:
+  - "**/node_modules/**"
+  - "**/dist/**"
+  - "**/build/**"
+  - "**/.venv/**"
+  - "**/*.egg-info/**"

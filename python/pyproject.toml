@@ -1,0 +1,20 @@
+[project]
+name = "algenta-integrations-workspace"
+version = "0.0.0"
+description = "uv workspace root for Algenta's framework-integration packages (pydantic-ai, LangChain, LiteLLM). Not published — see each member package for its own pyproject.toml."
+requires-python = ">=3.10"
+# This root package itself has no code and is never published; each real
+# package under this workspace declares its own dependencies independently.
+dependencies = []
+
+[tool.uv.workspace]
+members = [
+    "pydantic-ai-algenta",
+    "langchain-algenta",
+    "litellm-algenta",
+    "examples",
+]
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
