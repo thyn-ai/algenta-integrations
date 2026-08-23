@@ -41,6 +41,22 @@ jobs:
       - name: Run the checker's own regression tests (proves it catches violations)
         run: python scripts/test_check_no_engine_dependency.py
 
+  # Regression tests for the zero-PR release automation (see .github/workflows/auto-release.yml
+  # and scripts/compute_release_bumps.py). Only exercises the script directly against throwaway
+  # temp git repos -- never touches this repository's own history or main.
+  release-automation:
+    runs-on: ${{ fromJSON(vars.RUNNER_LABELS) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Fleet Python 3.14 (pre-provisioned tool cache)
+        run: |
+          echo "$RUNNER_TOOL_CACHE/Python/3.14.7/arm64/bin" >> "$GITHUB_PATH"
+          echo "PYTHONNOUSERSITE=1" >> "$GITHUB_ENV"
+      - name: Run compute_release_bumps.py's regression tests
+        run: python scripts/test_compute_release_bumps.py
+
   python:
     runs-on: ${{ fromJSON(vars.RUNNER_LABELS) }}
     steps:

@@ -1,0 +1,168 @@
+# Zero-PR, convergent release automation. Replaces release-please.yml (removed in the same
+# commit as this file), because release-please's whole job is to open a pull request and this
+# org's ENTERPRISE policy disables Actions creating or approving pull requests -- see the removed
+# file's git history for the full story, and .github/workflows/release-please-app-token-fix in
+# that history for the App-token workaround this repo tried first. That workaround was real and
+# working, but it still produced a SEPARATE bot-authored PR the owner explicitly didn't want here
+# ("no separate pr just to bump, come on - it must be in 1 pr") -- so instead of gating the bump
+# behind any PR at all, this pushes it straight to main, mirroring the proven
+# thyn-ai/codna auto-release-cli.yml pattern (zero PR, direct push, convergent).
+#
+# scripts/compute_release_bumps.py owns all the actual logic (Conventional-Commits classification,
+# per-package versioning, convergence). This workflow only wires it to git/GitHub: run the script,
+# commit + tag whatever it changed, push, create a GitHub Release per tag.
+#
+# Convergence is simpler here than in codna's version: codna reconciles against PyPI (an external,
+# cache-prone truth source), which needs an "is HEAD my own bump commit" guard to terminate. This
+# repo doesn't publish anywhere yet (a separate, explicit, owner-gated decision for later -- see the
+# removed release-please.yml's original header), so the only state being reconciled is "do this
+# package's git tags already cover every commit that touches it", which is self-consistent: the
+# moment a bump is tagged, that tag becomes the new boundary, so the immediate re-trigger from this
+# very push sees zero new commits and computes no further bump. No self-commit detection needed.
+name: auto-release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  auto-release:
+    runs-on: ${{ fromJSON(vars.RUNNER_LABELS) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0 # full history + tags -- the script needs both
+
+      - name: Fleet Python 3.14 (pre-provisioned tool cache)
+        run: |
+          echo "$RUNNER_TOOL_CACHE/Python/3.14.7/arm64/bin" >> "$GITHUB_PATH"
+          echo "PYTHONNOUSERSITE=1" >> "$GITHUB_ENV"
+
+      - name: Compute and apply version bumps
+        id: bumps
+        run: |
+          set -euo pipefail
+          python3 scripts/compute_release_bumps.py --apply --json | tee /tmp/bumps.json
+          bumped=$(python3 -c "
+          import json
+          bumps = json.load(open('/tmp/bumps.json'))
+          print('true' if any(b['bumped'] for b in bumps) else 'false')
+          ")
+          echo "bumped=$bumped" >> "$GITHUB_OUTPUT"
+
+      # secrets is not available in a job-level `if:` (only github/needs/vars/inputs are), so this
+      # has to be a step other steps gate on -- see release-please-app-token-fix's real precedent
+      # for the same constraint in this repo's history.
+      - name: Check whether the release App credentials are configured
+        id: creds
+        if: steps.bumps.outputs.bumped == 'true'
+        env:
+          APP_ID: ${{ secrets.ALGENTA_SDK_SYNC_APP_ID }}
+          APP_PRIVATE_KEY: ${{ secrets.ALGENTA_SDK_SYNC_APP_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -n "${APP_ID:-}" ] && [ -n "${APP_PRIVATE_KEY:-}" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Explain the skip (App credentials not configured)
+        if: steps.bumps.outputs.bumped == 'true' && steps.creds.outputs.configured != 'true'
+        run: |
+          {
+            echo "### auto-release skipped -- App credentials not configured"
+            echo
+            echo "A release-worthy bump was computed, but this repository has no"
+            echo "\`ALGENTA_SDK_SYNC_APP_ID\` / \`ALGENTA_SDK_SYNC_APP_PRIVATE_KEY\` secret, so"
+            echo "there is no token allowed to push to main here (this org's enterprise policy"
+            echo "restricts the default \`GITHUB_TOKEN\`'s reach, and main is ruleset-protected)."
+            echo
+            echo "Computed bump (not applied to main):"
+            echo '```json'
+            cat /tmp/bumps.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Mint a scoped App installation token
+        id: app-token
+        if: steps.bumps.outputs.bumped == 'true' && steps.creds.outputs.configured == 'true'
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.ALGENTA_SDK_SYNC_APP_ID }}
+          private-key: ${{ secrets.ALGENTA_SDK_SYNC_APP_PRIVATE_KEY }}
+          owner: thyn-ai
+          repositories: algenta-integrations
+
+      - name: Commit, tag, and push the bump directly to main
+        if: steps.bumps.outputs.bumped == 'true' && steps.creds.outputs.configured == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -euo pipefail
+          git config user.name "algenta-sdk-sync[bot]"
+          git config user.email "154177813+algenta-sdk-sync[bot]@users.noreply.github.com"
+
+          summary=$(python3 -c "
+          import json
+          bumps = [b for b in json.load(open('/tmp/bumps.json')) if b['bumped']]
+          print(', '.join(f\"{b['name']}@{b['new_version']}\" for b in bumps))
+          ")
+          echo "Releasing: $summary"
+
+          git add -A -- python typescript
+          # A bootstrap-only run (a package's first release, tagging its current on-disk version
+          # as-is -- see compute_release_bumps.py) writes no files, so there can be nothing
+          # staged here. `git commit` exits 1 on an empty stage, which -- caught by `set -e`
+          # above -- would abort this step before ever reaching the tag push below. Only commit
+          # when there's really something to commit; tagging (and pushing) still needs to happen
+          # either way.
+          if git diff --cached --quiet; then
+            echo "No version-file changes to commit (bootstrap-only run) -- tagging current HEAD."
+          else
+            git commit -m "chore: release $summary"
+          fi
+
+          python3 -c "
+          import json, subprocess
+          bumps = [b for b in json.load(open('/tmp/bumps.json')) if b['bumped']]
+          for b in bumps:
+              subprocess.run(['git', 'tag', b['tag']], check=True)
+          "
+
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/thyn-ai/algenta-integrations.git"
+          git push origin HEAD:main
+          python3 -c "
+          import json, subprocess
+          bumps = [b for b in json.load(open('/tmp/bumps.json')) if b['bumped']]
+          for b in bumps:
+              subprocess.run(['git', 'push', 'origin', b['tag']], check=True)
+          "
+
+      - name: Create a GitHub Release per bumped package
+        if: steps.bumps.outputs.bumped == 'true' && steps.creds.outputs.configured == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -euo pipefail
+          python3 -c "
+          import json
+          bumps = [b for b in json.load(open('/tmp/bumps.json')) if b['bumped']]
+          for b in bumps:
+              print(b['tag'])
+              print(b['name'])
+              print(b['new_version'])
+              print(b.get('bump_kind', ''))
+              print('---')
+          " | while IFS= read -r tag && IFS= read -r name && IFS= read -r version && IFS= read -r kind && IFS= read -r _sep; do
+            if [ "$kind" = "bootstrap" ]; then
+              notes="First tracked release of \`$name\` at $version."
+            else
+              notes="Automated $kind release of \`$name\` to $version, computed from Conventional Commits."
+            fi
+            gh release create "$tag" --title "$name $version" --notes "$notes"
+          done

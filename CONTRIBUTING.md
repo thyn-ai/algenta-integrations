@@ -81,7 +81,8 @@ not merge, no matter how small the violation looks.
 
 ### Commit messages
 We follow [Conventional Commits](https://www.conventionalcommits.org/),
-which also drives this repository's release-please automation:
+which also drives this repository's automated version bumps (see
+`.github/workflows/auto-release.yml`):
 ```
 feat(langchain-algenta): add governed-query tool wrapper
 fix(algenta-tools): correct tool-profile default
