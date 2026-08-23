@@ -61,13 +61,24 @@ jobs:
         # Python from the step above.
         run: python scripts/check-parity.py
       # pydantic-ai-algenta (D1) landed with real tests; langchain-algenta/litellm-algenta are
-      # still scaffolded-implementation-pending, per CONTRIBUTING.md, and simply contribute zero
-      # collected tests today -- pytest exits 0 on a directory with none, so this one invocation
-      # covers whichever packages under python/ currently have tests without needing to list
-      # them, and picks up each new package's tests automatically as it lands.
+      # still scaffolded-implementation-pending, per CONTRIBUTING.md. Explicit package dirs
+      # (never `.`) so this doesn't recurse into `.venv`'s installed site-packages. pytest exits
+      # 5, not 0, when zero tests are collected across every given path -- true today since none
+      # of the three packages have tests on this branch alone. Tolerate exactly that code (an
+      # all-scaffolds day is not a CI failure); any other nonzero exit (a real test failure or a
+      # collection error) still fails the build.
       - name: Run package tests
         working-directory: python
-        run: uv run pytest . -v
+        run: |
+          set +e
+          uv run pytest pydantic-ai-algenta langchain-algenta litellm-algenta -v
+          code=$?
+          set -e
+          if [ "$code" -ne 0 ] && [ "$code" -ne 5 ]; then
+            echo "pytest failed with exit code $code"
+            exit "$code"
+          fi
+          exit 0
 
   typescript:
     runs-on: ${{ fromJSON(vars.RUNNER_LABELS) }}
