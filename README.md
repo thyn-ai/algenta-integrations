@@ -131,11 +131,13 @@ anything yet — check the table above and each package's own README.
 - **No real framework integration.** pydantic-ai, LangChain, LiteLLM, and
   the TypeScript tool-calling helpers are all "scaffolded, implementation
   pending." That's D1/D3/D4/D2+'s job, not this bootstrap's.
-- **No publishing.** `release-please` runs in manifest mode (opens
-  version-bump PRs, tags GitHub Releases) but there is no PyPI or npm
-  publish step anywhere in this repository, no `PYPI_TOKEN`/`NPM_TOKEN`,
-  and no OIDC Trusted Publisher registration. This repository is private;
-  publishing is a separate, explicit, owner-gated decision for later.
+- **No publishing.** `.github/workflows/auto-release.yml` computes per-package
+  semantic-version bumps from Conventional Commits and pushes them straight to
+  main, tagging a GitHub Release per bumped package (zero PR — see
+  `scripts/compute_release_bumps.py`), but there is no PyPI or npm publish step
+  anywhere in this repository, no `PYPI_TOKEN`/`NPM_TOKEN`, and no OIDC Trusted
+  Publisher registration. This repository is private; publishing is a separate,
+  explicit, owner-gated decision for later.
 - **No repository visibility change.** This repository stays private until
   its owner decides otherwise.
 
