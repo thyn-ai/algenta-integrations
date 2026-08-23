@@ -53,9 +53,18 @@ jobs:
           echo "PYTHONNOUSERSITE=1" >> "$GITHUB_ENV"
       - name: Install uv
         run: python -m pip install --quiet --disable-pip-version-check uv
+      # --all-extras is required, not cosmetic: pytest/pytest-asyncio/anyio only live under each
+      # package's `dev` optional-dependencies extra (never a hard dependency of the published
+      # package). Without it, `.venv/bin/pytest` never gets created, so `uv run pytest` silently
+      # falls back to whatever global `pytest` happens to be on PATH (here, the fleet's
+      # pre-provisioned Python 3.14 tool cache) -- a completely different interpreter that can't
+      # see anything installed in this project's `.venv`. That produced a real, CI-reproduced
+      # `ModuleNotFoundError: No module named 'pydantic_ai'` despite pydantic-ai-slim being
+      # correctly listed and installed as pydantic-ai-algenta's dependency; the module was never
+      # missing, `uv run pytest` was just running under the wrong Python entirely.
       - name: Sync the workspace (installs the REAL published algenta-sdk from PyPI)
         working-directory: python
-        run: uv sync --all-packages
+        run: uv sync --all-packages --all-extras
       - name: Validate the shared tool-profile contract (stub today, see script header)
         # Stdlib-only script -- no venv needed, but PATH already has fleet
         # Python from the step above.
