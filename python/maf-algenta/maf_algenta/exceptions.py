@@ -7,7 +7,7 @@ Framework has exactly one primitive for "abort this run, don't let the model pap
 converted into a tool result, ... and the exception propagates to the caller of `Agent.run`"
 (quoted from the installed `agent_framework` 1.15.0's own docstring, verified live: raising it
 directly from a tool body -- not just from a `FunctionMiddleware` -- propagates unmodified even
-with zero middleware registered on the agent; see the package README's "Why `MiddlewareFailure`"
+with zero middleware registered on the agent; see the package README's "Approval mapping"
 section for the reproduction).
 
 The three subclasses below all inherit `MiddlewareFailure` (so `isinstance(exc,
