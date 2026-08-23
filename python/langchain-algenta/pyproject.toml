@@ -1,25 +1,38 @@
 [project]
 name = "langchain-algenta"
-version = "0.0.1"
-description = "LangChain tool integration for Algenta (scaffolded — implementation pending)"
+version = "0.1.0"
+description = "LangChain / LangGraph tool integration for Algenta: a governed-execution-aware toolset wrapping a self-hosted Algenta Engine's MCP tool surface"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
 license-files = ["../../LICENSE"]
-keywords = ["algenta", "langchain", "agent", "tools", "decision"]
+keywords = ["algenta", "langchain", "langgraph", "agent", "tools", "decision", "mcp"]
 classifiers = [
-    "Development Status :: 2 - Pre-Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Typing :: Typed",
 ]
 # The ONLY Algenta dependency any package in this repo may declare. See
-# scripts/check-no-engine-dependency.py, which enforces this on every PR.
+# scripts/check-no-engine-dependency.py, which enforces this on every PR. `langchain-core`,
+# `langchain-mcp-adapters`, and `langgraph` are the other real, runtime dependencies this
+# integration needs -- not dev-only, since `create_algenta_tools` builds a real
+# `langchain_mcp_adapters.client.MultiServerMCPClient` and `AlgentaToolCallInterceptor` calls
+# `langgraph.types.interrupt(...)` unconditionally on a pending approval (see the package
+# README's "Why `interrupt()`" section for why `langgraph` is a hard dependency here, not an
+# optional one, even for callers who never build a `StateGraph` by hand). Version floors below
+# are the exact versions verified against this package's real, current APIs while building it
+# (see the research notes referenced in this package's PR): langchain-core 1.6.0,
+# langchain-mcp-adapters 0.3.2, langgraph 1.2.11.
 dependencies = [
     "algenta-sdk>=1.0.11",
+    "langchain-core>=1.6.0",
+    "langchain-mcp-adapters>=0.3.2",
+    "langgraph>=1.2.11",
 ]
 
 [project.urls]
@@ -28,8 +41,19 @@ Documentation = "https://docs.algenta.ai"
 Repository = "https://github.com/thyn-ai/algenta-integrations"
 
 [project.optional-dependencies]
-dev = ["pytest", "pytest-asyncio"]
+# `mcp` (the base Model Context Protocol SDK) is already a transitive dependency of
+# `langchain-mcp-adapters`, but is listed explicitly here since the test suite's stub Algenta
+# MCP server (tests/stub_server.py) imports `mcp.server.fastmcp.FastMCP` directly -- a real MCP
+# server, not a mock of `AlgentaToolCallInterceptor`'s internals. `httpx` is likewise already
+# transitive (via `mcp`) but is listed explicitly since a test constructs an `httpx.Auth` value.
+dev = ["pytest", "pytest-asyncio", "mcp>=1.29.0", "httpx>=0.27"]
 
 [build-system]
 requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["langchain_algenta*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
