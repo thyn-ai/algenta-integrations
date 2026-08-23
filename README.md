@@ -21,8 +21,8 @@ tool surface onto the conventions of popular agent frameworks:
 
 | Package | Framework | Status |
 |---|---|---|
-| [`python/pydantic-ai-algenta`](./python/pydantic-ai-algenta) | pydantic-ai | Scaffolded, implementation pending |
-| [`python/langchain-algenta`](./python/langchain-algenta) | LangChain | Scaffolded, implementation pending |
+| [`python/pydantic-ai-algenta`](./python/pydantic-ai-algenta) | pydantic-ai | Implemented |
+| [`python/langchain-algenta`](./python/langchain-algenta) | LangChain / LangGraph | Implemented |
 | [`python/litellm-algenta`](./python/litellm-algenta) | LiteLLM | Scaffolded, implementation pending |
 | [`typescript/algenta-tools`](./typescript/algenta-tools/packages/algenta-tools) | Vercel AI SDK (`ai` v7) tool integration | Implemented |
 
@@ -103,9 +103,9 @@ of those should be assumed to work end-to-end.
 | Track | Scope | Status |
 |---|---|---|
 | D0 | This repository's scaffold: governance files, CI, the no-engine-dependency gate, the tool-profile contract, workspace layout | ✅ Done |
-| D1 | `pydantic-ai-algenta` real implementation | 📋 Planned |
+| D1 | `pydantic-ai-algenta` real implementation: a governed-execution-aware `WrapperToolset` over pydantic-ai's own `MCPToolset` — tool-profile filtering, never-model-facing field scrubbing, typed governed-execution receipts, and an `ApprovalRequired`/`ToolDenied`/`ToolFailed` approval-flow mapping | ✅ Done |
 | D2 | `typescript/algenta-tools` real implementation: a governed-execution-aware Vercel AI SDK (`ai` v7) `ToolSet` — tool-profile filtering, never-model-facing field scrubbing, typed governed-execution receipts, and a `needsApproval`-based approval-flow mapping | ✅ Done |
-| D3 | `langchain-algenta` real implementation | 📋 Planned |
+| D3 | `langchain-algenta` real implementation: a governed-execution-aware LangChain/LangGraph tool list — tool-profile filtering, never-model-facing field scrubbing, typed governed-execution receipts, and a native `langgraph.types.interrupt()`-based approval-flow mapping (with an honest fallback accounting for when no checkpointer is present) | ✅ Done |
 | D4 | `litellm-algenta` real implementation | 📋 Planned |
 | D9 | `demo/` — the 12-scenario conformance fixture set exercising every tool profile | 📋 Planned |
 | D5–D8 | Additional integration surfaces reserved in the approved plan | 📋 Planned — exact scope tracked in the approved plan, not restated here |
