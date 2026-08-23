@@ -56,5 +56,13 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    groups:
+      # codeql.yml pins github/codeql-action/{init,analyze} to the SAME version at two
+      # call sites; Dependabot bumps each occurrence independently by default, and CI
+      # fails if only one lands (init writes a config file the analyze step's CLI version
+      # must match exactly) -- group them so every bump is one PR, never two half-bumps.
+      codeql-action:
+        patterns:
+          - "github/codeql-action/*"
     commit-message:
       prefix: "chore(ci)"
