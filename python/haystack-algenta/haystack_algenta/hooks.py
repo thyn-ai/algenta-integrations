@@ -1,105 +1,69 @@
-"""`AlgentaGovernanceHooks` -- the `before_tool` + `after_tool` `Agent` hook pair that maps the
-governed-execution receipt contract onto Haystack's own real hook/human-in-the-loop primitives.
+"""`GovernedReceiptHook` -- the `after_tool` `Agent` hook that maps the real `execute_decision`
+denial shape onto Haystack's own real hook seam.
 
-Verified live against installed `haystack-ai` 3.0.0 (see the package README's "Approval mapping"
-section for the full reproduction): Haystack has no single tool-calling seam that can both gate a
-pending call *and* see the receipt that call eventually produces (unlike `maf_algenta`'s
-`_wrap_mcp_function`, which does both inside one wrapped `FunctionTool`). It has two separate,
-real primitives that this module wires together instead:
+**Corrected against the real engine contract.** An earlier version of this module additionally
+built a `before_tool` `ConfirmationHook` pre-call gate (via `default_confirmation_hook` /
+`AlgentaGovernanceHooks.before_tool`) that asked a human to confirm the model's *request* to call
+`execute_decision`, separately from `GovernedReceiptHook` checking whether the engine's own
+out-of-band plan approval had actually landed (`approval_state == "pending"`). That whole design
+existed to bridge two different notions of "waiting for a human" across a fictional async approval
+boundary that doesn't exist on the real tool: `execute_decision` never comes back pending -- it is
+a 200 success or a same-call 409 denial, full stop. There is nothing to ask a human to confirm
+*before* the call that the call's own result doesn't already tell you *after* the call, so the
+pre-call `ConfirmationHook` wiring is removed outright rather than kept for a state that cannot
+occur. (Haystack's `ConfirmationHook` itself is a perfectly real, general-purpose primitive --
+nothing here says otherwise -- it just has no job to do in *this* package once the fictional
+approval-state bridge it was built for is gone; a caller who wants a human-in-the-loop gate before
+letting a model call `execute_decision` at all can still wire Haystack's own `ConfirmationHook`
+directly, the same way they would for any other tool.)
 
-1. **`haystack.hooks.human_in_the_loop.ConfirmationHook`** (a real `before_tool` hook) + a
-   `BlockingConfirmationStrategy` -- a genuine pre-call gate. Proven live: with
-   `AlwaysAskPolicy()` and a UI that rejects, the underlying MCP server is never contacted at all
-   (no request logged). This is the same shape as MAF's `approval_mode="always_require"` and the
-   TypeScript sibling's `needsApproval` -- `default_confirmation_hook` below is a thin,
-   opinionated factory over it, defaulting to gating `execute_decision` specifically.
+What's left, and is the one piece of real safety enforcement this package provides: **this
+module's own `after_tool` hook**, `GovernedReceiptHook`. It parses the real outcome out of the
+tool-result message(s) `Agent._run_step` just wrote into `state.data["messages"]`
+(`haystack_algenta.receipts.extract_execution_outcome_from_tool_result`) and raises
+`AlgentaToolDenied` -- naming the real gate (`"idempotency"` / `"confidence"` / `"risk_floor"`) --
+for the real 409 denial shape. A successful `ExecutionReceipt` (even one whose
+`execution_status == "failed"` -- a webhook-delivery outcome, not a policy verdict) and any
+non-`execute_decision` tool's result are both left alone.
 
-2. **`GovernedReceiptHook`** (this module's own `after_tool` hook): parses the governed-execution
-   receipt out of the tool-result message(s) `Agent._run_step` just wrote into `state.data["messages"]`,
-   and raises `AlgentaToolDenied` / `AlgentaApprovalStillPending` / `AlgentaToolExecutionFailed`
-   for anything that isn't a clean success. Proven live that this exception propagates out of
-   `agent.run()` **completely unmodified** -- no `ToolInvocationError` wrapping, no swallowing --
-   because `Agent._run_step`'s `_run_hooks(self.hooks, AFTER_TOOL, state)` call has no surrounding
-   `try`/`except` anywhere in `agent.py` (grep-verified against the installed package). This is
-   the one seam in Haystack's `Agent` loop that behaves the way raising `MiddlewareFailure`
-   directly from a tool body does in MAF, or the way an uncaught exception from a LangChain tool
-   coroutine does -- and it is genuinely the *only* one: raising from inside a wrapped `Tool`'s own
-   `function` instead (what `haystack_algenta.toolset` deliberately does not do) gets unconditionally
-   rewrapped into `ToolInvocationError`, and with a real `Agent`'s documented default
-   `raise_on_tool_invocation_failure=False`, silently swallowed into an ordinary tool-result
-   message the model then sees as plain text -- never raised out of `agent.run()` at all.
-
-**Why these two don't collapse into one concern, same as every sibling package that has both a
-pre-call gate and an out-of-band engine approval:** confirming the *call* (via `ConfirmationHook`)
-is a decision about whether the model may attempt `execute_decision` at all. It says nothing about
-whether the connected engine's own out-of-band policy approval for that call's `plan_hash` has
-actually been recorded -- proven live, the receipt can still legitimately come back
-`approval_state="pending"` after a human has already approved the call itself through Haystack's
-gate. `GovernedReceiptHook` is what catches that, and it does so for every governed tool, not just
-`execute_decision` -- it detects a governed-execution receipt by *shape*
-(`haystack_algenta.receipts.extract_receipt_from_tool_result` returning non-`None`), never by tool
-name, exactly matching the contract's own "a result missing status/code should pass through
-unchanged" wording.
-
-**Registering the pre-call gate is optional; `GovernedReceiptHook` is the one piece of real safety
-enforcement here and is always included by `build_algenta_governance_hooks`.** An `observe`- or
-`govern`-profile agent has no `execute_decision` tool to gate in the first place, so
-`build_algenta_governance_hooks(confirmation_ui=None)` (the default) registers only the
-`after_tool` hook. Pass a real `confirmation_ui` (e.g. `haystack.hooks.human_in_the_loop.SimpleConsoleUI`
-or `RichConsoleUI`, or your own) to also get the pre-call gate for `execute`-profile agents.
+Verified live (see the package README's "Approval mapping" section): this exception propagates out
+of `agent.run()` **completely unmodified** -- no `ToolInvocationError` wrapping, no swallowing --
+because `Agent._run_step`'s `_run_hooks(self.hooks, AFTER_TOOL, state)` call has no surrounding
+`try`/`except` anywhere in `agent.py` (grep-verified against the installed package). This is the
+one seam in Haystack's `Agent` loop that behaves the way raising `MiddlewareFailure` directly from
+a tool body does in MAF, or the way an uncaught exception from a LangChain tool coroutine does --
+and it is genuinely the *only* one: raising from inside a wrapped `Tool`'s own `function` instead
+(what `haystack_algenta.toolset` deliberately does not do) gets unconditionally rewrapped into
+`ToolInvocationError`, and with a real `Agent`'s documented default
+`raise_on_tool_invocation_failure=False`, silently swallowed into an ordinary tool-result message
+the model then sees as plain text -- never raised out of `agent.run()` at all.
 
 **A `Pipeline`, or any caller invoking `Tool.invoke()`/`invoke_async()` directly instead of through
-an `Agent`, gets neither hook** -- hooks are an `Agent`-loop concept; nothing here runs for a bare
-tool call. For that caller, `haystack_algenta.receipts.extract_receipt_from_tool_result` is the
-same parsing this module's hook uses, exposed directly so a `Pipeline`/direct-`invoke()` caller can
-call it themselves on whatever `Tool.invoke()` returned and decide what to do -- an honest,
-undisguised capability, not a fabricated approval-pause mechanism (this package makes no such
-claim, the same honest stance `litellm_algenta` documents for its own no-pause gateway path).
+an `Agent`, gets no hook at all** -- hooks are an `Agent`-loop concept; nothing here runs for a bare
+tool call. For that caller, `haystack_algenta.receipts.extract_execution_outcome_from_tool_result`
+is the same parsing this module's hook uses, exposed directly so a `Pipeline`/direct-`invoke()`
+caller can call it themselves on whatever `Tool.invoke()` returned and decide what to do -- an
+honest, undisguised capability, not a fabricated approval-pause mechanism.
 """
 
 from __future__ import annotations
 
-from typing import Any
-
 from haystack.components.agents.state.state import State
-from haystack.hooks.human_in_the_loop import AlwaysAskPolicy, BlockingConfirmationStrategy, ConfirmationHook
 
-from .contract import EXECUTE_DECISION
-from .exceptions import AlgentaApprovalStillPending, AlgentaToolDenied, AlgentaToolExecutionFailed
-from .receipts import GovernedExecutionReceipt, extract_receipt_from_tool_result
-
-
-def _raise_if_not_success(*, tool_name: str, receipt: GovernedExecutionReceipt) -> None:
-    if receipt.is_pending_approval():
-        raise AlgentaApprovalStillPending(
-            f"Algenta tool {tool_name!r} is still pending server-side policy approval "
-            f"(plan_hash={receipt.plan_hash!r}) -- even if a before_tool confirmation gate already "
-            "let the model's request through, that is orthogonal to the engine's own out-of-band "
-            "plan approval (see the package README). Record the real approval against this "
-            "plan_hash out of band, then retry from a fresh agent.run().",
-            receipt=receipt,
-        )
-    if receipt.is_denied():
-        raise AlgentaToolDenied(
-            f"Algenta tool {tool_name!r} was denied by policy -- {receipt.denial_reason()}",
-            receipt=receipt,
-        )
-    if not receipt.is_success():
-        raise AlgentaToolExecutionFailed(
-            f"{receipt.code}: Algenta tool {tool_name!r} did not complete successfully "
-            f"(status={receipt.status!r}).",
-            receipt=receipt,
-        )
+from .exceptions import AlgentaToolDenied
+from .receipts import ExecutionBlocked, ExecutionReceipt, extract_execution_outcome_from_tool_result
 
 
 class GovernedReceiptHook:
     """A real Haystack `after_tool` `Agent` hook: parses every just-produced tool-result message
-    in `state` and raises `AlgentaToolDenied` / `AlgentaApprovalStillPending` /
-    `AlgentaToolExecutionFailed` for the first one that isn't a clean governed-execution success.
+    in `state` and raises `AlgentaToolDenied` for the first real `execute_decision` 409 denial it
+    finds.
 
-    Detects a governed-execution receipt by shape, not by tool name (see this module's docstring)
-    -- `get_contract`'s discovery payload, or any other non-governed tool's result, simply doesn't
-    parse as a `GovernedExecutionReceipt` and is silently skipped.
+    Detects the denial by shape, not by tool name -- `extract_execution_outcome_from_tool_result`
+    returning an `ExecutionBlocked` -- so any other tool's result (which never validates as either
+    `ExecutionReceipt` or `ExecutionBlocked`) is silently skipped, and a *successful*
+    `execute_decision` `ExecutionReceipt` is silently skipped too (nothing to raise for; a
+    `"failed"` `execution_status` is a webhook-delivery outcome, not a governance denial).
 
     Only makes sense at the `after_tool` hook point, where tool-result messages actually exist in
     `state` -- `allowed_hook_points` restricts it there, and Haystack's own `Agent` construction
@@ -108,18 +72,32 @@ class GovernedReceiptHook:
 
     allowed_hook_points = ("after_tool",)
 
-    def __init__(self, *, receipt_model: type[GovernedExecutionReceipt] = GovernedExecutionReceipt) -> None:
+    def __init__(
+        self,
+        *,
+        receipt_model: type[ExecutionReceipt] = ExecutionReceipt,
+        blocked_model: type[ExecutionBlocked] = ExecutionBlocked,
+    ) -> None:
         self.receipt_model = receipt_model
+        self.blocked_model = blocked_model
 
     def run(self, state: State) -> None:
         for message in state.data.get("messages") or []:
             result = getattr(message, "tool_call_result", None)
             if result is None:
                 continue
-            receipt = extract_receipt_from_tool_result(result.result, model=self.receipt_model)
-            if receipt is None:
+            outcome = extract_execution_outcome_from_tool_result(
+                result.result, receipt_model=self.receipt_model, blocked_model=self.blocked_model
+            )
+            if not isinstance(outcome, ExecutionBlocked):
                 continue
-            _raise_if_not_success(tool_name=result.origin.tool_name, receipt=receipt)
+            tool_name = result.origin.tool_name
+            hint = f" ({outcome.override_hint})" if outcome.override_hint else ""
+            raise AlgentaToolDenied(
+                f"Algenta tool {tool_name!r} was blocked by the real {outcome.gate!r} policy gate "
+                f"({outcome.code}): {outcome.message}{hint}",
+                blocked=outcome,
+            )
 
     async def run_async(self, state: State) -> None:
         # Pure, synchronous, in-memory message parsing -- no I/O, so there is nothing genuinely
@@ -128,96 +106,31 @@ class GovernedReceiptHook:
         self.run(state)
 
 
-def default_confirmation_hook(
+def build_algenta_governance_hooks(
     *,
-    confirmation_ui: Any,
-    require_approval_for: frozenset[str] | tuple[str, ...] = (EXECUTE_DECISION,),
-    confirmation_policy: Any | None = None,
-) -> ConfirmationHook:
-    """Build a `before_tool` `ConfirmationHook` gating `require_approval_for` (default:
-    `execute_decision` only) with `confirmation_policy` (default: `AlwaysAskPolicy()`, matching
-    this whole contract's "execute MUST NOT be enabled by default" stance -- opting into the gate
-    at all is itself the opt-in) and `confirmation_ui`.
-
-    `confirmation_ui` is required (no default): `BlockingConfirmationStrategy` needs a real
-    `ConfirmationUI` (e.g. `haystack.hooks.human_in_the_loop.SimpleConsoleUI`/`RichConsoleUI`, or
-    your own implementation of that protocol -- see Haystack's own docs) to actually ask anyone
-    anything. There is no sensible silent default for "how do you ask a human" that this package
-    could pick on your behalf.
-    """
-    policy = confirmation_policy if confirmation_policy is not None else AlwaysAskPolicy()
-    names = tuple(require_approval_for)
-    key: str | tuple[str, ...] = names[0] if len(names) == 1 else names
-    return ConfirmationHook(
-        confirmation_strategies={
-            key: BlockingConfirmationStrategy(confirmation_policy=policy, confirmation_ui=confirmation_ui)
-        }
-    )
-
-
-class AlgentaGovernanceHooks:
-    """The recommended `before_tool` + `after_tool` hook pair for an Algenta-governed `Agent`.
-
-    Pass `.as_agent_hooks()` straight to `Agent(hooks=...)`:
+    receipt_model: type[ExecutionReceipt] = ExecutionReceipt,
+    blocked_model: type[ExecutionBlocked] = ExecutionBlocked,
+) -> dict[str, list[GovernedReceiptHook]]:
+    """Build the `dict[HookPoint, list[Hook]]` shape `Agent(hooks=...)` expects, registering the
+    one real piece of safety enforcement this package provides.
 
     ```python
     from haystack.components.agents import Agent
-    from haystack.hooks.human_in_the_loop import SimpleConsoleUI
     from haystack_algenta import build_algenta_governance_hooks, create_algenta_tools
 
     toolset = create_algenta_tools(profile="execute")
-    governance = build_algenta_governance_hooks(confirmation_ui=SimpleConsoleUI())
-    agent = Agent(chat_generator=..., tools=toolset, hooks=governance.as_agent_hooks())
+    agent = Agent(chat_generator=..., tools=toolset, hooks=build_algenta_governance_hooks())
     ```
+
+    There is no `before_tool` entry: unlike the fictional design this package used to have, there
+    is no pre-call gate left for this package to wire on `execute_decision`'s behalf (see this
+    module's docstring). Wire Haystack's own `ConfirmationHook` directly, independently of this
+    function, if you want a human-in-the-loop pre-call gate for your own reasons.
     """
-
-    def __init__(self, *, before_tool: list[Any] | None = None, after_tool: list[Any] | None = None) -> None:
-        self.before_tool = list(before_tool) if before_tool else []
-        self.after_tool = list(after_tool) if after_tool else []
-
-    def as_agent_hooks(self) -> dict[str, list[Any]]:
-        """The `dict[HookPoint, list[Hook]]` shape `Agent(hooks=...)` expects."""
-        hooks: dict[str, list[Any]] = {}
-        if self.before_tool:
-            hooks["before_tool"] = list(self.before_tool)
-        if self.after_tool:
-            hooks["after_tool"] = list(self.after_tool)
-        return hooks
-
-
-def build_algenta_governance_hooks(
-    *,
-    confirmation_ui: Any | None = None,
-    require_approval_for: frozenset[str] | tuple[str, ...] = (EXECUTE_DECISION,),
-    confirmation_policy: Any | None = None,
-    receipt_model: type[GovernedExecutionReceipt] = GovernedExecutionReceipt,
-) -> AlgentaGovernanceHooks:
-    """Build the recommended hook pair.
-
-    `after_tool` always gets a `GovernedReceiptHook` -- this is the one piece of real safety
-    enforcement here, and it's always worth registering regardless of profile.
-
-    `before_tool` only gets a `default_confirmation_hook` (gating `require_approval_for`, default
-    `execute_decision`) when `confirmation_ui` is given. Leave it `None` (the default) for an
-    `observe`/`govern`-profile agent that has no `execute_decision` tool to gate in the first
-    place, or if you'd rather wire your own `ConfirmationHook`/UI directly alongside this pair.
-    """
-    before_tool = []
-    if confirmation_ui is not None:
-        before_tool.append(
-            default_confirmation_hook(
-                confirmation_ui=confirmation_ui,
-                require_approval_for=require_approval_for,
-                confirmation_policy=confirmation_policy,
-            )
-        )
-    after_tool = [GovernedReceiptHook(receipt_model=receipt_model)]
-    return AlgentaGovernanceHooks(before_tool=before_tool, after_tool=after_tool)
+    return {"after_tool": [GovernedReceiptHook(receipt_model=receipt_model, blocked_model=blocked_model)]}
 
 
 __all__ = [
-    "AlgentaGovernanceHooks",
     "GovernedReceiptHook",
     "build_algenta_governance_hooks",
-    "default_confirmation_hook",
 ]
