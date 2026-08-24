@@ -8,14 +8,18 @@ self-hosted Algenta Engine, and layers on:
 - **Tool-profile filtering** -- expose only `observe` (read-only, the default), `govern`,
   `execute`, or the opt-in `full` registry, per
   [`contracts/integration-tool-contract.json`](../../contracts/integration-tool-contract.json).
-- **Typed governed-execution receipts** -- every tool call's result is parsed into a
-  [`GovernedExecutionReceipt`][receipt] when it validates as one, so your code gets a typed
-  object instead of an untyped dict.
-- **Native approval handling** -- a paused, approval-gated `execute_decision` call surfaces
-  through pydantic-ai's own
-  [deferred-tool-approval](https://ai.pydantic.dev/deferred-tools/#human-in-the-loop-tool-approval)
-  primitives (`ApprovalRequired` / `DeferredToolRequests` / `DeferredToolResults`) -- not a
-  bespoke mechanism -- with a thin `approve_and_resume` convenience over the resume step.
+- **A typed `execute_decision` result** -- `execute_decision`'s result is parsed into an
+  [`ExecutionReceipt`][receipt] on success, so your code gets a typed object instead of an
+  untyped dict. Every other tool's result (`plan_decision`, `log_decision`, `get_contract`, ...)
+  is freeform and passes through unchanged -- there is no shared envelope every tool returns.
+- **Native denial handling** -- `execute_decision` is fully synchronous: a call either succeeds
+  or is blocked in the very same call by one of three named policy gates. A blocked call
+  surfaces through pydantic-ai's own denial primitive
+  ([`ToolDenied`](https://ai.pydantic.dev/api/tools/#pydantic_ai.tools.ToolDenied), the same
+  thing a human reviewer's "no" produces) with the real gate name preserved -- not a bespoke
+  mechanism, and not pydantic-ai's deferred-tool-*approval* primitives, since there is nothing
+  asynchronous to pause on. See [The execute_decision result](#the-execute_decision-result)
+  below.
 
 [receipt]: ./pydantic_ai_algenta/receipts.py
 
@@ -56,13 +60,8 @@ print(result.output)
 ```
 
 `profile="observe"` is also the default if you omit it -- the agent can call
-`get_contract` / `query_data` / `simulate` / `recommend`, and nothing that writes, plans, or
+`get_contract` / `query_data` / `simulate` / `recommend`, and nothing that plans, logs, or
 executes anything. See [Tool profiles](#tool-profiles) to opt into more.
-
-Every tool call's result comes back on `ToolReturnPart.content` as a typed
-[`GovernedExecutionReceipt`][receipt] (when the connected tool returns Algenta's governed-execution
-envelope -- see [Typed receipts](#typed-receipts)), so downstream code can do
-`receipt.result`, `receipt.approval_state`, etc. instead of indexing into a raw dict.
 
 ## Tool profiles
 
@@ -70,7 +69,7 @@ envelope -- see [Typed receipts](#typed-receipts)), so downstream code can do
 |---|---|---|
 | `observe` (default) | `get_contract`, `query_data`, `simulate`, `recommend` | Read-only. |
 | `govern` | + `plan_decision`, `log_decision` | Propose/record decisions; never executes. |
-| `execute` | + `execute_decision` | Real-world execution, approval-gated -- see below. |
+| `execute` | + `execute_decision` | Real-world execution -- see below. |
 | `full` | everything the connected engine advertises | Opt-in only; admin/ops tooling. |
 
 ```python
@@ -84,119 +83,85 @@ real schema) are never exposed either, in any profile: stripped from the adverti
 *and* scrubbed from the arguments dict actually forwarded to the wrapped MCP call, in case
 something upstream still tried to pass one.
 
-## The approval flow
+## The decision lifecycle
 
-`execute_decision` is real-world execution and is approval-gated. When the connected engine's
-result envelope reports `approval_state == "pending"`, `AlgentaToolset.call_tool` raises
-[`ApprovalRequired`][ApprovalRequired] instead of returning a normal result -- which ends the
-agent run early with a `DeferredToolRequests` as its output, carrying everything you need to act
-on the pending plan in `metadata` (`plan_hash`, `execution_id`, `idempotency_key`, and the full
-receipt):
+The real lifecycle behind the `govern`/`execute` profiles is: `plan_decision(...)` produces a
+freeform, not-yet-committed plan summary; `log_decision(chosen_action, ...)` persists a decision
+record and returns its `decision_id`; `execute_decision(decision_id, webhook_url, ...)` dispatches
+that already-logged decision for real-world execution (a webhook delivery) and returns an
+execution receipt. There is no separate, model-reachable approval step in between -- a genuinely
+separate human-approval system exists on the engine side (plan/case/analysis-run review), but the
+engine's own MCP tool registry does not expose it as a tool at all, by design, so no integration
+package -- this one included -- can wire up a flow around it.
 
-```python
-from pydantic_ai.tools import DeferredToolRequests
+## The `execute_decision` result
 
-result = await agent.run(
-    "execute the approved restock plan",
-    output_type=[str, DeferredToolRequests],  # required for a paused run to surface cleanly
-)
+`execute_decision` is real-world execution, and it is fully synchronous: **every call returns
+either a success or a named denial in that same call** -- never "pending, check back later".
+`AlgentaToolset.call_tool` maps whichever one comes back onto pydantic-ai's own primitives:
 
-if isinstance(result.output, DeferredToolRequests):
-    call_id = result.output.approvals[0].tool_call_id
-    metadata = result.output.metadata[call_id]
-    # metadata["plan_hash"], metadata["execution_id"], metadata["idempotency_key"], ...
-    ...  # go get a human (or your own policy engine) to actually approve metadata["plan_hash"]
-```
+- **Success** -- the result validates as an [`ExecutionReceipt`][receipt] and is returned as-is:
 
-Once the plan is genuinely approved on the engine side, resume with `approve_and_resume`, which
-collapses "call your approval endpoint" + "build `DeferredToolResults`" + "resume the run" into
-one call:
+  ```python
+  from pydantic_ai_algenta import ExecutionReceipt
 
-```python
-from pydantic_ai_algenta import approve_and_resume
+  receipt: ExecutionReceipt = tool_return_part.content
+  receipt.decision_id
+  receipt.webhook_url
+  receipt.execution_status     # "delivered" | "failed"
+  receipt.response_code
+  receipt.safety_overridden    # True if a human operator's force/override_safety applied
+  ```
 
-async def approve(metadata: dict) -> None:
-    # Call *your* engine's real approval endpoint here -- see "Why `approve` is a callback"
-    # below for why this package doesn't hardcode that call.
-    await my_algenta_sdk_client.approve_agent_run(metadata["execution_id"])
+  Note that `execution_status == "failed"` -- the downstream webhook delivery itself failed --
+  is still a *successful* `execute_decision` call. The engine did what was asked and is
+  honestly reporting the outcome; it isn't refusing the call, so this is not a denial.
 
-resumed = await approve_and_resume(
-    agent,
-    message_history=result.all_messages(),
-    deferred_requests=result.output,
-    approve=approve,
-)
-print(resumed.output)
-```
+- **Denial** -- the engine synchronously blocks the call with one of exactly three named policy
+  gates, and `AlgentaToolset.call_tool` returns
+  [`ToolDenied`](https://ai.pydantic.dev/api/tools/#pydantic_ai.tools.ToolDenied) (which
+  pydantic-ai turns into `ToolReturnPart(outcome="denied")`), with the real gate name and the
+  engine's own message/override hint preserved in the denial message:
 
-If a human instead **denies** the request, resolve it with pydantic-ai's own primitive directly
-(no helper needed -- `AlgentaToolset` never re-calls the engine for a denial; pydantic-ai
-resolves it entirely on its own):
+  | Gate | Meaning | Bypass |
+  |---|---|---|
+  | `idempotency` | This `decision_id` has already been delivered. | `force=true`, for one re-execution. Operator-only; never model-facing. |
+  | `confidence` | The decision's confidence is below `policy.min_confidence`. | `override_safety=true`. Operator-only; never model-facing. |
+  | `risk_floor` | `risk_p5` is below `-policy.risk_floor`. | `override_safety=true`. Operator-only; never model-facing. |
 
-```python
-from pydantic_ai.tools import DeferredToolResults
+  A human operator applying one of those bypasses does so outside the model-facing tool call
+  entirely (their own direct call to the engine, or a break-glass path in your own code) --
+  never by the model setting `force`/`override_safety` itself, which is exactly what the
+  never-model-facing scrubbing above prevents.
 
-results = DeferredToolResults()
-results.approvals[call_id] = False  # or ToolDenied(message="...") for a custom message
-denied = await agent.run(message_history=result.all_messages(), deferred_tool_results=results)
-```
+- **Anything else** -- a transport/HTTP-level failure (a dropped connection, a 5xx, a timeout)
+  is not this package's concern to map: it already surfaces as whatever pydantic-ai's own
+  `MCPToolset` raises (typically
+  [`ToolFailed`](https://ai.pydantic.dev/api/exceptions/#pydantic_ai.exceptions.ToolFailed) or
+  [`ModelRetry`](https://ai.pydantic.dev/api/exceptions/#pydantic_ai.exceptions.ModelRetry))
+  before `AlgentaToolset.call_tool` ever gets a result to parse.
 
-A call the engine denies outright -- a named policy-gate `code` such as `plan_hash_mismatch`,
-`stale_plan`, `plan_not_approved`, or `idempotency_key_conflict`, or `approval_state in
-("rejected", "expired")` -- never goes through the approval flow at all: it comes back as an
-ordinary `ToolReturnPart(outcome="denied")` with the engine's own code/message preserved, so the
-model sees it in the same step rather than waiting on a resume.
+### Why not `ApprovalRequired` / `DeferredToolRequests`?
 
-[ApprovalRequired]: https://ai.pydantic.dev/api/exceptions/#pydantic_ai.exceptions.ApprovalRequired
-
-### Why `approve` is a callback, not a hardcoded SDK call
-
-`approve_and_resume` takes your approval call as a callback (`approve: Callable[[dict],
-Awaitable[Any] | Any]`) rather than calling a specific `algenta-sdk` method itself. This was a
-deliberate choice made after actually checking: the published `algenta-sdk` (PyPI, version
-1.0.11, checked directly against its installed source while building this package -- the one
-thing this package is allowed to depend on) does not expose a `decision_plans.approve(plan_id)`
-or `execution.approve(execution_id)`-shaped method keyed the way this envelope's `plan_hash` /
-`execution_id` fields are. Its nearest real analog is the differently-shaped, run-id-keyed
-`client.approve_agent_run(run_id)`. Hardcoding a call to a method that doesn't exist on the real,
-published client would be worse than not calling it at all, so `approve_and_resume` leaves that
-one call to you -- and will pick up a better-matching SDK method transparently, with no change to
-this function, the moment one ships.
+An earlier version of this package modeled `execute_decision` as pausing for an out-of-band
+approval, surfacing that pause through pydantic-ai's deferred-tool-approval primitives
+(`ApprovalRequired` -> `DeferredToolRequests` -> `DeferredToolResults`). That was wrong: checked
+directly against the real engine, `execute_decision` has no asynchronous "pending" state at
+all -- a call either succeeds or is blocked by a named gate in the very same call, and the
+engine's separate, genuine human-approval system for decision plans is explicitly not exposed as
+an MCP tool. There is nothing for this package to pause on, so this version removes that
+machinery entirely rather than keep it dormant for a case that cannot occur. A blocked
+`execute_decision` call is a deliberate "no" decided synchronously by the engine, and
+`ToolDenied` -- pydantic-ai's own primitive for exactly that -- is the correct, and simpler,
+fit.
 
 ## Typed receipts
 
-Every governed Algenta MCP tool call's result is parsed into a `GovernedExecutionReceipt`:
-
-```python
-from pydantic_ai_algenta import GovernedExecutionReceipt
-
-receipt: GovernedExecutionReceipt = tool_return_part.content
-receipt.status            # "ok" | "error" | ...
-receipt.code               # "ok" | "plan_hash_mismatch" | "upstream_timeout" | ...
-receipt.approval_state     # "none" | "pending" | "approved" | "rejected" | "expired"
-receipt.plan_hash
-receipt.execution_id
-receipt.idempotency_key
-receipt.result              # the tool's actual payload, once unwrapped from the envelope
-```
-
-A tool whose result *doesn't* validate as this envelope (e.g. a real `get_contract`'s discovery
-payload) passes through unchanged as an ordinary result -- `AlgentaToolset` doesn't assume every
-tool on a self-hosted Algenta MCP endpoint returns this exact shape, only that governed
-decision/execution tools do.
-
-### Why not `ToolReturnPart(outcome="interrupted")` for a paused execution?
-
-If you've read pydantic-ai's `ToolReturnPart.outcome` docs, you might expect a paused,
-approval-gated call to come back with `outcome="interrupted"`. It doesn't, on purpose, once you
-read what `"interrupted"` actually means in pydantic-ai 2.33.0: it's synthesized by the framework
-itself for a genuinely interrupted run (a crash, a dropped stream, a cancellation) during message-
-history repair -- never something a tool's own return value can request. A paused governed
-execution isn't an interruption; it's a deliberate, resumable pause with its own dedicated
-primitive (`ApprovalRequired` -> `DeferredToolRequests`), which is what `AlgentaToolset.call_tool`
-raises instead. `success` / `denied` / `failed` do map onto `outcome` exactly as you'd expect
-(returning the receipt, returning `ToolDenied(...)`, and raising `ToolFailed(...)`,
-respectively).
+Every tool other than `execute_decision` returns its own freeform result and passes through
+`AlgentaToolset` unchanged -- there is no shared "governed execution" envelope every tool
+returns. `execute_decision`'s successful result is the one exception, always parsed into an
+[`ExecutionReceipt`][receipt]; see [The execute_decision result](#the-execute_decision-result)
+above.
 
 ## Testing this package's own test suite (not your agent)
 
