@@ -67,11 +67,13 @@ discovered at tool-listing time, not known ahead of time by this package.
 """
 
 #: Every governed-execution tool named by the contract, excluding `get_contract` (a plain
-#: discovery/capability listing, never a governed-execution receipt). Used only as a documentation
-#: aid and a default scope for advanced callers of `haystack_algenta.hooks`; the receipt-mapping
-#: `after_tool` hook itself does not filter by tool name at all -- it detects a governed-execution
-#: receipt by *shape* (`haystack_algenta.receipts.parse_receipt` returning non-`None`), exactly as
-#: the contract itself describes ("a result missing status/code should pass through unchanged").
+#: discovery/capability listing, never an `execute_decision`-style outcome). Used only as a
+#: documentation aid and a default scope for advanced callers of `haystack_algenta.hooks`; the
+#: denial-mapping `after_tool` hook itself does not filter by tool name at all -- it detects the
+#: real `execute_decision` denial shape by *shape*
+#: (`haystack_algenta.receipts.parse_execution_outcome` returning an `ExecutionBlocked`), and any
+#: other tool's result -- which never validates as `ExecutionReceipt`/`ExecutionBlocked` -- simply
+#: passes through unchanged.
 GOVERNED_TOOL_NAMES: Final[frozenset[str]] = _EXECUTE_TOOLS - {GET_CONTRACT}
 
 #: Fields that exist on `execute_decision`'s schema for operator/break-glass use only. No profile,
