@@ -62,15 +62,15 @@
     },
     "plan_decision": {
       "category": "decisions",
-      "description": "Produce a proposed, not-yet-committed decision plan (plan_hash included) for human or downstream governance review."
+      "description": "Produce a structured, compact decision-plan summary (recommended_action, confidence, expected_value, risk, options) for human or downstream governance review. Does not return a plan_hash -- no such field exists on this tool's real response."
     },
     "log_decision": {
       "category": "decision_memory",
-      "description": "Persist a decision record (and its rationale) to decision memory for audit and later outcome recording. Does not execute anything."
+      "description": "Persist a decision record (and its rationale) to decision memory, returning a decision_id. Does not execute anything."
     },
     "execute_decision": {
       "category": "decisions",
-      "description": "Dispatch one already-planned, already-logged decision for real-world execution (e.g. a webhook delivery) and persist the execution receipt.",
+      "description": "Dispatch one logged decision (by decision_id, from log_decision) to a webhook for real-world execution, and return the resulting execution receipt.",
       "safety_critical": true
     }
   },
@@ -92,19 +92,17 @@
       "requires_all_of": [
         "explicit server-side enablement (the self-hosted engine operator has turned execute-tier tools on for this API key/role -- an integration package cannot itself turn this on)",
         "caller role/permission check passes on the engine side",
-        "an out-of-band policy approval already recorded against the plan_hash being executed",
-        "a caller-supplied idempotency key on the execute_decision call",
-        "the plan_hash of an already-planned (plan_decision) and already-logged (log_decision) decision -- execute_decision may not originate a new, unplanned action",
-        "a single-use nonce, to make replay of a captured execute_decision call a no-op on the engine side"
+        "a decision_id from an already-logged (log_decision) decision -- execute_decision may not originate a new, unlogged action"
       ],
+      "execution_model_note": "execute_decision is fully SYNCHRONOUS on the engine: a call either returns a 200 ExecutionReceipt (decision_id, webhook_url, execution_status, response_code, executed_at, policy_snapshot_id, schema_snapshot_id, manifest_version, payload_summary, safety_overridden) or is blocked in the same call by a 409 naming exactly one of three real gates -- 'idempotency' (decision already delivered; force=true bypasses only this gate), 'confidence' (below the org's min_confidence; override_safety=true bypasses only this and risk_floor), 'risk_floor' (risk_p5 below the org's -risk_floor). There is no asynchronous 'pending approval' state on this tool -- an integration package must not model one. A genuinely separate, real, plan_hash+nonce human-approval system exists in the engine (decision-cases/analysis-runs/decision-plans), but it is intentionally not exposed as an MCP/LLM tool and is unreachable from any package in this repository.",
       "never_model_facing_fields": [
         "force",
         "override_safety"
       ],
-      "never_model_facing_note": "These two fields exist on execute_decision's schema for operator/break-glass use only. No integration package may expose them as a parameter the model can set -- not in a tool schema, not via a kwarg the model's function-call arguments can reach, not via a default that resolves to true. If a human operator needs to set them, that happens outside the model-facing tool call entirely."
+      "never_model_facing_note": "These two fields exist on execute_decision's schema for operator/break-glass use only (force bypasses only the idempotency gate; override_safety bypasses only the confidence and risk_floor gates). No integration package may expose them as a parameter the model can set -- not in a tool schema, not via a kwarg the model's function-call arguments can reach, not via a default that resolves to true. If a human operator needs to set them, that happens outside the model-facing tool call entirely."
     },
     "full": {
-      "description": "Opt-in complete tool registry (all ~117 MCP tools across all 12 categories: data onboarding, data access, schema discovery, query & ingest, LLM utilities, runtime libraries, decisions, agent runtime, control plane, observability, decision memory, triggers). Intended for admin/ops tooling and advanced users, never a model-facing default.",
+      "description": "Opt-in complete tool registry (the full live MCP tool set -- 140 tools as of this writing, verified live against a running engine; enumerate the current count for your own deployment with get_contract or the server's real tool listing, never hardcode a number). Intended for admin/ops tooling and advanced users, never a model-facing default.",
       "tools": "*",
       "opt_in_only": true
     }
