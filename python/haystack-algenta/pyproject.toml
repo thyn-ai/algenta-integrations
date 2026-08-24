@@ -1,6 +1,6 @@
 [project]
 name = "haystack-algenta"
-version = "0.1.0"
+version = "0.1.1"
 description = "Haystack tool integration for Algenta: a governed-execution-aware wrapper around Haystack's own MCPToolset, plus an Agent hook pair mapping the governed-execution receipt onto Haystack's real human-in-the-loop and hook primitives"
 readme = "README.md"
 requires-python = ">=3.10"

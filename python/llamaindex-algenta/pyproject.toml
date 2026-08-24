@@ -1,6 +1,6 @@
 [project]
 name = "llamaindex-algenta"
-version = "0.2.0"
+version = "0.2.1"
 description = "LlamaIndex tool integration for Algenta: a governed-execution-aware FunctionTool list wrapping a self-hosted Algenta Engine's MCP tool surface"
 readme = "README.md"
 requires-python = ">=3.10"
