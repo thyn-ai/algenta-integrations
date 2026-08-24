@@ -2,8 +2,8 @@
 
 Used by `test_profile_filtering.py` and `test_never_model_facing.py`, both of which are pure
 list-filtering / schema-scrubbing logic that doesn't need a real MCP round trip to exercise (see
-`test_toolset_scenarios.py` for the real-wire equivalent, including the real approval gate and
-the real governance mapping end to end).
+`test_toolset_scenarios.py` for the real-wire equivalent, including the real denial mapping end
+to end).
 
 `fake_mcp_tool(name, schema=..., func=...)` builds a plain `agent_framework.FunctionTool` with a
 raw JSON-Schema `dict` as its `input_model` -- the exact shape a real MCP-derived function's
@@ -25,16 +25,20 @@ from agent_framework import FunctionTool
 
 _NO_ARGS_SCHEMA = {"type": "object", "properties": {}, "required": []}
 _SCENARIO_SCHEMA = {"type": "object", "properties": {"scenario": {"type": "string"}}, "required": ["scenario"]}
-_PLAN_HASH_SCHEMA = {"type": "object", "properties": {"plan_hash": {"type": "string"}}, "required": ["plan_hash"]}
+_LOG_DECISION_SCHEMA = {
+    "type": "object",
+    "properties": {"chosen_action": {"type": "string"}},
+    "required": ["chosen_action"],
+}
 _EXECUTE_DECISION_SCHEMA = {
     "type": "object",
     "properties": {
-        "plan_hash": {"type": "string"},
-        "idempotency_key": {"type": "string", "default": "idem-1"},
+        "decision_id": {"type": "string"},
+        "webhook_url": {"type": "string"},
         "force": {"type": "boolean", "default": False},
         "override_safety": {"type": "boolean", "default": False},
     },
-    "required": ["plan_hash"],
+    "required": ["decision_id", "webhook_url"],
 }
 
 
@@ -50,10 +54,6 @@ class FakeMCPTool:
     functions: list[FunctionTool] = field(default_factory=list)
 
 
-def _ok_receipt(**result: Any) -> dict[str, Any]:
-    return {"status": "ok", "code": "ok", "approval_state": "none", "result": result}
-
-
 def build_full_fake_registry(*, received_execute_calls: list[dict[str, Any]] | None = None) -> FakeMCPTool:
     """A fake registry covering every contract tool plus one tool the contract doesn't name at
     all (`admin_only_diagnostic_tool`) -- representing the wider real registry only `"full"`
@@ -64,33 +64,45 @@ def build_full_fake_registry(*, received_execute_calls: list[dict[str, Any]] | N
         return {"capabilities": ["query", "simulate", "recommend"], "engine_version": "1.4.0"}
 
     async def query_data(dataset: str) -> dict[str, Any]:
-        return _ok_receipt(dataset=dataset)
+        return {"dataset": dataset}
 
     async def simulate(scenario: str) -> dict[str, Any]:
-        return _ok_receipt(scenario=scenario)
+        return {"scenario": scenario}
 
     async def recommend(scenario: str) -> dict[str, Any]:
-        return _ok_receipt(scenario=scenario)
+        return {"scenario": scenario}
 
     async def plan_decision(scenario: str) -> dict[str, Any]:
-        return {"status": "ok", "code": "ok", "approval_state": "none", "plan_hash": "plan-1", "result": {}}
+        return {"scenario": scenario}
 
-    async def log_decision(plan_hash: str) -> dict[str, Any]:
-        return {"status": "ok", "code": "ok", "approval_state": "none", "plan_hash": plan_hash, "result": {}}
+    async def log_decision(chosen_action: str) -> dict[str, Any]:
+        return {
+            "decision_id": "decision-1",
+            "chosen_action": chosen_action,
+            "expected_value": None,
+            "confidence": None,
+            "created_at": "2026-08-23T00:00:00+00:00",
+            "note": "logged",
+        }
 
     async def execute_decision(
-        plan_hash: str, idempotency_key: str = "idem-1", force: bool = False, override_safety: bool = False
+        decision_id: str, webhook_url: str, force: bool = False, override_safety: bool = False
     ) -> dict[str, Any]:
         if received_execute_calls is not None:
             received_execute_calls.append(
-                {"plan_hash": plan_hash, "force": force, "override_safety": override_safety}
+                {"decision_id": decision_id, "force": force, "override_safety": override_safety}
             )
         return {
-            "status": "ok",
-            "code": "ok",
-            "approval_state": "approved",
-            "plan_hash": plan_hash,
-            "result": {"executed": True},
+            "decision_id": decision_id,
+            "webhook_url": webhook_url,
+            "execution_status": "delivered",
+            "response_code": 200,
+            "executed_at": "2026-08-23T00:00:00+00:00",
+            "policy_snapshot_id": "policy-snap-1",
+            "schema_snapshot_id": "schema-snap-1",
+            "manifest_version": "1",
+            "payload_summary": None,
+            "safety_overridden": override_safety,
         }
 
     async def admin_only_diagnostic_tool() -> dict[str, Any]:
@@ -103,7 +115,7 @@ def build_full_fake_registry(*, received_execute_calls: list[dict[str, Any]] | N
             fake_mcp_tool("simulate", schema=_SCENARIO_SCHEMA, func=simulate),
             fake_mcp_tool("recommend", schema=_SCENARIO_SCHEMA, func=recommend),
             fake_mcp_tool("plan_decision", schema=_SCENARIO_SCHEMA, func=plan_decision),
-            fake_mcp_tool("log_decision", schema=_PLAN_HASH_SCHEMA, func=log_decision),
+            fake_mcp_tool("log_decision", schema=_LOG_DECISION_SCHEMA, func=log_decision),
             fake_mcp_tool("execute_decision", schema=_EXECUTE_DECISION_SCHEMA, func=execute_decision),
             fake_mcp_tool("admin_only_diagnostic_tool", schema=_NO_ARGS_SCHEMA, func=admin_only_diagnostic_tool),
         ]
