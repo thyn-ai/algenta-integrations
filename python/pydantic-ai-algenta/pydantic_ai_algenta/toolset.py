@@ -1,11 +1,14 @@
 """`AlgentaToolset` -- a governed-execution-aware `pydantic_ai.toolsets.wrapper.WrapperToolset`
 wrapping an `MCPToolset` pointed at the caller's own self-hosted Algenta Engine.
 
-Structural template: `pydantic_ai.toolsets.approval_required.ApprovalRequiredToolset`, the
-built-in precedent for "a `WrapperToolset` that raises `ApprovalRequired` from `call_tool`".
-`AlgentaToolset` follows the same shape, but the approval decision comes from the wrapped MCP
-tool's own result envelope (`GovernedExecutionReceipt.approval_state`) rather than from a
-caller-supplied predicate evaluated before the call happens.
+`execute_decision` is fully synchronous: a call either succeeds (a typed `ExecutionReceipt`) or
+is blocked in the same call by exactly one of three named policy gates (a 409-shaped
+`ExecutionDenial`) -- there is no asynchronous "pending approval" state to model, and so no use
+for pydantic-ai's deferred-tool-approval primitives (`ApprovalRequired` /
+`DeferredToolRequests`) here. `AlgentaToolset.call_tool` maps a denial onto pydantic-ai's
+*denial* idiom instead -- returning [`ToolDenied`][pydantic_ai.tools.ToolDenied], the same
+primitive a human reviewer's "no" produces -- since a policy-gate block is exactly that: a
+deliberate "no", decided synchronously by the engine rather than by a human in the loop.
 """
 
 from __future__ import annotations
@@ -16,13 +19,12 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
 import httpx
-from pydantic_ai.exceptions import ApprovalRequired, ToolFailed
 from pydantic_ai.tools import AgentDepsT, RunContext, ToolDenied
 from pydantic_ai.toolsets.abstract import AbstractToolset, ToolsetTool
 from pydantic_ai.toolsets.wrapper import WrapperToolset
 
 from .contract import NEVER_MODEL_FACING_FIELDS, DEFAULT_PROFILE, ToolProfile, resolve_profile_tool_names
-from .receipts import GovernedExecutionReceipt, parse_receipt
+from .receipts import ExecutionReceipt, parse_denial, parse_receipt
 
 if TYPE_CHECKING:
     from pydantic_ai.mcp import MCPToolsetClient
@@ -81,14 +83,14 @@ class AlgentaToolset(WrapperToolset[AgentDepsT]):
        [`contracts/integration-tool-contract.json`](https://github.com/thyn-ai/algenta-integrations/blob/main/contracts/integration-tool-contract.json)
        assigns to the requested profile are exposed to the model. Defaults to `"observe"`
        (read-only), matching the contract's own stated default.
-    2. **Typed governed-execution receipts**: every wrapped tool call's raw result is parsed
-       into a [`GovernedExecutionReceipt`][pydantic_ai_algenta.receipts.GovernedExecutionReceipt]
-       when it validates as one, so message history carries a typed object instead of a raw
-       dict. A tool whose result doesn't validate as a receipt (e.g. `get_contract`'s discovery
-       payload) passes through unchanged.
-    3. **The approval/denial/failure mapping** (see `call_tool` below) between the receipt's
-       `approval_state`/`code`/`status` fields and pydantic-ai's own deferred-tool-approval and
-       `ToolReturnPart.outcome` mechanisms.
+    2. **Typed `execute_decision` results**: `execute_decision`'s raw result is parsed into a
+       typed [`ExecutionReceipt`][pydantic_ai_algenta.receipts.ExecutionReceipt] (success) or
+       mapped to [`ToolDenied`][pydantic_ai.tools.ToolDenied] (a named policy-gate denial) --
+       see `call_tool` below. Every other tool's result (`plan_decision`, `log_decision`,
+       `get_contract`, ...) is freeform and passes through unchanged; this package doesn't
+       invent a shared envelope for tools that don't have one.
+    3. **The denial/failure mapping** (see `call_tool` below) between `execute_decision`'s real
+       result shape and pydantic-ai's own `ToolReturnPart.outcome` mechanism.
 
     Example:
 
@@ -102,7 +104,7 @@ class AlgentaToolset(WrapperToolset[AgentDepsT]):
     """
 
     profile: ToolProfile = DEFAULT_PROFILE
-    receipt_model: type[GovernedExecutionReceipt] = GovernedExecutionReceipt
+    receipt_model: type[ExecutionReceipt] = ExecutionReceipt
 
     def __init__(
         self,
@@ -110,7 +112,7 @@ class AlgentaToolset(WrapperToolset[AgentDepsT]):
         base_url: str | None = None,
         profile: ToolProfile = DEFAULT_PROFILE,
         wrapped: AbstractToolset[AgentDepsT] | None = None,
-        receipt_model: type[GovernedExecutionReceipt] = GovernedExecutionReceipt,
+        receipt_model: type[ExecutionReceipt] = ExecutionReceipt,
         id: str | None = None,
         auth: httpx.Auth | Literal["oauth"] | str | None = None,
         headers: dict[str, str] | None = None,
@@ -131,10 +133,10 @@ class AlgentaToolset(WrapperToolset[AgentDepsT]):
                 an `MCPToolset`, or a `TestModel`-friendly stand-in) instead of having
                 `AlgentaToolset` build one from `base_url`. Mutually exclusive with `base_url`,
                 `auth`, `headers`, `http_client`, and any `**mcp_kwargs`.
-            receipt_model: The `GovernedExecutionReceipt` subclass to validate tool results
-                against. Override if your engine's receipt envelope has grown fields you want
-                typed (the base model already accepts and preserves unknown fields via
-                `extra="allow"`, so most callers won't need this).
+            receipt_model: The `ExecutionReceipt` subclass to validate `execute_decision`'s
+                successful result against. Override if your engine's receipt envelope has grown
+                fields you want typed (the base model already accepts and preserves unknown
+                fields via `extra="allow"`, so most callers won't need this).
             id: Forwarded to the constructed `MCPToolset` as its `id`.
             auth: Forwarded to the constructed `MCPToolset` (HTTP auth for the self-hosted
                 endpoint).
@@ -191,25 +193,34 @@ class AlgentaToolset(WrapperToolset[AgentDepsT]):
     async def call_tool(
         self, name: str, tool_args: dict[str, Any], ctx: RunContext[AgentDepsT], tool: ToolsetTool[AgentDepsT]
     ) -> Any:
-        """Call the wrapped tool, then map its governed-execution receipt onto pydantic-ai's primitives.
+        """Call the wrapped tool, then map `execute_decision`'s real result onto pydantic-ai's primitives.
 
-        - `approval_state == "pending"` -> raises
-          [`ApprovalRequired`][pydantic_ai.exceptions.ApprovalRequired] with the plan's
-          identifying fields in `metadata`, diverting the call into pydantic-ai's own
-          deferred-tool-approval flow (`DeferredToolRequests` / `DeferredToolResults`) rather
-          than returning it as an ordinary result. See the package README's "Why not
-          `outcome='interrupted'`?" note for why this -- not a `ToolReturnPart` outcome -- is the
-          correct binding for a paused governed execution.
-        - `approval_state in ("rejected", "expired")`, or a named policy-gate `code` (e.g.
-          `plan_hash_mismatch`) -- returns [`ToolDenied`][pydantic_ai.tools.ToolDenied], which
-          `pydantic-ai` turns into `ToolReturnPart(outcome="denied")` with the engine's own
-          code/message preserved (see `GovernedExecutionReceipt.denial_reason`).
-        - Anything else that isn't a recognized success -- raises
-          [`ToolFailed`][pydantic_ai.exceptions.ToolFailed], turned into
-          `ToolReturnPart(outcome="failed")`.
-        - A successful call, or a result that doesn't parse as a governed-execution receipt at
-          all (e.g. `get_contract`'s discovery payload) -- returned as-is, becoming
-          `ToolReturnPart(outcome="success")` (the default).
+        - A named policy-gate denial (the real, synchronous `{"error": {"code":
+          "execution_blocked_<gate>", "gate": ..., "message": ..., "override_hint": ...}}`
+          shape, where `<gate>` is one of `"idempotency"`, `"confidence"`, `"risk_floor"`) --
+          returns [`ToolDenied`][pydantic_ai.tools.ToolDenied], which pydantic-ai turns into
+          `ToolReturnPart(outcome="denied")` with the real gate name and the engine's own
+          message/override_hint preserved (see `ExecutionDenial.denial_reason`).
+        - A successful result that validates as an [`ExecutionReceipt`]
+          [pydantic_ai_algenta.receipts.ExecutionReceipt] -- returned as-is (a typed object, not
+          a raw dict), becoming `ToolReturnPart(outcome="success")`. Note that
+          `execution_status == "failed"` (the downstream webhook delivery failed) is still this
+          branch: the call itself succeeded, and the engine is honestly reporting delivery
+          failure, not refusing the call.
+        - Anything else -- a freeform result from a tool that isn't `execute_decision`
+          (`plan_decision`, `log_decision`, `get_contract`'s discovery payload, ...) -- passes
+          through unchanged.
+
+        A genuine transport/HTTP-level failure (a dropped connection, a 5xx, a timeout) is never
+        this method's concern: it already surfaces as whatever pydantic-ai's own `MCPToolset`
+        raises out of `super().call_tool()` (typically
+        [`ToolFailed`][pydantic_ai.exceptions.ToolFailed] or
+        [`ModelRetry`][pydantic_ai.exceptions.ModelRetry], depending on `tool_error_behavior`)
+        before this method ever sees a result to parse.
+
+        There is no "pending approval" branch: `execute_decision` is fully synchronous, so this
+        method never raises [`ApprovalRequired`][pydantic_ai.exceptions.ApprovalRequired] and no
+        call through this toolset ever produces a `DeferredToolRequests`.
 
         `force`/`override_safety` are stripped from `tool_args` before the wrapped call, as a
         second layer behind the schema-level scrub in `get_tools` -- see
@@ -218,44 +229,15 @@ class AlgentaToolset(WrapperToolset[AgentDepsT]):
         scrubbed_args = {k: v for k, v in tool_args.items() if k not in NEVER_MODEL_FACING_FIELDS}
         raw_result = await super().call_tool(name, scrubbed_args, ctx, tool)
 
+        denial = parse_denial(raw_result)
+        if denial is not None:
+            return ToolDenied(message=denial.denial_reason())
+
         receipt = parse_receipt(raw_result, model=self.receipt_model)
-        if receipt is None:
-            return raw_result
+        if receipt is not None:
+            return receipt
 
-        if receipt.is_pending_approval():
-            raise ApprovalRequired(metadata=self._approval_metadata(name, receipt))
-
-        if receipt.is_denied():
-            return ToolDenied(message=receipt.denial_reason())
-
-        if not receipt.is_success():
-            raise ToolFailed(
-                f"{receipt.code}: Algenta tool {name!r} did not complete successfully "
-                f"(status={receipt.status!r})."
-            )
-
-        return receipt
-
-    @staticmethod
-    def _approval_metadata(tool_name: str, receipt: GovernedExecutionReceipt) -> dict[str, Any]:
-        """Metadata attached to `ApprovalRequired`, surfaced on `DeferredToolRequests.metadata`.
-
-        Carries everything `approve_and_resume` (see `pydantic_ai_algenta.resume`) -- or a
-        caller building their own approval flow -- needs to call the engine's real approval
-        endpoint and then resume the run: `plan_hash`, `execution_id`, and `idempotency_key`
-        (which doubles as `execute_decision`'s single-use replay nonce), plus the full receipt
-        for anything else the caller might want.
-        """
-        return {
-            "tool_name": tool_name,
-            "plan_hash": receipt.plan_hash,
-            "execution_id": receipt.execution_id,
-            "idempotency_key": receipt.idempotency_key,
-            "policy_snapshot_hash": receipt.policy_snapshot_hash,
-            "request_id": receipt.request_id,
-            "trace_id": receipt.trace_id,
-            "receipt": receipt.model_dump(),
-        }
+        return raw_result
 
 
 __all__ = ["AlgentaToolset", "DEFAULT_ALGENTA_BASE_URL", "ALGENTA_BASE_URL_ENV_VAR"]

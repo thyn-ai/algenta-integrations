@@ -21,27 +21,27 @@ def get_contract() -> dict:
 
 
 def query_data(dataset: str) -> dict:
-    return {"status": "ok", "code": "ok", "approval_state": "none", "result": {"dataset": dataset}}
+    return {"dataset": dataset, "rows": []}
 
 
 def simulate(scenario: str) -> dict:
-    return {"status": "ok", "code": "ok", "approval_state": "none", "result": {"scenario": scenario}}
+    return {"scenario": scenario, "expected_value": 1.0}
 
 
 def recommend(scenario: str) -> dict:
-    return {"status": "ok", "code": "ok", "approval_state": "none", "result": {"scenario": scenario}}
+    return {"scenario": scenario, "recommended_action": "hold"}
 
 
 def plan_decision(scenario: str) -> dict:
-    return {"status": "ok", "code": "ok", "approval_state": "none", "plan_hash": "p1", "result": {}}
+    return {"summary": "proposed plan", "scenario": scenario}
 
 
-def log_decision(plan_hash: str) -> dict:
-    return {"status": "ok", "code": "ok", "approval_state": "none", "result": {}}
+def log_decision(chosen_action: str) -> dict:
+    return {"decision_id": "dec-1", "chosen_action": chosen_action}
 
 
-def execute_decision(plan_hash: str) -> dict:
-    return {"status": "ok", "code": "ok", "approval_state": "approved", "result": {}}
+def execute_decision(decision_id: str, webhook_url: str) -> dict:
+    return {"decision_id": decision_id, "webhook_url": webhook_url, "execution_status": "delivered"}
 
 
 def admin_only_diagnostic_tool() -> dict:
