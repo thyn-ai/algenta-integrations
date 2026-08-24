@@ -1,10 +1,11 @@
 /**
  * algenta-tools -- Vercel AI SDK ("ai") tool integration for Algenta.
  *
- * `createAlgentaTools` builds a governed-execution-aware `ToolSet` from a self-hosted Algenta
- * Engine's MCP tool surface: tool-profile filtering, never-model-facing field scrubbing, typed
- * governed-execution receipts, and a mapping of the receipt's approval/denial/failure states
- * onto AI SDK's own `needsApproval` / thrown-error primitives.
+ * `createAlgentaTools` builds an Algenta-aware `ToolSet` from a self-hosted Algenta Engine's MCP
+ * tool surface: tool-profile filtering, never-model-facing field scrubbing, and `execute_decision`'s
+ * typed success/denial contract -- a typed `ExecutionReceipt` on success, or a typed
+ * `ExecutionBlockedError` (carrying the engine's real named gate) thrown from `execute()` when
+ * the engine's synchronous safety gate blocks the call.
  *
  * See the package README for a runnable example, and
  * `contracts/integration-tool-contract.json` in the `algenta-integrations` repository root for
@@ -29,16 +30,14 @@ export {
 } from "./contract.js";
 
 export {
-  APPROVAL_STATES,
-  NAMED_POLICY_GATE_CODES,
-  denialReason,
-  governedExecutionReceiptSchema,
-  isDenied,
-  isPendingApproval,
-  isSuccess,
-  parseReceipt,
-  type ApprovalState,
-  type GovernedExecutionReceipt,
+  EXECUTION_GATES,
+  ExecutionBlockedError,
+  executionReceiptSchema,
+  parseExecutionBlockedBody,
+  parseExecutionReceipt,
+  type ExecutionBlockedBody,
+  type ExecutionGate,
+  type ExecutionReceipt,
 } from "./receipts.js";
 
 export {

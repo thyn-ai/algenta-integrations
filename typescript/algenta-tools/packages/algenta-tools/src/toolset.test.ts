@@ -18,11 +18,10 @@ import {
   scrubNeverModelFacingArgs,
   stripNeverModelFacingSchema,
 } from "./toolset.js";
-import type { GovernedExecutionReceipt } from "./receipts.js";
+import { ExecutionBlockedError, type ExecutionReceipt } from "./receipts.js";
 import {
-  PENDING_PLAN_HASH,
-  REJECTED_PLAN_CODE,
-  REJECTED_PLAN_HASH,
+  POLICY_MIN_CONFIDENCE,
+  POLICY_RISK_FLOOR,
   startStubAlgentaServer,
   type StubServerHandle,
 } from "./test-support/stub-server.js";
@@ -33,11 +32,21 @@ const noopExecOptions: ToolExecutionOptions<unknown> = {
   context: undefined,
 };
 
-// ── Profile filtering against an in-memory fake tool set (no network) ─────────────────────────
-
-function fakeReceipt(overrides: Partial<Record<string, unknown>> = {}) {
-  return { status: "ok", code: "ok", approval_state: "none", result: {}, ...overrides };
+/** Calls `log_decision` through the real stub server and returns the `decision_id` it minted,
+ * optionally seeded with a `confidence`/`risk_p5` low enough to trip a named gate later. */
+async function logDecision(
+  client: MCPClient,
+  overrides: { confidence?: number; risk_p5?: number } = {},
+): Promise<string> {
+  const tools = await createAlgentaTools({ client, profile: "govern" });
+  const result = (await tools[LOG_DECISION]!.execute!(
+    { chosen_action: "ship_it", ...overrides },
+    noopExecOptions,
+  )) as { decision_id: string };
+  return result.decision_id;
 }
+
+// ── Profile filtering against an in-memory fake tool set (no network) ─────────────────────────
 
 function fakeToolSet(): Record<string, Tool> {
   return {
@@ -49,36 +58,37 @@ function fakeToolSet(): Record<string, Tool> {
     [QUERY_DATA]: tool({
       description: "fake query_data",
       inputSchema: z.object({ dataset: z.string() }),
-      execute: async ({ dataset }) => fakeReceipt({ result: { dataset } }),
+      execute: async ({ dataset }) => ({ dataset, rows: [] }),
     }),
     [SIMULATE]: tool({
       description: "fake simulate",
       inputSchema: z.object({ scenario: z.string() }),
-      execute: async ({ scenario }) => fakeReceipt({ result: { scenario } }),
+      execute: async ({ scenario }) => ({ scenario, expected_value: 1 }),
     }),
     [RECOMMEND]: tool({
       description: "fake recommend",
       inputSchema: z.object({ scenario: z.string() }),
-      execute: async ({ scenario }) => fakeReceipt({ result: { scenario } }),
+      execute: async ({ scenario }) => ({ scenario, recommended_action: "hold" }),
     }),
     [PLAN_DECISION]: tool({
       description: "fake plan_decision",
       inputSchema: z.object({ scenario: z.string() }),
-      execute: async () => fakeReceipt({ plan_hash: "p1" }),
+      execute: async () => ({ plan_id: "p1" }),
     }),
     [LOG_DECISION]: tool({
       description: "fake log_decision",
-      inputSchema: z.object({ plan_hash: z.string() }),
-      execute: async () => fakeReceipt(),
+      inputSchema: z.object({ chosen_action: z.string() }),
+      execute: async () => ({ decision_id: "decision-1" }),
     }),
     [EXECUTE_DECISION]: tool({
       description: "fake execute_decision",
       inputSchema: z.object({
-        plan_hash: z.string(),
+        decision_id: z.string(),
+        webhook_url: z.string(),
         force: z.boolean().optional(),
         override_safety: z.boolean().optional(),
       }),
-      execute: async () => fakeReceipt({ approval_state: "approved" }),
+      execute: async () => ({ decision_id: "decision-1", execution_status: "delivered" }),
     }),
     admin_only_diagnostic_tool: tool({
       description: "not in the contract at all",
@@ -136,9 +146,9 @@ describe("profile filtering (in-memory tool set)", () => {
     ).rejects.toThrow(/Pass either `tools` or the MCP-connection options/);
   });
 
-  it("only exposes execute_decision with needsApproval set (never observe/govern-tier tools)", async () => {
+  it("no tool sets needsApproval -- there is no approval-pause gate on the real contract", async () => {
     const tools = await createAlgentaTools({ tools: fakeToolSet(), profile: "execute" });
-    expect(tools[EXECUTE_DECISION]?.needsApproval).toBe(true);
+    expect(tools[EXECUTE_DECISION]?.needsApproval).toBeUndefined();
     expect(tools[GET_CONTRACT]?.needsApproval).toBeUndefined();
     expect(tools[QUERY_DATA]?.needsApproval).toBeUndefined();
   });
@@ -151,15 +161,15 @@ describe("stripNeverModelFacingSchema", () => {
     const schema = {
       type: "object",
       properties: {
-        plan_hash: { type: "string" },
+        decision_id: { type: "string" },
         force: { type: "boolean" },
         override_safety: { type: "boolean" },
       },
-      required: ["plan_hash", "force"],
+      required: ["decision_id", "force"],
     };
     const stripped = stripNeverModelFacingSchema(schema);
-    expect(stripped.properties).toEqual({ plan_hash: { type: "string" } });
-    expect(stripped.required).toEqual(["plan_hash"]);
+    expect(stripped.properties).toEqual({ decision_id: { type: "string" } });
+    expect(stripped.required).toEqual(["decision_id"]);
   });
 
   it("returns the exact same object reference when nothing needs stripping", () => {
@@ -170,12 +180,16 @@ describe("stripNeverModelFacingSchema", () => {
 
 describe("scrubNeverModelFacingArgs", () => {
   it("removes force/override_safety from an arguments object", () => {
-    const scrubbed = scrubNeverModelFacingArgs({ plan_hash: "p1", force: true, override_safety: true });
-    expect(scrubbed).toEqual({ plan_hash: "p1" });
+    const scrubbed = scrubNeverModelFacingArgs({
+      decision_id: "d1",
+      force: true,
+      override_safety: true,
+    });
+    expect(scrubbed).toEqual({ decision_id: "d1" });
   });
 
   it("returns the exact same object reference when there's nothing to scrub", () => {
-    const args = { plan_hash: "p1" };
+    const args = { decision_id: "d1" };
     expect(scrubNeverModelFacingArgs(args)).toBe(args);
   });
 });
@@ -207,7 +221,6 @@ describe("createAlgentaTools against a real stub MCP server", () => {
         PLAN_DECISION,
         LOG_DECISION,
         EXECUTE_DECISION,
-        "_test_approve_plan",
         "admin_only_diagnostic_tool",
       ].sort(),
     );
@@ -218,7 +231,7 @@ describe("createAlgentaTools against a real stub MCP server", () => {
     expect(Object.keys(tools).sort()).toEqual([GET_CONTRACT, QUERY_DATA, RECOMMEND, SIMULATE].sort());
   });
 
-  it("get_contract's non-envelope discovery payload passes through unchanged", async () => {
+  it("get_contract's discovery payload passes through unchanged", async () => {
     const tools = await createAlgentaTools({ client, profile: "observe" });
     const result = await tools[GET_CONTRACT]!.execute!({}, noopExecOptions);
     expect(result).toEqual({
@@ -227,15 +240,10 @@ describe("createAlgentaTools against a real stub MCP server", () => {
     });
   });
 
-  it("a governed tool's receipt comes back as a parsed, typed object on success", async () => {
+  it("query_data's plain result passes through unchanged (it is not execute_decision's receipt shape)", async () => {
     const tools = await createAlgentaTools({ client, profile: "observe" });
-    const result = (await tools[QUERY_DATA]!.execute!(
-      { dataset: "orders" },
-      noopExecOptions,
-    )) as GovernedExecutionReceipt;
-    expect(result.status).toBe("ok");
-    expect(result.approval_state).toBe("none");
-    expect(result.result).toEqual({ dataset: "orders", rows: [{ value: 1 }, { value: 2 }] });
+    const result = await tools[QUERY_DATA]!.execute!({ dataset: "orders" }, noopExecOptions);
+    expect(result).toEqual({ dataset: "orders", rows: [{ value: 1 }, { value: 2 }] });
   });
 
   it("force/override_safety are absent from execute_decision's advertised schema", async () => {
@@ -246,58 +254,109 @@ describe("createAlgentaTools against a real stub MCP server", () => {
     expect(schema.properties).not.toHaveProperty("override_safety");
     expect(schema.required ?? []).not.toContain("force");
     // and the field that IS supposed to be model-facing survives untouched
-    expect(schema.properties).toHaveProperty("plan_hash");
+    expect(schema.properties).toHaveProperty("decision_id");
   });
 
-  it("execute_decision has needsApproval set unconditionally", async () => {
+  it("no tool -- including execute_decision -- sets needsApproval", async () => {
     const tools = await createAlgentaTools({ client, profile: "execute" });
-    expect(tools[EXECUTE_DECISION]!.needsApproval).toBe(true);
+    expect(tools[EXECUTE_DECISION]!.needsApproval).toBeUndefined();
   });
 
   it("a smuggled force/override_safety argument never reaches the wrapped MCP call", async () => {
+    const decisionId = await logDecision(client);
     const tools = await createAlgentaTools({ client, profile: "execute" });
     await tools[EXECUTE_DECISION]!.execute!(
-      { plan_hash: PENDING_PLAN_HASH, idempotency_key: "idem-x", force: true, override_safety: true },
+      {
+        decision_id: decisionId,
+        webhook_url: "https://example.com/hooks/decision",
+        force: true,
+        override_safety: true,
+      },
       noopExecOptions,
-    ).catch(() => {
-      // expected to throw (pending approval) -- we only care about what the server received
-    });
+    );
     expect(stub.executeDecisionCalls).toHaveLength(1);
     expect(stub.executeDecisionCalls[0]).toEqual({
-      plan_hash: PENDING_PLAN_HASH,
-      idempotency_key: "idem-x",
+      decision_id: decisionId,
+      webhook_url: "https://example.com/hooks/decision",
       force: false,
       override_safety: false,
     });
   });
 
-  it("throws a clear pending-approval error when the engine reports approval_state pending", async () => {
-    const tools = await createAlgentaTools({ client, profile: "execute" });
-    await expect(
-      tools[EXECUTE_DECISION]!.execute!({ plan_hash: PENDING_PLAN_HASH }, noopExecOptions),
-    ).rejects.toThrow(/still pending server-side policy approval/);
-  });
-
-  it("throws a policy-denial error for a named policy-gate code", async () => {
-    const tools = await createAlgentaTools({ client, profile: "execute" });
-    await expect(
-      tools[EXECUTE_DECISION]!.execute!({ plan_hash: REJECTED_PLAN_HASH }, noopExecOptions),
-    ).rejects.toThrow(new RegExp(`denied by policy.*${REJECTED_PLAN_CODE}`));
-  });
-
-  it("returns the receipt normally once the engine has genuinely approved the plan", async () => {
-    // Approve out-of-band via the full profile's test-only tool (stands in for a human/policy
-    // engine approval against the engine's real HTTP endpoint).
-    const fullTools = await createAlgentaTools({ client, profile: "full" });
-    await fullTools._test_approve_plan!.execute!({ plan_hash: PENDING_PLAN_HASH }, noopExecOptions);
-
+  it("a normal execute_decision call round-trips the real receipt fields", async () => {
+    const decisionId = await logDecision(client);
     const tools = await createAlgentaTools({ client, profile: "execute" });
     const result = (await tools[EXECUTE_DECISION]!.execute!(
-      { plan_hash: PENDING_PLAN_HASH },
+      { decision_id: decisionId, webhook_url: "https://example.com/hooks/decision" },
       noopExecOptions,
-    )) as GovernedExecutionReceipt;
-    expect(result.approval_state).toBe("approved");
-    expect(result.result).toEqual({ executed: true, plan_hash: PENDING_PLAN_HASH });
+    )) as ExecutionReceipt;
+
+    expect(result.decision_id).toBe(decisionId);
+    expect(result.webhook_url).toBe("https://example.com/hooks/decision");
+    expect(result.execution_status).toBe("delivered");
+    expect(result.response_code).toBe(200);
+    expect(typeof result.executed_at).toBe("string");
+    expect(result.policy_snapshot_id).toBe("policy-snap-1");
+    expect(result.schema_snapshot_id).toBe("schema-snap-1");
+    expect(result.manifest_version).toBe(1);
+    expect(result.safety_overridden).toBe(false);
+  });
+
+  it("throws ExecutionBlockedError with gate 'idempotency' on a second execution of the same decision", async () => {
+    const decisionId = await logDecision(client);
+    const tools = await createAlgentaTools({ client, profile: "execute" });
+    const args = { decision_id: decisionId, webhook_url: "https://example.com/hooks/decision" };
+
+    // First call succeeds and marks the decision delivered.
+    await tools[EXECUTE_DECISION]!.execute!(args, noopExecOptions);
+
+    // Second call, without force, is blocked on the idempotency gate.
+    let caught: unknown;
+    try {
+      await tools[EXECUTE_DECISION]!.execute!(args, noopExecOptions);
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(ExecutionBlockedError);
+    expect((caught as ExecutionBlockedError).gate).toBe("idempotency");
+    expect((caught as ExecutionBlockedError).code).toBe("execution_blocked_idempotency");
+  });
+
+  it("throws ExecutionBlockedError with gate 'confidence' when confidence is below policy.min_confidence", async () => {
+    const decisionId = await logDecision(client, { confidence: POLICY_MIN_CONFIDENCE - 0.1 });
+    const tools = await createAlgentaTools({ client, profile: "execute" });
+
+    let caught: unknown;
+    try {
+      await tools[EXECUTE_DECISION]!.execute!(
+        { decision_id: decisionId, webhook_url: "https://example.com/hooks/decision" },
+        noopExecOptions,
+      );
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(ExecutionBlockedError);
+    expect((caught as ExecutionBlockedError).gate).toBe("confidence");
+    expect((caught as ExecutionBlockedError).code).toBe("execution_blocked_confidence");
+    expect((caught as ExecutionBlockedError).overrideHint).toMatch(/override_safety/);
+  });
+
+  it("throws ExecutionBlockedError with gate 'risk_floor' when risk_p5 is below -policy.risk_floor", async () => {
+    const decisionId = await logDecision(client, { risk_p5: -(POLICY_RISK_FLOOR + 1) });
+    const tools = await createAlgentaTools({ client, profile: "execute" });
+
+    let caught: unknown;
+    try {
+      await tools[EXECUTE_DECISION]!.execute!(
+        { decision_id: decisionId, webhook_url: "https://example.com/hooks/decision" },
+        noopExecOptions,
+      );
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(ExecutionBlockedError);
+    expect((caught as ExecutionBlockedError).gate).toBe("risk_floor");
+    expect((caught as ExecutionBlockedError).code).toBe("execution_blocked_risk_floor");
   });
 
   it("a tool the contract names but the server doesn't advertise is simply absent", async () => {
