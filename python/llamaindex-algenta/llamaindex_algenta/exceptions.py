@@ -1,119 +1,91 @@
-"""Exceptions raised by `llamaindex_algenta.toolset`'s wrapped tool calls for a denied, failed,
-or (in the fail-closed fallback case) still-pending governed call.
+"""Exceptions raised by `llamaindex_algenta.toolset`'s wrapped `execute_decision` calls for a
+real named-gate denial or a genuine execution failure.
 
-Unlike `pydantic_ai`'s own `ApprovalRequired`/`ToolDenied`/`ToolFailed`, or
-`agent_framework.MiddlewareFailure` (`maf_algenta`'s foundation), llama-index has no single named
-exception type for "this tool call is gated." What it has -- verified live, not assumed, against
-installed `llama-index-core` 0.14.24 / `llama-index-workflows` 2.23.3 (see the package README's
-"Approval mapping" section for the full reproduction) -- is a real, working pause/resume primitive
-for the *pending-approval* case specifically:
-`workflows.context.context.Context.wait_for_event()`, which every wrapped tool built by
-`llamaindex_algenta.toolset.create_algenta_tools` calls itself when a receipt comes back
-`approval_state == "pending"`. That call raises an internal `workflows.runtime.types.results.
-WaitingForEvent` control-flow exception that the workflow runtime is documented to catch and turn
-into a real pause -- *replaying the entire step* (here: the tool call itself, MCP round trip
-included) once a human/caller resumes it, rather than resuming execution mid-function. See
-`llamaindex_algenta.toolset`'s module docstring for exactly what that does and doesn't guarantee.
+**There is no pending/approval-pause state on the real `execute_decision` tool at all.** A call
+either succeeds synchronously (a real `ExecutionReceipt`, see `llamaindex_algenta.receipts`) or is
+blocked synchronously by exactly one of three named policy gates (a real HTTP 409 whose body this
+package parses into `ExecutionDenial`) -- never "pending, come back later." An earlier version of
+this package modeled a fictional asynchronous `approval_state` on every governed tool and mapped
+a `"pending"` state onto `workflows.context.context.Context.wait_for_event()`, llama-index-workflows'
+real human-in-the-loop pause primitive. That state does not exist on the real tool, so that mapping
+-- and the `AlgentaApprovalStillPending` exception it raised as a fail-closed fallback -- has been
+removed entirely for this tool. (`Context.wait_for_event()` itself is a real, generally useful
+primitive; this package simply has no remaining reason of its own to call it.)
 
-These three exceptions below are this package's own plain exceptions (matching every sibling
-package's precedent of not inventing a fake shared base class across frameworks) for the other
-three governed-execution outcomes that have no comparable real primitive to bind to:
+What remains are two plain exceptions (matching every sibling package's precedent of not
+inventing a fake shared base class across frameworks) for the two real outcomes other than
+success:
 
-- `AlgentaToolDenied` -- a deliberate governance denial (`approval_state` `"rejected"`/`"expired"`,
-  or a named policy-gate `code`).
-- `AlgentaToolExecutionFailed` -- a generic execution-level failure, including the MCP
-  protocol-level `isError=True` case (Q3, layer 1: a server-side tool crash the MCP SDK already
-  turned into ordinary response data, never a raised exception at any layer).
-- `AlgentaApprovalStillPending` -- raised only as a fail-closed fallback when `wait_for_event()`
-  itself cannot be used to pause at all: `ctx` isn't wired to a live, running workflow (a bare
-  `FunctionTool.acall()` outside any `Workflow`/`FunctionAgent` run raises
-  `workflows.errors.ContextStateError` the moment `wait_for_event` is called), or the wait timed
-  out (`asyncio.TimeoutError`) with no human response ever arriving. Both are caught and re-raised
-  as this one exception type, so a caller has one thing to catch regardless of which underlying
-  reason applies.
+- `AlgentaToolDenied` -- `execute_decision` was blocked synchronously by one of the three real,
+  named gates (`llamaindex_algenta.receipts.NAMED_EXECUTION_GATES`: `"idempotency"`,
+  `"confidence"`, `"risk_floor"`). Carries the real `gate` name, the engine's `code`
+  (`"execution_blocked_<gate>"`), and `override_hint` verbatim.
+- `AlgentaToolExecutionFailed` -- a genuine execution-level failure that is *not* a named-gate
+  denial: the MCP protocol-level `isError=True` case (a server-side tool crash the MCP SDK
+  already turned into ordinary response data, never a raised exception at any layer), or a
+  result that is neither a well-formed `ExecutionReceipt` nor a well-formed `ExecutionDenial`.
 
-All three propagate out of `FunctionTool.acall()` completely unmodified (verified live: no
-try/except anywhere in `FunctionTool.acall`/`.call`). Whether they reach *your* code unmodified
-depends entirely on what calls the tool: a bare `await tool.acall(...)` lets them through as-is;
-going through `llama_index.core.tools.calling.acall_tool` or a real `FunctionAgent`/`AgentWorkflow`
-run (`BaseWorkflowAgent._call_tool`) gets them caught and turned into an ordinary
+Both propagate out of `FunctionTool.acall()` completely unmodified (verified live: no try/except
+anywhere in `FunctionTool.acall`/`.call`). Whether they reach *your* code unmodified depends
+entirely on what calls the tool: a bare `await tool.acall(...)` lets them through as-is; going
+through `llama_index.core.tools.calling.acall_tool` or a real `FunctionAgent`/`AgentWorkflow` run
+(`BaseWorkflowAgent._call_tool`) gets them caught and turned into an ordinary
 `ToolOutput(is_error=True, exception=e)` / `ToolCallResult` instead -- verified live with a
-deliberately-blowing-up tool (see the package README's "Exception propagation" section) -- *except*
-for the one control-flow exception `wait_for_event()` itself raises internally, which is the one
-exception type `BaseWorkflowAgent._call_tool` explicitly re-raises rather than swallowing. A
-caller that wants `AlgentaToolDenied`/`AlgentaToolExecutionFailed`/`AlgentaApprovalStillPending` to
-actually stop a `FunctionAgent.run()` must inspect the `ToolCallResult`/`ToolOutput` it produces
+deliberately-blowing-up test tool (see the package README's "Exception propagation" section). A
+caller that wants `AlgentaToolDenied`/`AlgentaToolExecutionFailed` to actually stop a
+`FunctionAgent.run()` must inspect the `ToolCallResult`/`ToolOutput` it produces
 (`tool_output.is_error`, `tool_output.exception`), not wrap `agent.run()` in a `try`/`except` --
-documented honestly here rather than papering over it, matching `haystack_algenta`'s and
-`maf_algenta`'s own documented stance on their respective runtimes' default swallowing behavior.
+documented honestly here rather than papering over it.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from .receipts import GovernedExecutionReceipt
-
 
 class AlgentaGovernedCallFailure(Exception):
-    """Base class for the three governed-execution exceptions below.
+    """Base class for the two `execute_decision` failure exceptions below.
 
-    Carries the parsed `receipt` (when one was available) so a caller catching this can still
-    inspect `error.receipt.plan_hash`, `error.receipt.execution_id`, etc.
+    `gate`/`code`/`override_hint` are populated only on `AlgentaToolDenied` (a real named-gate
+    denial has all three); they are `None` on `AlgentaToolExecutionFailed`, which has no gate to
+    report.
     """
 
-    def __init__(self, message: str, *, receipt: "GovernedExecutionReceipt | None" = None) -> None:
+    def __init__(
+        self,
+        message: str,
+        *,
+        gate: str | None = None,
+        code: str | None = None,
+        override_hint: str | None = None,
+    ) -> None:
         super().__init__(message)
-        self.receipt = receipt
+        self.gate = gate
+        self.code = code
+        self.override_hint = override_hint
 
 
 class AlgentaToolDenied(AlgentaGovernedCallFailure):
-    """Raised when the engine denies a governed call outright.
+    """Raised when `execute_decision` is blocked synchronously by one of the three real, named
+    policy gates: `"idempotency"` (already delivered; `force=true` overrides for one
+    re-execution), `"confidence"` (below `policy.min_confidence`), or `"risk_floor"` (`risk_p5`
+    below `-policy.risk_floor`) -- the latter two bypassable only via `override_safety=true`.
 
-    Corresponds to `GovernedExecutionReceipt.is_denied()`: `approval_state` is `"rejected"` or
-    `"expired"`, or `code` is one of `NAMED_POLICY_GATE_CODES` (e.g. `"plan_hash_mismatch"`).
+    `self.gate` is always one of those three exact strings, `self.code` is the engine's own
+    `"execution_blocked_<gate>"`, and `self.override_hint` (when the engine sent one) is its
+    verbatim guidance on how a human operator, not the model, could resolve this outside the
+    model-facing call (`force`/`override_safety` are never model-facing -- see
+    `llamaindex_algenta.contract.NEVER_MODEL_FACING_FIELDS`).
     """
 
 
 class AlgentaToolExecutionFailed(AlgentaGovernedCallFailure):
-    """Raised when a governed call did not complete successfully for a reason that is neither a
-    denial nor a pending approval.
-
-    Covers both a receipt-shaped failure (e.g. `code="upstream_timeout"`, `status="error"`, an
-    `approval_state` that isn't a recognized success) and the MCP protocol-level `isError=True`
-    case (`receipt` is `None` on the exception in that second case -- there was no
-    governed-execution envelope to parse at all, see `llamaindex_algenta.receipts.is_call_error`).
-    """
-
-
-class AlgentaApprovalStillPending(AlgentaGovernedCallFailure):
-    """Raised only when `Context.wait_for_event()` itself could not be used to pause.
-
-    Two real, distinct causes collapse into this one exception type:
-
-    1. `ctx` is not wired to a live, running workflow (`workflows.errors.ContextStateError`) --
-       e.g. a bare `await tool.acall(plan_hash=..., ctx=Context(workflow))` called outside any
-       `Workflow.run()`/`FunctionAgent.run()`. There is no live step to pause, so this package
-       fails closed rather than silently proceeding as if the call had succeeded.
-    2. The wait timed out (`asyncio.TimeoutError`) -- a real pause happened, but no human/caller
-       ever sent back a `HumanResponseEvent` within the configured `approval_wait_timeout`.
-
-    In the common case -- a real `FunctionAgent`/`AgentWorkflow` run, a human resuming within the
-    timeout -- this exception is never raised at all: `wait_for_event()` pauses for real, and per
-    its own documented semantics the *entire step is replayed* once resumed, which for this
-    package's wrapped tools means the underlying MCP call (here: `execute_decision` or whichever
-    governed tool paused) is transparently redone from scratch -- there is no separate "retry"
-    code path to write, unlike `langchain_algenta`'s hand-built single-retry `resolve_governed_call`
-    (LangGraph's `interrupt()` has the same replay-the-node semantics, so this mirrors that
-    sibling's design, just for free). See the package README for the full accounting, including
-    why this makes `execute_decision`'s caller-supplied idempotency key load-bearing here in a way
-    it wouldn't be for a tool without automatic replay-on-resume.
+    """Raised when `execute_decision` did not complete successfully for a reason that is not one
+    of the three named gates above -- either the MCP protocol-level `isError=True` case, or a
+    result that parsed as neither a well-formed `ExecutionReceipt` nor a well-formed
+    `ExecutionDenial`. `self.gate` is always `None` here; there was no gate to report.
     """
 
 
 __all__ = [
-    "AlgentaApprovalStillPending",
     "AlgentaGovernedCallFailure",
     "AlgentaToolDenied",
     "AlgentaToolExecutionFailed",

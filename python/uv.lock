@@ -2587,7 +2587,7 @@ wheels = [
 
 [[package]]
 name = "llamaindex-algenta"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "llamaindex-algenta" }
 dependencies = [
     { name = "llama-index-core" },
