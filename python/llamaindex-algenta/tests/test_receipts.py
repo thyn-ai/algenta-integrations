@@ -10,11 +10,15 @@ from __future__ import annotations
 
 from typing import Any
 
+from pydantic import ValidationError
+
 from llamaindex_algenta.receipts import (
-    GovernedExecutionReceipt,
+    ExecutionDenial,
+    ExecutionReceipt,
     call_error_text,
     is_call_error,
-    parse_receipt,
+    parse_execution_denial,
+    parse_execution_receipt,
     unwrap_call_tool_result,
 )
 
@@ -32,35 +36,84 @@ class _FakeCallToolResult:
         self.isError = is_error
 
 
-def test_parse_receipt_accepts_a_well_formed_dict() -> None:
-    receipt = parse_receipt({"status": "ok", "code": "ok", "result": {"a": 1}})
-    assert isinstance(receipt, GovernedExecutionReceipt)
-    assert receipt.is_success()
+def test_parse_execution_receipt_accepts_a_well_formed_dict() -> None:
+    receipt = parse_execution_receipt(
+        {"decision_id": "d1", "webhook_url": "https://example.com/hook", "execution_status": "delivered"}
+    )
+    assert isinstance(receipt, ExecutionReceipt)
+    assert receipt.decision_id == "d1"
+    assert receipt.safety_overridden is False
 
 
-def test_parse_receipt_returns_none_for_a_non_envelope_dict() -> None:
-    assert parse_receipt({"capabilities": ["query"], "engine_version": "1.0"}) is None
+def test_parse_execution_receipt_returns_none_for_a_non_envelope_dict() -> None:
+    assert parse_execution_receipt({"capabilities": ["query"], "engine_version": "1.0"}) is None
 
 
-def test_parse_receipt_returns_none_for_a_non_dict() -> None:
-    assert parse_receipt("just a string") is None
-    assert parse_receipt(None) is None
-    assert parse_receipt([1, 2, 3]) is None
+def test_parse_execution_receipt_returns_none_for_a_denial_shaped_dict() -> None:
+    assert (
+        parse_execution_receipt(
+            {"error": {"code": "execution_blocked_confidence", "gate": "confidence", "message": "too risky"}}
+        )
+        is None
+    )
+
+
+def test_parse_execution_receipt_returns_none_for_a_non_dict() -> None:
+    assert parse_execution_receipt("just a string") is None
+    assert parse_execution_receipt(None) is None
+    assert parse_execution_receipt([1, 2, 3]) is None
+
+
+def test_parse_execution_denial_accepts_the_real_409_body_shape() -> None:
+    denial = parse_execution_denial(
+        {
+            "error": {
+                "code": "execution_blocked_idempotency",
+                "gate": "idempotency",
+                "message": "already delivered",
+                "override_hint": "Retry with force=true.",
+            }
+        }
+    )
+    assert isinstance(denial, ExecutionDenial)
+    assert denial.gate == "idempotency"
+    assert denial.code == "execution_blocked_idempotency"
+    assert denial.override_hint == "Retry with force=true."
+
+
+def test_parse_execution_denial_returns_none_without_an_error_key() -> None:
+    assert parse_execution_denial({"decision_id": "d1", "webhook_url": "h", "execution_status": "delivered"}) is None
+
+
+def test_parse_execution_denial_returns_none_for_a_non_dict() -> None:
+    assert parse_execution_denial("just a string") is None
+    assert parse_execution_denial(None) is None
+
+
+def test_execution_denial_rejects_an_unknown_gate_name() -> None:
+    # Only "idempotency" | "confidence" | "risk_floor" are real gate names -- anything else is
+    # not a real execution-blocked denial and must fail validation, not be silently accepted.
+    try:
+        ExecutionDenial.model_validate({"code": "execution_blocked_bogus", "gate": "bogus", "message": "nope"})
+    except ValidationError:
+        pass
+    else:
+        raise AssertionError("expected ValidationError for an unknown gate name")
 
 
 def test_unwrap_prefers_structured_content_over_text_json() -> None:
     raw = _FakeCallToolResult(
-        structured_content={"status": "ok", "code": "ok", "result": {"from": "structured"}},
-        content=[_FakeTextContent('{"status": "ok", "code": "ok", "result": {"from": "text"}}')],
+        structured_content={"decision_id": "d1", "webhook_url": "h", "execution_status": "delivered", "source": "structured"},
+        content=[_FakeTextContent('{"decision_id": "d1", "webhook_url": "h", "execution_status": "delivered", "source": "text"}')],
     )
     payload = unwrap_call_tool_result(raw)
-    assert payload["result"] == {"from": "structured"}
+    assert payload["source"] == "structured"
 
 
 def test_unwrap_falls_back_to_text_content_json_when_no_structured_content() -> None:
-    raw = _FakeCallToolResult(content=[_FakeTextContent('{"status": "ok", "code": "ok", "result": 42}')])
+    raw = _FakeCallToolResult(content=[_FakeTextContent('{"decision_id": "d1", "webhook_url": "h", "execution_status": "delivered"}')])
     payload = unwrap_call_tool_result(raw)
-    assert payload == {"status": "ok", "code": "ok", "result": 42}
+    assert payload == {"decision_id": "d1", "webhook_url": "h", "execution_status": "delivered"}
 
 
 def test_unwrap_returns_none_for_unparseable_text_content() -> None:
@@ -69,11 +122,11 @@ def test_unwrap_returns_none_for_unparseable_text_content() -> None:
 
 
 def test_unwrap_accepts_a_plain_already_unwrapped_dict() -> None:
-    assert unwrap_call_tool_result({"status": "ok", "code": "ok"}) == {"status": "ok", "code": "ok"}
+    assert unwrap_call_tool_result({"decision_id": "d1"}) == {"decision_id": "d1"}
 
 
 def test_unwrap_accepts_a_json_string_defensively() -> None:
-    assert unwrap_call_tool_result('{"status": "ok", "code": "ok"}') == {"status": "ok", "code": "ok"}
+    assert unwrap_call_tool_result('{"decision_id": "d1"}') == {"decision_id": "d1"}
 
 
 def test_unwrap_returns_none_for_a_non_json_string() -> None:
@@ -97,25 +150,14 @@ def test_call_error_text_falls_back_to_str_when_no_text_content() -> None:
     assert call_error_text(raw) == str(raw)
 
 
-def test_receipt_is_denied_for_named_policy_gate_code() -> None:
-    receipt = GovernedExecutionReceipt(status="error", code="plan_hash_mismatch", approval_state="approved")
-    assert receipt.is_denied()
-    assert not receipt.is_success()
+def test_execution_receipt_round_trips_through_model_dump() -> None:
+    receipt = ExecutionReceipt(decision_id="d1", webhook_url="https://example.com/hook", execution_status="delivered")
+    assert parse_execution_receipt(receipt.model_dump()) == receipt
 
 
-def test_receipt_denial_reason_prefers_result_message() -> None:
-    receipt = GovernedExecutionReceipt(
-        status="error", code="stale_plan", approval_state="rejected", result={"message": "plan expired at the engine"}
+def test_execution_receipt_preserves_unknown_future_fields() -> None:
+    receipt = parse_execution_receipt(
+        {"decision_id": "d1", "webhook_url": "h", "execution_status": "delivered", "future_field": "surprise"}
     )
-    assert receipt.denial_reason() == "stale_plan: plan expired at the engine"
-
-
-def test_receipt_round_trips_through_model_dump() -> None:
-    receipt = GovernedExecutionReceipt(status="ok", code="ok", plan_hash="p1", result={"x": 1})
-    assert parse_receipt(receipt.model_dump()) == receipt
-
-
-def test_receipt_preserves_unknown_future_fields() -> None:
-    receipt = parse_receipt({"status": "ok", "code": "ok", "future_field": "surprise"})
     assert receipt is not None
     assert receipt.model_dump()["future_field"] == "surprise"

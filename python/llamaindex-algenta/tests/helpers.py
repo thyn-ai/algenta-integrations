@@ -6,45 +6,12 @@ from typing import Any
 
 from llama_index.core.base.llms.types import ChatMessage, ChatResponse, LLMMetadata, MessageRole
 from llama_index.core.llms.function_calling import FunctionCallingLLM
-from llama_index.core.workflow import Context, StartEvent, StopEvent, Workflow, step
-
-
-class _BareWorkflow(Workflow):
-    """A workflow with a trivial, never-invoked step -- exists only so `Context(...)` has
-    something to wrap (a real `Workflow` subclass must have at least one `@step` accepting a
-    `StartEvent`, or its own constructor rejects it before `Context(...)` is ever reached).
-
-    Never `.run()`, so the `Context` built from it stays in `PreContext` state forever, which is
-    exactly what exercises `llamaindex_algenta.exceptions.AlgentaApprovalStillPending`'s
-    `ContextStateError` fallback path: `ctx.wait_for_event(...)` on a `PreContext` raises
-    `workflows.errors.ContextStateError("... requires a running workflow. Call workflow.run() first.")`.
-    """
-
-    @step
-    async def _never_runs(self, ev: StartEvent) -> StopEvent:
-        return StopEvent(result=None)
-
-
-def bare_context() -> Context:
-    """A minimal, standalone `Context` for calling a wrapped `FunctionTool.acall(ctx=..., ...)`
-    directly, without spinning up a full agent/workflow run.
-
-    Fine for the toolset-level unit tests in this suite that exercise a *successful*,
-    *denied*, or *failed* governed call (none of those ever touch `ctx.wait_for_event()`) -- and
-    is the deliberate fixture for proving the pending-approval fail-closed fallback (there is no
-    live step here for `wait_for_event()` to actually pause).
-    """
-    return Context(_BareWorkflow())
 
 
 class ScriptedFunctionCallingLLM(FunctionCallingLLM):
     """A deterministic, scripted `FunctionCallingLLM` stand-in -- no network calls, fully
     reproducible. Each entry in `turns` is either a `list[ToolSelection]` (call these tools this
     turn) or a `str` (finish the run with this content).
-
-    Mirrors this package's own research probes (`probe_hitl2.py`/`probe_hitl3.py`) that first
-    proved `FunctionAgent.run()` genuinely pauses mid-tool-call via `Context.wait_for_event()`,
-    generalized here into one reusable scriptable stand-in for the whole test suite.
     """
 
     _turns: list[Any] = []

@@ -1,13 +1,13 @@
 # llamaindex-algenta
 
-LlamaIndex tool integration for [Algenta](https://algenta.ai): `create_algenta_tools`, a
-governed-execution-aware `list[llama_index.core.tools.FunctionTool]` wrapping your own self-hosted
-Algenta Engine's MCP tool surface via `llama-index-tools-mcp`'s own real
+LlamaIndex tool integration for [Algenta](https://algenta.ai): `create_algenta_tools`, an
+outcome-aware `list[llama_index.core.tools.FunctionTool]` wrapping your own self-hosted Algenta
+Engine's MCP tool surface via `llama-index-tools-mcp`'s own real
 [`BasicMCPClient`](https://docs.llamaindex.ai/en/stable/api_reference/tools/mcp/) (a separate PyPI
 package -- see [Why `llama-index-tools-mcp`, not the `llama-index`
-metapackage](#why-llama-index-tools-mcp-not-the-llama-index-metapackage)), plus a real approval
-mapping onto `llama-index-workflows`' `Context.wait_for_event()` human-in-the-loop primitive for a
-paused `execute_decision` call.
+metapackage](#why-llama-index-tools-mcp-not-the-llama-index-metapackage)), plus a real,
+synchronous receipt/denial mapping for `execute_decision` -- the one safety-critical tool in the
+real contract.
 
 - **Tool-profile filtering** -- expose only `observe` (read-only, the default), `govern`,
   `execute`, or the opt-in `full` registry, per
@@ -15,12 +15,12 @@ paused `execute_decision` call.
 - **Two-layer never-model-facing scrubbing** -- `force`/`override_safety` are stripped from every
   returned tool's advertised pydantic schema *and* from the arguments dict actually forwarded to
   the real `call_tool(...)`.
-- **Typed governed-execution receipts** -- a successful governed call's `ToolOutput.raw_output` is
-  the parsed `GovernedExecutionReceipt` object itself, not a stringified blob.
-- **An honest approval mapping** -- see [Approval mapping](#approval-mapping) below for the full
-  accounting of what LlamaIndex's real primitives do and don't guarantee, verified live against
-  installed `llama-index-core` 0.14.24 / `llama-index-tools-mcp` 0.4.8 / `llama-index-workflows`
-  2.23.3 / `mcp` 1.29.0, not assumed from documentation.
+- **A typed execution receipt, not a stringified blob** -- a successful `execute_decision` call's
+  `ToolOutput.raw_output` is the parsed `ExecutionReceipt` object itself.
+- **An honest execution-outcome mapping** -- see [Execution outcome
+  mapping](#execution-outcome-mapping) below for exactly what `execute_decision` does on success
+  and on each of its three real named denial gates -- there is no asynchronous "pending approval"
+  state anywhere in the real tool, and this package does not pretend there is one.
 
 ## Install
 
@@ -71,7 +71,7 @@ lifecycle of its own to manage either.
 |---|---|---|
 | `observe` (default) | `get_contract`, `query_data`, `simulate`, `recommend` | Read-only. |
 | `govern` | + `plan_decision`, `log_decision` | Propose/record decisions; never executes. |
-| `execute` | + `execute_decision` | Real-world execution, approval-gated -- see below. |
+| `execute` | + `execute_decision` | Real-world execution, gated -- see below. |
 | `full` | everything the connected engine advertises | Opt-in only; admin/ops tooling. |
 
 ```python
@@ -95,119 +95,87 @@ async def async_tool_fn(**kwargs):
     return await self.client.call_tool(tool_name, kwargs)
 ```
 
--- no `ctx: Context` parameter anywhere. `FunctionTool.__init__` decides whether a wrapped
-function needs workflow context purely by inspecting its signature for a `Context`-annotated
-parameter (`requires_context`/`ctx_param_name`), so every tool `McpToolSpec` builds has
-`requires_context=False` and **cannot itself call `ctx.wait_for_event()`** -- the one real,
-verified-live human-in-the-loop primitive this package needs for a paused `execute_decision` (see
-below). `create_algenta_tools` therefore builds its own `async def wrapper(ctx: Context, **kwargs)`
-per allowed tool and hands that to `FunctionTool.from_defaults(...)` directly -- reusing only
-`McpToolSpec`'s public JSON-Schema-to-pydantic-model helpers (`create_model_from_json_schema`,
-`remove_model_fields`), never its tool-call closures or `fetch_tools`/`to_tool_list_async`.
+-- kwargs are forwarded to the real MCP call completely unscrubbed, and the raw
+`mcp.types.CallToolResult` comes straight back with no outcome mapping applied at all.
+`create_algenta_tools` needs two things that closure doesn't give it, for every allowed tool call:
+the two-layer `force`/`override_safety` scrub, and (for `execute_decision` specifically) turning a
+real success/denial into a typed `ExecutionReceipt` or a raised `AlgentaToolDenied`. This module
+therefore builds its own `async def wrapper(**kwargs)` per allowed tool and hands that to
+`FunctionTool.from_defaults(...)` directly -- reusing only `McpToolSpec`'s public
+JSON-Schema-to-pydantic-model helpers (`create_model_from_json_schema`, `remove_model_fields`),
+never its tool-call closures or `fetch_tools`/`to_tool_list_async`.
 
-**A real footgun this design decision avoids, caught by this package's own test suite while
-building it:** if `llamaindex_algenta.toolset` used `from __future__ import annotations` (every
-other module in this package does), `wrapper`'s `ctx: Context` annotation would become the
-*string* `"Context"` at runtime instead of the real class object. `FunctionTool`'s context
-detection compares the raw annotation object directly -- it never resolves postponed/string
-annotations -- so `requires_context` would silently come back `False`, and every real
-`FunctionAgent` call would fail with a plain `TypeError: wrapper() missing 1 required positional
-argument: 'ctx'`, caught and swallowed into an ordinary tool error by the agent runtime rather than
-raised anywhere visible. `llamaindex_algenta/toolset.py` deliberately omits that future import,
-with a comment explaining why -- this is exactly the kind of gap only exercising the real
-`FunctionAgent` path (not just inspecting the tool object) would surface.
+**A footgun this design used to carry, and doesn't anymore:** an earlier version of `wrapper` took
+a `ctx: Context` parameter, so it could call `Context.wait_for_event()` -- llama-index-workflows'
+real human-in-the-loop pause primitive -- for a fictional, asynchronous `approval_state ==
+"pending"` receipt state that does not exist on the real `execute_decision` tool (see [Execution
+outcome mapping](#execution-outcome-mapping) below). Because `FunctionTool.__init__` detects
+whether a wrapped function needs workflow context by inspecting the *raw*, unresolved annotation
+on a `Context`-typed parameter, that `ctx: Context` parameter was the one real reason
+`llamaindex_algenta/toolset.py` used to omit `from __future__ import annotations` (every sibling
+module in this package uses it) -- with the future import enabled, the annotation would have
+silently become the *string* `"Context"` at runtime, `requires_context` would have silently come
+back `False`, and every real `FunctionAgent` call would have failed with a plain `TypeError:
+wrapper() missing 1 required positional argument: 'ctx'`. Now that `execute_decision`'s real
+behavior is fully synchronous (see below), there is nothing left to pause on, `wrapper` no longer
+takes a `ctx` parameter at all, and with no `Context`-annotated parameter anywhere in this module
+the footgun no longer applies -- `toolset.py` uses `from __future__ import annotations` like every
+sibling module now.
 
-## Approval mapping
+## Execution outcome mapping
 
-Verified live against installed `llama-index-core` 0.14.24 / `llama-index-workflows` 2.23.3 (a
-real `fastmcp.FastMCP` stub server, real HTTP wire, a real `FunctionAgent.run()` -- see
-`tests/test_approval_hitl.py`), not assumed from documentation.
+Only `execute_decision` gets any outcome mapping at all -- it is the one tool in the real contract
+marked `safety_critical`. `plan_decision`, `log_decision`, `query_data`, `simulate`, `recommend`,
+and `get_contract` are none of them gated; each returns its own plain result, passed straight
+through to the model unchanged.
 
-**The real primitive: `workflows.context.context.Context.wait_for_event()`.** Every wrapped tool
-this package builds calls this itself when a receipt comes back `approval_state == "pending"`:
+`execute_decision(decision_id, webhook_url, timeout_seconds=None, force=False,
+override_safety=False, metadata=None)` has exactly two real outcomes, both synchronous, in the
+same call -- there is no asynchronous "pending, come back later" state anywhere on this tool:
 
-```python
-await ctx.wait_for_event(
-    HumanResponseEvent,
-    waiter_id=f"algenta:{tool_name}:{plan_hash}",
-    waiter_event=InputRequiredEvent(tool_name=tool_name, plan_hash=plan_hash, msg="..."),
-    requirements={"plan_hash": plan_hash},
-    timeout=approval_wait_timeout,  # default 2000s, matching wait_for_event's own default
-)
-```
+- **Success**: a real `ExecutionReceipt` --
+  `{decision_id, webhook_url, execution_status: "delivered" | "failed", response_code,
+  executed_at, policy_snapshot_id, schema_snapshot_id, manifest_version, payload_summary,
+  safety_overridden}`. `create_algenta_tools` returns this parsed, typed object as
+  `ToolOutput.raw_output` -- not a stringified blob.
+- **Blocked**: a real, synchronous HTTP 409 whose body is `{"error": {"code":
+  "execution_blocked_<gate>", "gate": "<gate>", "message": "...", "override_hint": "..."}}`,
+  where `<gate>` is exactly one of three named values: `"idempotency"` (already delivered;
+  `force=true` overrides for one re-execution), `"confidence"` (below `policy.min_confidence`), or
+  `"risk_floor"` (`risk_p5` below `-policy.risk_floor`) -- the latter two bypassable only via
+  `override_safety=true`. `create_algenta_tools` raises `AlgentaToolDenied` for this, with
+  `error.gate`/`error.code`/`error.override_hint` carried on the exception verbatim.
 
-This raises an internal `WaitingForEvent` control-flow exception that the workflow runtime is
-documented to catch and turn into a genuine pause -- proven live through a real
-`FunctionAgent.run()`: the run yields an `InputRequiredEvent` mid-tool-call, and only completes
-after a caller sends back `handler.ctx.send_event(HumanResponseEvent(response="approved", ...))`.
+Anything else that isn't a recognized success or a recognized named-gate denial -- including the
+MCP protocol-level `isError=True` case (a server-side tool crash the MCP SDK already turned into
+ordinary, non-raising response data) -- raises `AlgentaToolExecutionFailed`. `force` and
+`override_safety` are the two fields that resolve a denial, and neither is ever model-facing (see
+[Tool profiles](#tool-profiles) above) -- an agent that receives `AlgentaToolDenied` cannot itself
+retry past it; only a human operator calling outside the model-facing tool surface can.
 
-**The one real wrinkle, and why it matters for `execute_decision` specifically:**
-`Context.wait_for_event()`'s own docstring says it plainly -- *"the runtime pauses ... and replays
-the entire step when the event arrives."* For a tool this package wraps, "the step" is the whole
-tool-call step, MCP round trip included. On resume, the wrapped `execute_decision` call is
-**redone from scratch** -- verified live in `test_approval_hitl.py` by observing that a genuinely
-`approval_state="approved"` receipt is only reachable at all if the underlying `call_tool(...)`
-really ran a second time (the stub server's fake plan only flips to `"approved"` after a separate,
-out-of-band `_test_approve_plan` call). This mirrors LangGraph's `interrupt()` (`langchain-algenta`
-documents the identical replay-the-node semantics for its own sibling design) -- but unlike that
-sibling, this package needs no hand-built "retry once after resume" logic at all
-(`langchain_algenta.governance.resolve_governed_call`'s explicit `retry` callback has no
-counterpart here): the workflow runtime's own replay does the retry for free. This is also exactly
-why the contract's `execute_decision` requiring a caller-supplied idempotency key matters in a way
-it wouldn't for a tool without automatic replay-on-resume -- a real engine seeing the same call
-twice (once producing "pending", once for real after approval) needs that key to treat the second
-delivery correctly.
-
-**The fail-closed fallback: `AlgentaApprovalStillPending`.** Raised only when
-`wait_for_event()` itself cannot be used to pause at all:
-
-- `ctx` isn't wired to a live, running workflow (a bare `await tool.acall(ctx=..., ...)` outside
-  any `Workflow`/`FunctionAgent` run) -- `wait_for_event()` raises
-  `workflows.errors.ContextStateError` in that case, and this package fails closed rather than
-  proceeding as if the call had succeeded.
-- The wait genuinely timed out (`asyncio.TimeoutError`) -- a real pause happened, but nobody
-  resumed within `approval_wait_timeout`.
-
-A call the engine denies outright (a named policy-gate `code` such as `plan_hash_mismatch`,
-`stale_plan`, `plan_not_approved`, `idempotency_key_conflict`, or `approval_state in ("rejected",
-"expired")`) raises `AlgentaToolDenied`; anything else that isn't a recognized success --
-including the MCP protocol-level `isError=True` case, a server-side tool crash the MCP SDK already
-turned into ordinary response data -- raises `AlgentaToolExecutionFailed`.
-
-### Where this sits relative to the other five siblings
-
-- `pydantic-ai-algenta` raises `ApprovalRequired` -- a **post-hoc** reaction after the real MCP
-  call already happened, because pydantic-ai has no pre-call approval gate at all.
-- `algenta-tools` (Vercel AI SDK) sets `needsApproval: true` as a **pre-call** gate and still
-  throws if the engine reports pending after that gate passes.
-- `langchain-algenta` can pause **mid-call**, genuinely resumably, via
-  `langgraph.types.interrupt()` -- with a hand-built single-retry-after-resume `retry` callback.
-- `maf-algenta` has a real **pre-call** gate (`approval_mode`) and a hard, fail-closed **abort**
-  when the engine's own state is still pending after that gate.
-- `haystack-algenta` has no mid-call pause at all -- its `after_tool` hook is a one-shot,
-  fail-closed abort with no resumption.
-- `llamaindex-algenta` (this package) is the only one of the six with a real **mid-call** pause
-  (`Context.wait_for_event()`, like LangGraph's `interrupt()`) that **also gets its retry for
-  free** from the runtime's own replay-the-step semantics, instead of needing a hand-built retry
-  path.
+A genuinely separate, real, `plan_hash`+nonce human-approval system does exist in the real engine
+(decision-cases/analysis-runs/decision-plans HTTP routes) -- but it is intentionally not exposed as
+an MCP/LLM tool at all, so no integration package (this one included) can reach it, and this
+package does not pretend otherwise.
 
 ### Exception propagation once it leaves this package
 
 `FunctionTool.acall()` has no `try`/`except` anywhere -- `AlgentaToolDenied` /
-`AlgentaToolExecutionFailed` / `AlgentaApprovalStillPending` propagate out of it completely
-unmodified. What happens next depends entirely on what calls the tool:
+`AlgentaToolExecutionFailed` propagate out of it completely unmodified. What happens next depends
+entirely on what calls the tool:
 
 - A bare `await tool.acall(...)` lets the exception through as-is.
 - `llama_index.core.tools.calling.acall_tool`, or a real `FunctionAgent`/`AgentWorkflow` run
   (`BaseWorkflowAgent._call_tool`), catches *any* exception and turns it into an ordinary
-  `ToolOutput(is_error=True, exception=e)` -- verified live with a deliberately-blowing-up test
-  tool (`tests/stub_server.py`'s `blow_up`) -- **except** the internal `WaitingForEvent` control-flow
-  exception `wait_for_event()` itself raises, which is the one exception type
-  `BaseWorkflowAgent._call_tool` explicitly re-raises rather than swallowing (mirroring MAF's
-  `MiddlewareFailure` carve-out and Haystack's `after_tool`-hook precedent for their own runtimes).
+  `ToolOutput(is_error=True, exception=e)` instead -- verified live with a deliberately-blowing-up
+  test tool (`tests/stub_server.py`'s `blow_up`) and with a real named-gate denial
+  (`tests/test_toolset_scenarios.py`). Since `execute_decision`'s real outcome is always decided
+  within the one tool-call step -- never a pause -- this is the only path a real `FunctionAgent`
+  run through this tool ever takes: it finishes on the very same turn regardless of whether the
+  call succeeded or was denied.
 
-A caller that wants `AlgentaToolDenied`/`AlgentaToolExecutionFailed`/`AlgentaApprovalStillPending`
-to actually stop a `FunctionAgent.run()` must inspect the `ToolCallResult`/`ToolOutput` it produces
+A caller that wants `AlgentaToolDenied`/`AlgentaToolExecutionFailed` to actually stop a
+`FunctionAgent.run()` must inspect the `ToolCallResult`/`ToolOutput` it produces
 (`tool_output.is_error`, `tool_output.exception`), not wrap `agent.run()` in a `try`/`except`.
 Documented honestly here rather than papering over it -- see `llamaindex_algenta/exceptions.py`'s
 module docstring for the full accounting.
@@ -220,14 +188,14 @@ about grounding *generated text* or a *synthesized answer* in retrieved source c
 anything to do with a tool call's execution metadata: `FunctionTool._parse_tool_output` only ever
 emits a `CitableBlock`/`CitationBlock` if a tool's raw output *already is* one, and an MCP
 `CallToolResult` never is. There is no real API seam in `llama-index-core`/`llama-index-tools-mcp`
-that reads `request_id`/`trace_id`/`plan_hash`/`policy_snapshot_hash` for any citation purpose --
-so this package does not build one; inventing a "receipt citation" primitive here would be exactly
-the kind of unverified, hoped-for feature this whole track's research is meant to rule out.
+that reads any of `ExecutionReceipt`'s fields for any citation purpose -- so this package does not
+build one; inventing a "receipt citation" primitive here would be exactly the kind of unverified,
+hoped-for feature this whole track's research is meant to rule out.
 
 What this package *does* give you is the receipt itself, fully typed, on `ToolOutput.raw_output`
-for every governed call. If you want those fields to show up in a citation-aware LlamaIndex chat
-UI, build your own `CitableBlock` from them -- that's a few lines in your own code, not package
-machinery:
+for a successful `execute_decision` call. If you want those fields to show up in a citation-aware
+LlamaIndex chat UI, build your own `CitableBlock` from them -- that's a few lines in your own code,
+not package machinery:
 
 ```python
 from llama_index.core.base.llms.types import CitableBlock, TextBlock
@@ -235,8 +203,8 @@ from llama_index.core.base.llms.types import CitableBlock, TextBlock
 def receipt_as_citable_block(receipt, tool_name: str) -> CitableBlock:
     return CitableBlock(
         title=f"Algenta: {tool_name}",
-        source=f"plan_hash={receipt.plan_hash} request_id={receipt.request_id}",
-        content=[TextBlock(text=str(receipt.result))],
+        source=f"decision_id={receipt.decision_id} response_code={receipt.response_code}",
+        content=[TextBlock(text=str(receipt.payload_summary))],
     )
 ```
 
@@ -299,6 +267,8 @@ multiple packages at once) -- two packages sharing a `tests/__init__.py` module 
 otherwise collide in one shared invocation. `tests/stub_server.py` runs a real `fastmcp.FastMCP`
 server over a real local HTTP socket, so a wire-shape regression (e.g. the receipt envelope not
 surviving `structuredContent` round-tripping) would actually be caught, not hidden behind a mock.
-`tests/test_approval_hitl.py` exercises the real pause/resume round trip through a real
-`FunctionAgent.run()`, and `tests/test_contract_parity.py` loads
+`tests/test_toolset_scenarios.py` exercises all three real named `execute_decision` gates plus the
+success path, both via a direct `tool.acall(...)` and through a real `FunctionAgent.run()` (proving
+each run finishes on its very first turn, with no `InputRequiredEvent`/pause of any kind ever
+emitted -- there is nothing asynchronous to pause on), and `tests/test_contract_parity.py` loads
 `contracts/integration-tool-contract.json` from disk rather than hardcoding profile membership.

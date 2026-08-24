@@ -1,27 +1,24 @@
-"""`GovernedExecutionReceipt` -- the typed shape of a governed Algenta MCP tool call's result, plus
-the plumbing that recovers it from what a real `mcp.types.CallToolResult` actually looks like.
+"""`ExecutionReceipt` / `ExecutionDenial` -- the real typed shapes a governed Algenta
+`execute_decision` MCP tool call returns, plus the plumbing that recovers them from what a real
+`mcp.types.CallToolResult` actually looks like.
 
-Every governed tool call against a self-hosted Algenta Engine (query/simulate/recommend and, most
-importantly, `plan_decision` / `log_decision` / `execute_decision`) returns this envelope as its
-result. Not every tool a self-hosted Algenta MCP endpoint exposes necessarily returns this shape
--- `get_contract`'s discovery payload, for instance, is a capability listing, not a governed
-execution result. `parse_receipt` returns `None` for anything that doesn't validate as a
-`GovernedExecutionReceipt`, and `llamaindex_algenta.toolset`'s wrapped tool calls pass such
-results through unchanged as an ordinary successful tool result.
+**Only `execute_decision` gets this treatment.** Verified directly against the real engine's MCP
+tool surface (`apps/mcp_server/tools/decisions.py`, private, but its facts are authoritative
+here): `plan_decision` is a freeform passthrough to `POST /v1/decisions/plan`, `log_decision`
+returns its own small `{decision_id, chosen_action, expected_value, confidence, created_at,
+note}` shape, and `query_data`/`simulate`/`recommend`/`get_contract` each return whatever payload
+they document -- none of that is safety-critical and none of it is gated. `execute_decision`
+alone is safety-critical: it either succeeds with a real `ExecutionReceipt` (below) or is blocked
+*synchronously* by exactly one of three named policy gates, surfaced as a real 409 whose body is
+an `ExecutionDenial` (below). `llamaindex_algenta.toolset` therefore only ever tries to parse
+these two shapes for the `execute_decision` tool call specifically -- every other tool's result is
+passed through to the model unchanged, exactly as it came back from the engine.
 
-This module is deliberately identical in the receipt model's shape to its siblings,
-`pydantic_ai_algenta.receipts`, `langchain_algenta.receipts`, `maf_algenta.receipts`,
-`haystack_algenta.receipts`, and `typescript/algenta-tools`'s `src/receipts.ts` -- the receipt
-envelope is one shared contract, not something each framework package gets to redefine. What *is*
-specific to this package is `unwrap_call_tool_result` / `extract_receipt_from_call_tool_result`
-below: unlike Haystack's `MCPToolset` (whose `Tool.invoke()` returns the whole MCP
-`CallToolResult` JSON-serialized to a *string*, with the tool's real payload nested as a second
-JSON string inside a text content block), `llamaindex_algenta.toolset` calls
-`BasicMCPClient.call_tool()` directly and gets back a real, typed `mcp.types.CallToolResult`
-object (`content: list[ContentBlock]`, `structuredContent: dict | None`, `isError: bool`) --
-verified live against a real `fastmcp` stub server: `structuredContent` is already the tool's
-real, structured payload with no JSON-string layer to peel at all, and `content[0].text` carries
-the same payload JSON-encoded as a fallback for servers that don't populate `structuredContent`.
+This module was previously built against a fictional, generic `GovernedExecutionReceipt` envelope
+(`status`/`code`/`approval_state`/`plan_hash`/... on *every* governed tool, with an asynchronous
+"pending approval" state) -- that shape does not exist anywhere in the real engine. It has been
+replaced with the two real shapes above. See the package README's "Execution outcome mapping"
+section for the full accounting.
 """
 
 from __future__ import annotations
@@ -31,114 +28,66 @@ from typing import Any, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
-ApprovalState = Literal["none", "pending", "approved", "rejected", "expired"]
-"""The engine's own approval-lifecycle state for a governed execution.
+#: The three, and only three, real named gates `execute_decision` can synchronously block on
+#: (verified against the real engine: a 409 with `{"error": {"code": "execution_blocked_<gate>",
+#: "gate": "<gate>", ...}}`, `<gate>` always one of these three literal strings).
+#:
+#: - `"idempotency"`: this decision has already been delivered; `force=true` bypasses this gate
+#:   for one re-execution only.
+#: - `"confidence"`: the decision's confidence is below `policy.min_confidence`; bypassable only
+#:   via `override_safety=true`.
+#: - `"risk_floor"`: `risk_p5` is below `-policy.risk_floor`; bypassable only via
+#:   `override_safety=true`.
+ExecutionGate = Literal["idempotency", "confidence", "risk_floor"]
 
-- `"none"`: no approval gate applies to this call (the common case for read-only tools).
-- `"pending"`: the call is paused awaiting an out-of-band policy approval -- see
-  `llamaindex_algenta.toolset`, which maps this onto the real
-  `workflows.context.Context.wait_for_event()` human-in-the-loop primitive.
-- `"approved"`: the plan behind this call has been approved and the call executed.
-- `"rejected"`: the plan was explicitly rejected by policy.
-- `"expired"`: the approval window lapsed before the call could be resumed.
-"""
-
-#: `code` values that are named, already-shipped 409-style policy-gate denials on
-#: `execute_decision` (see `contracts/integration-tool-contract.json`'s `execute` profile). A
-#: receipt carrying one of these is a deliberate governance decision, not a transient failure.
-NAMED_POLICY_GATE_CODES: Final[frozenset[str]] = frozenset(
-    {
-        "plan_not_approved",
-        "stale_plan",
-        "plan_hash_mismatch",
-        "idempotency_key_conflict",
-    }
-)
-
-#: `status` values that indicate the call otherwise completed without an execution-level error.
-#: Consulted only once `approval_state` and `code` have already been checked.
-_SUCCESS_STATUSES: Final[frozenset[str]] = frozenset({"ok", "success"})
+NAMED_EXECUTION_GATES: Final[frozenset[str]] = frozenset({"idempotency", "confidence", "risk_floor"})
 
 
-class GovernedExecutionReceipt(BaseModel):
-    """The governed-execution result envelope every governed Algenta MCP tool call returns.
+class ExecutionReceipt(BaseModel):
+    """The real, successful (HTTP 200) result of an `execute_decision` MCP tool call.
 
-    `extra="allow"` on purpose: the engine may add fields to this envelope over time (it is
-    versioned via `receipt_version`), and a newer engine talking to an older version of this
-    package should not fail to parse just because it sent one more field than this model knew
-    about when it was released.
+    `extra="allow"` on purpose: the engine may add fields to this envelope over time, and a newer
+    engine talking to an older version of this package should not fail to parse just because it
+    sent one more field than this model knew about when it was released.
     """
 
     model_config = ConfigDict(extra="allow")
 
-    status: str
-    """Coarse execution status as reported by the engine (e.g. `"ok"` or `"error"`)."""
+    decision_id: str
+    webhook_url: str
+    execution_status: Literal["delivered", "failed"]
+    response_code: int | None = None
+    executed_at: str | None = None
+    policy_snapshot_id: str | None = None
+    schema_snapshot_id: str | None = None
+    manifest_version: str | None = None
+    payload_summary: Any = None
+    safety_overridden: bool = False
+
+
+class ExecutionDenial(BaseModel):
+    """The real, synchronous HTTP 409 body an `execute_decision` call gets back when one of the
+    three named gates (`NAMED_EXECUTION_GATES`) blocks it -- the JSON under the response's
+    top-level `"error"` key, e.g. `{"code": "execution_blocked_confidence", "gate": "confidence",
+    "message": "...", "override_hint": "..."}`.
+    """
+
+    model_config = ConfigDict(extra="allow")
 
     code: str
-    """A specific, named result/error code (e.g. `"ok"`, `"plan_hash_mismatch"`, `"upstream_timeout"`)."""
-
-    retryable: bool = False
-    """Whether the engine considers a repeat of this exact call likely to succeed."""
-
-    request_id: str | None = None
-    trace_id: str | None = None
-    policy_snapshot_hash: str | None = None
-    receipt_version: int | str | None = None
-
-    plan_hash: str | None = None
-    """Hash of the decision plan this call is executing against, when one applies."""
-
-    approval_state: ApprovalState = "none"
-
-    execution_id: str | None = None
-    """Identifies this specific governed-execution attempt, for later approval/audit lookups."""
-
-    idempotency_key: str | None = None
-    """The caller-supplied idempotency key that also doubles as `execute_decision`'s single-use
-    replay nonce (see the contract's `execute` profile `requires_all_of`)."""
-
-    result: Any = None
-    """The tool's actual payload (a recommendation, a query result, ...), once unwrapped from the
-    governance envelope around it."""
-
-    def is_success(self) -> bool:
-        """Whether this receipt represents a completed, non-gated, non-failed call."""
-        return self.approval_state in ("none", "approved") and self.status in _SUCCESS_STATUSES
-
-    def is_pending_approval(self) -> bool:
-        return self.approval_state == "pending"
-
-    def is_denied(self) -> bool:
-        """Whether this receipt represents a deliberate governance denial (not a raw error)."""
-        return self.approval_state in ("rejected", "expired") or self.code in NAMED_POLICY_GATE_CODES
-
-    def denial_reason(self) -> str:
-        """A human-readable reason for `is_denied()`, preferring the engine's own code/message."""
-        message = self.result.get("message") if isinstance(self.result, dict) else None
-        if message:
-            return f"{self.code}: {message}"
-        if self.approval_state == "rejected":
-            return f"{self.code}: the decision plan was rejected by policy."
-        if self.approval_state == "expired":
-            return f"{self.code}: the approval window for this decision plan expired."
-        return self.code
+    gate: ExecutionGate
+    message: str
+    override_hint: str | None = None
 
 
-def parse_receipt(
-    raw_result: Any, *, model: type[GovernedExecutionReceipt] = GovernedExecutionReceipt
-) -> GovernedExecutionReceipt | None:
-    """Parse an already-unwrapped tool-result payload into a `GovernedExecutionReceipt`.
+def parse_execution_receipt(
+    raw_result: Any, *, model: type[ExecutionReceipt] = ExecutionReceipt
+) -> ExecutionReceipt | None:
+    """Parse an already-unwrapped `execute_decision` result payload into an `ExecutionReceipt`.
 
-    Returns `None` (rather than raising) when `raw_result` doesn't validate as a governed
-    execution envelope -- e.g. a dict missing `status`/`code`, or a non-dict value entirely. This
-    is the deliberate signal callers use to pass a non-governed tool's result (such as
-    `get_contract`'s discovery payload) through unchanged.
-
-    Args:
-        raw_result: The already-unwrapped JSON payload (typically a dict -- see
-            `unwrap_call_tool_result` for recovering this from a real `CallToolResult`).
-        model: The `GovernedExecutionReceipt` subclass to validate against -- pass through a
-            caller's typed subclass instead of always validating against the base model.
+    Returns `None` (rather than raising) when `raw_result` doesn't validate as one -- in
+    particular, this also correctly rejects a denial payload (no `decision_id`/`webhook_url`/
+    `execution_status` on that shape).
     """
     if not isinstance(raw_result, dict):
         return None
@@ -148,15 +97,35 @@ def parse_receipt(
         return None
 
 
+def parse_execution_denial(
+    raw_result: Any, *, model: type[ExecutionDenial] = ExecutionDenial
+) -> ExecutionDenial | None:
+    """Parse an already-unwrapped `execute_decision` result payload into an `ExecutionDenial`,
+    when it's shaped like the real `{"error": {"code": ..., "gate": ..., ...}}` 409 body.
+
+    Returns `None` for anything else -- including a well-formed `ExecutionReceipt`, or a
+    dict whose `"error"` sub-object doesn't carry one of `NAMED_EXECUTION_GATES` in `gate`
+    (`pydantic`'s `Literal` validation rejects any other value).
+    """
+    if not isinstance(raw_result, dict):
+        return None
+    error = raw_result.get("error")
+    if not isinstance(error, dict):
+        return None
+    try:
+        return model.model_validate(error)
+    except ValidationError:
+        return None
+
+
 def is_call_error(raw: Any) -> bool:
     """Whether `raw` is a real `CallToolResult`/duck-typed equivalent reporting `isError=True`.
 
-    This is the MCP *protocol*-level failure case (Q3, layer 1 in this package's research):
-    something raised inside the connected server's own tool implementation, caught by the MCP
-    SDK, and returned as ordinary (non-raising) response data with no governed-execution envelope
-    to parse -- e.g. `content=[TextContent(text="Error executing tool blow_up: ...")]`. Distinct
-    from a governed *denial* (`GovernedExecutionReceipt.is_denied()`), which is a deliberate,
-    well-formed receipt the engine returned on purpose, not a protocol-level crash.
+    This is the MCP *protocol*-level failure case: something raised inside the connected server's
+    own tool implementation for a reason that is *not* one of the three named execution gates
+    above (those come back as an ordinary, well-formed denial body, not a protocol-level error),
+    caught by the MCP SDK, and returned as ordinary (non-raising) response data -- e.g.
+    `content=[TextContent(text="Error executing tool blow_up: ...")]`.
     """
     return bool(getattr(raw, "isError", False))
 
@@ -190,9 +159,9 @@ def unwrap_call_tool_result(raw: Any) -> Any:
        produces this, since `BasicMCPClient.call_tool` always returns a typed object, but kept
        for symmetry with the sibling packages that do unwrap a JSON-string layer).
 
-    Returns `None` when nothing recognizable is found -- the deliberate signal `parse_receipt`
-    (once fed this function's output) uses to treat a result as a non-governed passthrough, or
-    when `raw` genuinely isn't parseable (e.g. a non-JSON string).
+    Returns `None` when nothing recognizable is found -- the deliberate signal callers use to
+    treat a result as a non-governed passthrough, or when `raw` genuinely isn't parseable (e.g. a
+    non-JSON string).
     """
     structured = getattr(raw, "structuredContent", None)
     if isinstance(structured, dict) and structured:
@@ -237,22 +206,14 @@ def unwrap_call_tool_result(raw: Any) -> Any:
     return None
 
 
-def extract_receipt_from_call_tool_result(
-    raw: Any, *, model: type[GovernedExecutionReceipt] = GovernedExecutionReceipt
-) -> GovernedExecutionReceipt | None:
-    """`unwrap_call_tool_result` followed by `parse_receipt` -- the one call
-    `llamaindex_algenta.toolset`'s wrapped tool calls need to go from a real `CallToolResult`
-    straight to a typed receipt (or `None` for a non-governed passthrough result)."""
-    return parse_receipt(unwrap_call_tool_result(raw), model=model)
-
-
 __all__ = [
-    "NAMED_POLICY_GATE_CODES",
-    "ApprovalState",
-    "GovernedExecutionReceipt",
+    "NAMED_EXECUTION_GATES",
+    "ExecutionDenial",
+    "ExecutionGate",
+    "ExecutionReceipt",
     "call_error_text",
-    "extract_receipt_from_call_tool_result",
     "is_call_error",
-    "parse_receipt",
+    "parse_execution_denial",
+    "parse_execution_receipt",
     "unwrap_call_tool_result",
 ]

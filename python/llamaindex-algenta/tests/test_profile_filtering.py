@@ -45,7 +45,7 @@ async def test_full_profile_exposes_every_tool_the_server_advertises_including_t
     tools = await create_algenta_tools(base_url=stub_server, profile="full")
     names = {t.metadata.name for t in tools}
     assert TOOL_PROFILES["execute"] <= names
-    assert "_test_approve_plan" in names
+    assert "blow_up" in names
 
 
 @pytest.mark.asyncio
