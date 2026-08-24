@@ -12,12 +12,12 @@ self-hosted Algenta Engine's MCP tool surface, and layers on:
   every returned tool's advertised schema *and* from the arguments dict actually forwarded to
   the real call, and here (unlike this repository's other Python siblings) both layers are load-
   bearing, not just belt-and-suspenders -- see [Why two layers, verified](#why-two-layers-verified).
-- **Typed governed-execution receipts** -- every tool call's result is parseable into a
-  [`GovernedExecutionReceipt`][receipt] via `parse_receipt`.
-- **An honest approval mapping** built on MAF's own two real primitives --
-  `approval_mode="always_require"` (a genuine pre-call human-in-the-loop gate) and
-  `agent_framework.MiddlewareFailure` (MAF's one fail-closed abort signal) -- with a full
-  accounting below of what each one does and doesn't guarantee.
+- **A typed `execute_decision` receipt/denial mapping** -- a successful call returns a real
+  [`ExecutionReceipt`][receipt]; a call the real engine blocks synchronously (its real HTTP 409,
+  one of three named policy gates) raises a typed `AlgentaToolDenied` built on
+  `agent_framework.MiddlewareFailure` (MAF's one fail-closed abort signal) -- see
+  [Denial mapping](#denial-mapping) for the full, honest accounting, including what an earlier
+  version of this package got wrong.
 
 [receipt]: ./maf_algenta/receipts.py
 
@@ -72,7 +72,7 @@ See [Tool profiles](#tool-profiles) to opt into more.
 |---|---|---|
 | `observe` (default) | `get_contract`, `query_data`, `simulate`, `recommend` | Read-only. |
 | `govern` | + `plan_decision`, `log_decision` | Propose/record decisions; never executes. |
-| `execute` | + `execute_decision` | Real-world execution, approval-gated -- see below. |
+| `execute` | + `execute_decision` | Real-world execution; synchronous success/denial -- see [Denial mapping](#denial-mapping). |
 | `full` | everything the connected engine advertises | Opt-in only; admin/ops tooling. |
 
 ```python
@@ -99,75 +99,84 @@ call-time layer is not optional:
 check a model-supplied argument dict against a tool's schema before invoking it -- only rejects
 an *unexpected* property when the schema explicitly sets `"additionalProperties": false`. Real
 MCP-derived tool schemas do not set that. This was proven live, not assumed: a scripted model
-call supplying `{"plan_hash": ..., "force": true}` against a schema with `force` already removed
-sails straight through validation, and the real underlying `execute_decision` call would have
-received `force=True` if the call-time scrub weren't also there. `tests/test_never_model_facing.py`
+call supplying `{"decision_id": ..., "webhook_url": ..., "force": true}` against a schema with
+`force` already removed sails straight through validation, and the real underlying
+`execute_decision` call would have received `force=True` if the call-time scrub weren't also
+there. `tests/test_never_model_facing.py`
 and `tests/test_toolset_scenarios.py::test_smuggled_force_never_reaches_the_real_server_over_the_real_wire`
 both assert on the real received arguments (via the stub server's own `forced` echo field), not
 just on the advertised schema.
 
-## Approval mapping
+## Denial mapping
 
-`execute_decision` is real-world execution and is approval-gated, using the two real MAF
-primitives this package's research pass found -- verified live against the installed
-`agent-framework-core` 1.15.0, not assumed from documentation:
+**The real contract, verified directly against the live, running Algenta Engine's own source**
+(not assumed from any planning document or from this package's own prior README, both of which
+turned out to describe a fictional contract): `execute_decision(decision_id, webhook_url,
+timeout_seconds?, force?, override_safety?, metadata?)` either
 
-**1. `approval_mode="always_require"` -- a genuine pre-call, human-in-the-loop gate.** Every
-`FunctionTool` `create_algenta_tools` returns for `execute_decision` carries this. When the model
-requests the call, MAF's own function-invocation loop pauses *before* calling anything: the run
-returns with `Content(type="function_approval_request")` instead of a result, and the real
-underlying tool has genuinely not been called yet (verified: `tests/test_toolset_scenarios.py::test_execute_decision_pauses_for_approval_via_real_agent_run`
-asserts the pause and that no call happened). Resuming requires appending a
-`Content.from_function_approval_response(..., approved=True)` and calling `agent.run()` again on
-the next turn -- this is analogous in spirit to `algenta-tools` (Vercel AI SDK)'s `needsApproval`
-(a real pre-call gate), but framework-native rather than MCP-adapter-specific, and it resumes on
-the next model turn rather than mid-call.
+- succeeds synchronously (HTTP 200): a real
+  [`ExecutionReceipt`](./maf_algenta/receipts.py) -- `decision_id`, `webhook_url`,
+  `execution_status` (`"delivered"` or `"failed"` -- the *webhook delivery* outcome, not a
+  governance verdict; even a `"failed"` delivery is a completed, successful call with a real
+  receipt, no exception raised), `response_code`, `executed_at`, `policy_snapshot_id`,
+  `schema_snapshot_id`, `manifest_version`, `payload_summary`, `safety_overridden`; or
+- is blocked synchronously (HTTP 409), in the very same call, with a body shaped
+  `{"error": {"code": "execution_blocked_<gate>", "gate": "idempotency" | "confidence" |
+  "risk_floor", "message": ..., "override_hint": ...}}`.
 
-**2. `agent_framework.MiddlewareFailure` -- MAF's one fail-closed abort signal.** Quoted directly
-from the installed package's own docstring: "Ordinary exceptions raised by function middleware
-(or by the tool it wraps) are converted into tool-error results ... `MiddlewareFailure` is the
-loop's explicit fail-closed escape: it is never converted into a tool result, ... and the
-exception propagates to the caller of `Agent.run`." Verified live, including the specific case
-this package relies on -- raising it directly from a tool's own body (not from a
-`FunctionMiddleware`), with **zero middleware registered on the agent at all**, still propagates
-unmodified out of `agent.run()`.
+**There is no third state.** No `plan_hash`, no `approval_state`, and critically, no asynchronous
+"pending" outcome exists anywhere on this tool in the real engine. A call either succeeds or is
+denied, both synchronously, in the same call -- never "pending, come back later."
 
-**Why both are needed, and why they don't collapse into one concern:** approving the *call* (via
-`approval_mode`) is a decision about whether the model may attempt `execute_decision` at all. It
-says nothing about whether the connected engine's own out-of-band policy approval for that call's
-`plan_hash` has actually been recorded. Verified live: after a human approves the call through
-MAF's gate, the engine's own receipt can still legitimately come back `approval_state="pending"`
-if nobody separately called the engine's real approval endpoint for that `plan_hash`. That is
-exactly what `maf_algenta.exceptions.AlgentaApprovalStillPending` (an `AlgentaGovernedCallFailure`,
-which is an `agent_framework.MiddlewareFailure`) represents -- and, per the finding above, there
-is no MAF-native resumable pause to fall back to at that point, unlike `langchain-algenta`'s
-`langgraph.types.interrupt()`. This is a one-shot, fail-closed abort: record the real approval
-against `receipt.plan_hash` out of band, then retry the call from a fresh model turn.
+**An earlier version of this package modeled a fictional contract:** it assumed `execute_decision`
+carried an async, `plan_hash`-keyed `approval_state` (`"none"` / `"pending"` / `"approved"` /
+`"rejected"` / `"expired"`), gated the call with MAF's `approval_mode="always_require"` pre-call
+primitive as if the model needed permission to *attempt* the call, and then still had to invent a
+fail-closed `AlgentaApprovalStillPending` exception for the receipt coming back `"pending"` after
+that gate passed -- because the two states were never actually connected to anything real. None of
+that exists on the real tool, so none of it is modeled here anymore: `execute_decision` no longer
+carries `approval_mode="always_require"` at all (there is nothing for a human to approve *before*
+the call -- only a real, synchronous outcome to observe *from* it), and
+`AlgentaApprovalStillPending` no longer exists.
 
-A call the engine denies outright (a named policy-gate `code` such as `plan_hash_mismatch`,
-`stale_plan`, `plan_not_approved`, `idempotency_key_conflict`, or `approval_state in ("rejected",
-"expired")`) raises `AlgentaToolDenied`; anything else that isn't a recognized success raises
-`AlgentaToolExecutionFailed`. All three inherit `AlgentaGovernedCallFailure`, which inherits
-`agent_framework.MiddlewareFailure` -- so `isinstance(exc, agent_framework.MiddlewareFailure)` is
-always true for anything this package raises, and nothing here can silently be swallowed into a
-tool-error result the model then sees and might paper over.
+**What actually happens now, verified live against the installed `agent-framework-core` 1.15.0:**
+a real HTTP 409 denial reaches this package as an MCP tool-error result. `agent_framework`'s own
+MCP client (`agent_framework._mcp.MCPStreamableHTTPTool`) raises
+`agent_framework.exceptions.ToolExecutionException` whenever the underlying `CallToolResult` comes
+back `isError=True` -- confirmed by reading the installed source directly, not assumed. This
+package catches exactly that exception around the real `execute_decision` call, recovers the real
+`{"error": {...}}` body out of its text (the real MCP server framework wraps *any* exception a
+tool raises as `f"Error executing tool {name}: {e}"` before it becomes that text -- confirmed
+against the installed `mcp` SDK -- so the JSON body is recovered by scanning for its first `{`,
+not by assuming the whole message is JSON), and re-raises it as `AlgentaToolDenied`: still built
+on `agent_framework.MiddlewareFailure` (MAF's one real fail-closed abort primitive -- "the loop's
+explicit fail-closed escape: it is never converted into a tool result, ... and the exception
+propagates to the caller of `Agent.run`," quoted directly from the installed package's own
+docstring, and verified live to propagate unmodified even with zero middleware registered on the
+agent), so `isinstance(exc, agent_framework.MiddlewareFailure)` is still always true for anything
+this package raises, and a real denial still can't silently be swallowed into a tool-error result
+the model then sees and might paper over.
 
-### Where this sits relative to the other three siblings
+`AlgentaToolDenied.blocked` carries the parsed `ExecutionBlocked` detail: `blocked.gate` is one of
+the three real gate names, `blocked.message`, and `blocked.override_hint`. `force=true` bypasses
+only the `"idempotency"` gate (a decision already delivered), for one re-execution;
+`override_safety=true` bypasses only `"confidence"`/`"risk_floor"`. Neither field is ever
+model-facing (see [Why two layers, verified](#why-two-layers-verified)) -- resolving a real denial
+means a human operator decides whether to retry the call with one of them set, outside the
+model-facing tool surface entirely.
 
-- `pydantic-ai-algenta` raises `ApprovalRequired` -- a **post-hoc** reaction after the real MCP
-  call already happened, because pydantic-ai has no pre-call approval gate at all.
-- `algenta-tools` (Vercel AI SDK) sets `needsApproval: true` as a **pre-call** gate and still
-  throws if the engine reports pending after that gate passes, because AI SDK has no mid-call
-  pause primitive to fall back on.
-- `langchain-algenta` can pause **mid-call**, genuinely resumably, via
-  `langgraph.types.interrupt()` -- when a checkpointer is present.
-- `maf-algenta` (this package) is closest in shape to `algenta-tools`: a real **pre-call** gate
-  (`approval_mode`), and a hard, fail-closed **abort** rather than a pause when the engine's own
-  state is still pending after that gate -- because, like AI SDK, MAF has no mid-call resumable
-  primitive either. The one thing this package can do that none of the three others can: raise
-  its abort signal directly from inside the wrapped tool's own body, with no middleware
-  registration required on the caller's `Agent` at all, since `MiddlewareFailure` propagates
-  unmodified from either location.
+A non-error result that doesn't validate as a real `ExecutionReceipt` (a genuine anomaly -- an
+engine bug, or a version skew this package hasn't caught up with yet) raises
+`AlgentaToolExecutionFailed` instead, for the same reason: the real contract says a non-error
+`execute_decision` result is always a real receipt, so anything else is worth failing loudly on
+rather than passing through as if it were fine. Both `AlgentaToolDenied` and
+`AlgentaToolExecutionFailed` inherit `AlgentaGovernedCallFailure`, which inherits
+`agent_framework.MiddlewareFailure`.
+
+Every other tool this package wraps (`get_contract`, `query_data`, `simulate`, `recommend`,
+`plan_decision`, `log_decision`) has no verified receipt/denial contract of its own in the real
+engine, so this package imposes none on them -- their results pass straight through, scrubbed but
+otherwise unexamined. Only `execute_decision` gets this typed mapping.
 
 ## The `mcp_tool=` escape hatch
 
@@ -233,25 +242,46 @@ separately inspects the `dotnet/` tree -- this package does not fabricate that v
 
 ## Typed receipts
 
-Every governed Algenta MCP tool call's result payload is parseable into a
-`GovernedExecutionReceipt`:
+A successful `execute_decision` call's result payload is parseable into a real `ExecutionReceipt`
+(this package already does this internally -- `create_algenta_tools` raises before you'd ever see
+an unparseable one -- but the parser is public for a caller who wants to work with the payload
+directly, e.g. after pulling it back out of a logged tool-call transcript):
 
 ```python
-from maf_algenta import GovernedExecutionReceipt, parse_receipt
+from maf_algenta import ExecutionReceipt, parse_execution_receipt
 from maf_algenta.toolset import _extract_function_result_payload
 
 # `function_result_content` is a real `agent_framework.Content(type="function_result")` item
 # taken off an `agent.run()` result's `.messages` -- the same shape a real chat model would see.
 payload = _extract_function_result_payload([function_result_content])
-receipt: GovernedExecutionReceipt | None = parse_receipt(payload)
+receipt: ExecutionReceipt | None = parse_execution_receipt(payload)
 if receipt is not None:
-    receipt.status            # "ok" | "error" | ...
-    receipt.code               # "ok" | "plan_hash_mismatch" | "upstream_timeout" | ...
-    receipt.approval_state     # "none" | "pending" | "approved" | "rejected" | "expired"
-    receipt.plan_hash
-    receipt.execution_id
-    receipt.idempotency_key
-    receipt.result              # the tool's actual payload, once unwrapped from the envelope
+    receipt.decision_id
+    receipt.webhook_url
+    receipt.execution_status    # "delivered" | "failed" -- the webhook delivery outcome
+    receipt.response_code
+    receipt.executed_at
+    receipt.policy_snapshot_id
+    receipt.schema_snapshot_id
+    receipt.manifest_version
+    receipt.payload_summary
+    receipt.safety_overridden
+    receipt.is_delivered()      # execution_status == "delivered"
+```
+
+A real denial (see [Denial mapping](#denial-mapping)) is caught with `AlgentaToolDenied`, whose
+`.blocked` attribute is the parsed `ExecutionBlocked` detail:
+
+```python
+from maf_algenta import AlgentaToolDenied
+
+try:
+    await execute_decision.invoke(arguments={"decision_id": "...", "webhook_url": "..."})
+except AlgentaToolDenied as exc:
+    exc.blocked.gate            # "idempotency" | "confidence" | "risk_floor"
+    exc.blocked.code            # "execution_blocked_<gate>"
+    exc.blocked.message
+    exc.blocked.override_hint
 ```
 
 ## Testing this package's own test suite (not your agent)
@@ -265,8 +295,8 @@ The model side of the loop is driven by `tests/fake_chat_client.py`'s `FakeChatC
 `agent_framework._clients.BaseChatClient` subclass composed with the real `FunctionInvocationLayer`
 / `ChatMiddlewareLayer` / `ChatTelemetryLayer` mixins (the same technique as pydantic-ai's
 `TestModel` or LangChain's `FakeListChatModel` -- `agent_framework` 1.15.0 ships no built-in test
-double of its own, confirmed directly), so the real approval-gate / function-invocation loop runs,
-with only the "what does the model say next" decision scripted and zero network egress.
+double of its own, confirmed directly), so the real function-invocation loop runs, with only the
+"what does the model say next" decision scripted and zero network egress.
 
 ```bash
 cd python

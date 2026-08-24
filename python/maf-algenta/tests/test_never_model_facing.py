@@ -25,7 +25,7 @@ async def test_force_and_override_safety_are_absent_from_the_advertised_schema()
         assert "override_safety" not in schema.get("properties", {})
         assert "force" not in schema.get("required", [])
         # And the field that IS supposed to be model-facing survives untouched.
-        assert "plan_hash" in schema.get("properties", {})
+        assert "decision_id" in schema.get("properties", {})
 
 
 async def test_a_smuggled_force_argument_never_reaches_the_wrapped_tool_call() -> None:
@@ -37,20 +37,27 @@ async def test_a_smuggled_force_argument_never_reaches_the_wrapped_tool_call() -
         # Simulates a caller/model that somehow still supplied `force`/`override_safety` despite
         # the schema not advertising them (e.g. copied from an earlier message).
         raw_result = await execute_decision.invoke(
-            arguments={"plan_hash": "plan-1", "force": True, "override_safety": True}, skip_parsing=True
+            arguments={"decision_id": "decision-1", "webhook_url": "https://example.com/hook", "force": True,
+                       "override_safety": True},
+            skip_parsing=True,
         )
 
         assert len(received_calls) == 1
         # The underlying tool never saw `force=True`/`override_safety=True` -- it saw its own
         # defaults, because the call-time scrub removed both keys from the arguments dict
         # before forwarding the call.
-        assert received_calls[0] == {"plan_hash": "plan-1", "force": False, "override_safety": False}
+        assert received_calls[0] == {"decision_id": "decision-1", "force": False, "override_safety": False}
         assert raw_result == {
-            "status": "ok",
-            "code": "ok",
-            "approval_state": "approved",
-            "plan_hash": "plan-1",
-            "result": {"executed": True},
+            "decision_id": "decision-1",
+            "webhook_url": "https://example.com/hook",
+            "execution_status": "delivered",
+            "response_code": 200,
+            "executed_at": "2026-08-23T00:00:00+00:00",
+            "policy_snapshot_id": "policy-snap-1",
+            "schema_snapshot_id": "schema-snap-1",
+            "manifest_version": "1",
+            "payload_summary": None,
+            "safety_overridden": False,
         }
 
 
