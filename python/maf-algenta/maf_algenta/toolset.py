@@ -34,16 +34,19 @@ Layers three things on top of each wrapped MCP tool's real calls:
    strips it. This was verified directly, not assumed -- see the package README's "Why two
    layers, verified" section for the reproduction proving a smuggled `force=True` never reaches
    the underlying tool.
-3. **The governed-execution receipt mapping** (`_governed_call`, inside `_wrap_mcp_function`):
-   every real call's result is parsed into a `GovernedExecutionReceipt`; `execute_decision`
-   additionally gets `approval_mode="always_require"` on its exposed `FunctionTool` -- MAF's real,
-   native pre-call human-in-the-loop gate (`Content(type="function_approval_request")`, verified
-   live against the installed package) -- and a receipt that is still `"pending"` *after* that
-   gate has already been satisfied, or that the engine denies/fails outright, raises one of
-   `maf_algenta.exceptions`' three `agent_framework.MiddlewareFailure` subclasses. See that
-   module's docstring, and the package README's "Approval mapping" section, for the full
-   reasoning behind building this on `MiddlewareFailure` rather than a bespoke exception
-   hierarchy or (nonexistent) resumable pause.
+3. **`execute_decision`'s real denial mapping** (`_governed_execute_decision_call`, inside
+   `_wrap_mcp_function`): `execute_decision` -- and only `execute_decision`, since it is the only
+   tool in this repository's real contract with a documented receipt/denial shape -- either
+   succeeds (a real `maf_algenta.receipts.ExecutionReceipt`, passed through to the model
+   unchanged) or is blocked synchronously by the real engine (an MCP tool-error whose text is the
+   real `{"error": {"code": "execution_blocked_<gate>", ...}}` 409 body). The latter is parsed
+   and re-raised as `maf_algenta.exceptions.AlgentaToolDenied`, one of the two
+   `agent_framework.MiddlewareFailure` subclasses in `maf_algenta.exceptions` -- see that module's
+   docstring, and the package README's "Denial mapping" section, for the full reasoning. Every
+   other tool this package wraps (`get_contract`, `query_data`, `simulate`, `recommend`,
+   `plan_decision`, `log_decision`) has no verified receipt/denial contract of its own, so this
+   package imposes none on them: their raw results pass straight through, scrubbed but otherwise
+   untouched.
 """
 
 from __future__ import annotations
@@ -55,6 +58,7 @@ from contextlib import asynccontextmanager
 from typing import Any, Protocol, runtime_checkable
 
 from agent_framework import FunctionTool, MCPStreamableHTTPTool
+from agent_framework.exceptions import ToolExecutionException
 
 from .contract import (
     DEFAULT_PROFILE,
@@ -64,8 +68,8 @@ from .contract import (
     ToolProfile,
     resolve_profile_tool_names,
 )
-from .exceptions import AlgentaApprovalStillPending, AlgentaToolDenied, AlgentaToolExecutionFailed
-from .receipts import GovernedExecutionReceipt, parse_receipt
+from .exceptions import AlgentaToolDenied, AlgentaToolExecutionFailed
+from .receipts import ExecutionBlocked, ExecutionReceipt, parse_execution_blocked, parse_execution_receipt
 
 #: Default self-hosted Algenta MCP endpoint. Matches this whole program's standing rule: every
 #: default in this repository points at the caller's own self-hosted deployment, never a
@@ -126,9 +130,7 @@ def _extract_function_result_payload(contents: Any) -> Any:
     hatch's fake-registry tests build plain async functions that just return a dict directly,
     with no `Content` wrapping at all) and, defensively, a `Content` item exposing a structured
     `.result` dict directly, mirroring `langchain_algenta.interceptor.extract_call_tool_payload`'s
-    `structuredContent`-first preference. Returns `None` when nothing recognizable is found --
-    the deliberate signal `parse_receipt` uses to treat a result as a non-governed passthrough
-    (e.g. `get_contract`'s discovery payload).
+    `structuredContent`-first preference. Returns `None` when nothing recognizable is found.
     """
     if isinstance(contents, dict):
         return contents
@@ -147,9 +149,72 @@ def _extract_function_result_payload(contents: Any) -> Any:
     return None
 
 
-def _wrap_mcp_function(
-    real_fn: FunctionTool, *, receipt_model: type[GovernedExecutionReceipt]
-) -> FunctionTool:
+def _parse_execution_blocked_from_exception(exc: ToolExecutionException) -> ExecutionBlocked | None:
+    """Try to recover the real `{"error": {...}}` 409 body out of a `ToolExecutionException`.
+
+    `agent_framework`'s own MCP client raises this exception with the underlying MCP
+    `CallToolResult`'s joined text content as its message whenever `isError` comes back true
+    (verified directly against the installed `agent-framework-core` 1.15.0 source -- see this
+    module's docstring). A real `execute_decision` 409 denial reaches this package exactly that
+    way: `tests/stub_server.py`'s `execute_decision` raises a plain exception carrying the real
+    JSON-encoded error body as its message, and the real MCP server framework wraps *any*
+    exception raised inside a tool function as `ToolError(f"Error executing tool {name}: {e}")`
+    (confirmed directly against the installed `mcp` SDK's
+    `mcp.server.fastmcp.tools.base.Tool.run` source) before turning it into that `isError=True`
+    text -- so the JSON body arrives with a human-readable prefix in front of it, not on its own.
+    This looks for the first `{` and parses from there, rather than assuming the whole text is
+    JSON, to survive that prefix (and similar ones a different real MCP server framework might
+    use) without depending on its exact wording. Returns `None` when no such JSON object is found,
+    or it doesn't parse as the real denial shape -- the signal `_governed_execute_decision_call`
+    uses to tell a real, recognized policy-gate denial apart from some other, unrelated failure.
+    """
+    text = str(exc)
+    start = text.find("{")
+    if start == -1:
+        return None
+    try:
+        body = json.loads(text[start:])
+    except json.JSONDecodeError:
+        return None
+    return parse_execution_blocked(body)
+
+
+async def _governed_execute_decision_call(
+    real_fn: FunctionTool, *, receipt_model: type[ExecutionReceipt], **kwargs: Any
+) -> Any:
+    """The real `execute_decision` call: a real `ExecutionReceipt` (success, returned unchanged)
+    or a real, named policy-gate denial (raised as `AlgentaToolDenied`) -- never anything else,
+    per the real contract (see this module's and `maf_algenta.receipts`' docstrings).
+    """
+    scrubbed_args = _scrub_never_model_facing_args(kwargs)
+    try:
+        raw_result = await real_fn.invoke(arguments=scrubbed_args, skip_parsing=True)
+    except ToolExecutionException as exc:
+        blocked = _parse_execution_blocked_from_exception(exc)
+        if blocked is None:
+            # Not the real, recognized denial shape -- some other failure (a transport error, a
+            # malformed decision_id, ...) that this package has no special knowledge of. Let it
+            # propagate as the ordinary MAF tool failure it already is, rather than pretending
+            # it's a governance denial this package understands.
+            raise
+        hint = f" ({blocked.override_hint})" if blocked.override_hint else ""
+        raise AlgentaToolDenied(
+            f"Algenta tool {real_fn.name!r} was blocked by the real, synchronous {blocked.gate!r} "
+            f"policy gate -- {blocked.message}{hint}",
+            blocked=blocked,
+        ) from exc
+
+    payload = _extract_function_result_payload(raw_result)
+    receipt = parse_execution_receipt(payload, model=receipt_model)
+    if receipt is None:
+        raise AlgentaToolExecutionFailed(
+            f"Algenta tool {real_fn.name!r} returned a non-error result that does not validate "
+            f"as the real ExecutionReceipt shape: {payload!r}"
+        )
+    return raw_result
+
+
+def _wrap_mcp_function(real_fn: FunctionTool, *, receipt_model: type[ExecutionReceipt]) -> FunctionTool:
     """Build the model-facing `FunctionTool` for one already-profile-allowed real MCP function.
 
     Rebuilds a fresh `FunctionTool` (rather than mutating `real_fn` in place) whose `func`:
@@ -159,57 +224,34 @@ def _wrap_mcp_function(
     2. Calls the real underlying function with `skip_parsing=True`, so this wrapper sees the raw
        result exactly as the real MCP call produced it, before MAF's own `FunctionTool.invoke`
        would otherwise re-parse it into `list[Content]` a second time.
-    3. Parses that result into a `GovernedExecutionReceipt` (via `_extract_function_result_payload`
-       + `parse_receipt`) and maps `approval_state`/`code`/`status` onto success / one of the
-       three `AlgentaGovernedCallFailure` subclasses -- see `maf_algenta.exceptions`.
-
-    `execute_decision` additionally gets `approval_mode="always_require"`: MAF's real pre-call
-    human-in-the-loop gate, checked by the model in `agent.run()`'s own function-invocation loop
-    *before* this wrapper's `func` is ever called -- see this module's docstring.
+    3. For `execute_decision` only: maps the real success/denial shape onto a real
+       `ExecutionReceipt` or an `AlgentaToolDenied`/`AlgentaToolExecutionFailed` -- see
+       `_governed_execute_decision_call`. Every other tool's raw result passes straight through,
+       scrubbed but otherwise unexamined -- this package has no verified receipt/denial contract
+       for anything but `execute_decision`.
     """
     schema = _strip_never_model_facing_schema(dict(real_fn.parameters()))
 
-    async def _governed_call(**kwargs: Any) -> Any:
-        scrubbed_args = _scrub_never_model_facing_args(kwargs)
-        raw_result = await real_fn.invoke(arguments=scrubbed_args, skip_parsing=True)
-        payload = _extract_function_result_payload(raw_result)
-        receipt = parse_receipt(payload, model=receipt_model)
-        if receipt is None:
-            return raw_result
+    if real_fn.name == EXECUTE_DECISION:
 
-        if receipt.is_pending_approval():
-            raise AlgentaApprovalStillPending(
-                f"Algenta tool {real_fn.name!r} is still pending server-side policy approval "
-                f"(plan_hash={receipt.plan_hash!r}) even though the model's request to call it "
-                "already passed MAF's own approval_mode gate -- the two are orthogonal (see "
-                "the package README). Record the real approval against this plan_hash out of "
-                "band, then retry the call from a fresh turn.",
-                receipt=receipt,
-            )
-        if receipt.is_denied():
-            raise AlgentaToolDenied(
-                f"Algenta tool {real_fn.name!r} was denied by policy -- {receipt.denial_reason()}",
-                receipt=receipt,
-            )
-        if not receipt.is_success():
-            raise AlgentaToolExecutionFailed(
-                f"{receipt.code}: Algenta tool {real_fn.name!r} did not complete successfully "
-                f"(status={receipt.status!r}).",
-                receipt=receipt,
-            )
-        return raw_result
+        async def _call(**kwargs: Any) -> Any:
+            return await _governed_execute_decision_call(real_fn, receipt_model=receipt_model, **kwargs)
+    else:
+
+        async def _call(**kwargs: Any) -> Any:
+            scrubbed_args = _scrub_never_model_facing_args(kwargs)
+            return await real_fn.invoke(arguments=scrubbed_args, skip_parsing=True)
 
     return FunctionTool(
         name=real_fn.name,
         description=real_fn.description or "",
         input_model=schema,
-        approval_mode="always_require" if real_fn.name == EXECUTE_DECISION else None,
-        func=_governed_call,
+        func=_call,
     )
 
 
 def _wrap_functions(
-    functions: list[FunctionTool], *, profile: ToolProfile, receipt_model: type[GovernedExecutionReceipt]
+    functions: list[FunctionTool], *, profile: ToolProfile, receipt_model: type[ExecutionReceipt]
 ) -> list[FunctionTool]:
     allowed_names = resolve_profile_tool_names(profile, available_tool_names=frozenset(fn.name for fn in functions))
     return [_wrap_mcp_function(fn, receipt_model=receipt_model) for fn in functions if fn.name in allowed_names]
@@ -222,7 +264,7 @@ async def create_algenta_tools(
     profile: ToolProfile = DEFAULT_PROFILE,
     mcp_tool: _ConnectedMCPTool | None = None,
     server_name: str = _DEFAULT_SERVER_NAME,
-    receipt_model: type[GovernedExecutionReceipt] = GovernedExecutionReceipt,
+    receipt_model: type[ExecutionReceipt] = ExecutionReceipt,
     **mcp_kwargs: Any,
 ) -> AsyncIterator[list[FunctionTool]]:
     """Build a governed-execution-aware list of `FunctionTool`s from a self-hosted Algenta Engine.
@@ -259,10 +301,10 @@ async def create_algenta_tools(
             `**mcp_kwargs`.
         server_name: The name to register this connection under, when this function builds its
             own `MCPStreamableHTTPTool`. Defaults to `"algenta"`. Ignored if `mcp_tool` is given.
-        receipt_model: The `GovernedExecutionReceipt` subclass to validate tool results against.
-            Override if your engine's receipt envelope has grown fields you want typed (the base
-            model already accepts and preserves unknown fields via `extra="allow"`, so most
-            callers won't need this).
+        receipt_model: The `ExecutionReceipt` subclass to validate a successful `execute_decision`
+            call's result against. Override if your engine's receipt envelope has grown fields you
+            want typed (the base model already accepts and preserves unknown fields via
+            `extra="allow"`, so most callers won't need this).
         **mcp_kwargs: Any other `agent_framework.MCPStreamableHTTPTool` constructor keyword
             argument (e.g. `headers`, `http_client`, `request_timeout`), forwarded as-is when
             this function builds its own connection. Ignored (and rejected, see below) if
@@ -270,8 +312,9 @@ async def create_algenta_tools(
 
     Yields:
         The tools allowed under `profile`, each with `force`/`override_safety` stripped from its
-        advertised schema and scrubbed from its call-time arguments, and `execute_decision` (if
-        present under `profile`) gated by `approval_mode="always_require"`.
+        advertised schema and scrubbed from its call-time arguments. Calling `execute_decision`
+        either returns a real `ExecutionReceipt` or raises `AlgentaToolDenied` /
+        `AlgentaToolExecutionFailed` -- see this module's docstring.
 
     Raises:
         ValueError: If `profile` isn't one of the four contract profiles, or if `mcp_tool` is

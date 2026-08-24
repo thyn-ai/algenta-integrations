@@ -8,140 +8,170 @@ a mock of `maf_algenta.toolset`'s internals. Tests exercise the real `maf_algent
 round trip, so a wire-shape regression (e.g. the receipt envelope not surviving the MCP text-content
 round trip) would actually be caught here, unlike a test that mocks tool execution directly.
 
-Identical in shape (same plan-hash fixtures, same scenarios, same tool set) to its siblings in
+`execute_decision` here is shaped exactly like the real, verified engine contract: it either
+returns a real `ExecutionReceipt`-shaped dict (HTTP 200 equivalent) or raises a plain exception
+whose message is the real, JSON-encoded `{"error": {"code": "execution_blocked_<gate>", ...}}`
+409 body -- `mcp.server.lowlevel.server`'s own `call_tool` handler (confirmed by reading the
+installed `mcp` SDK source directly) turns *any* exception raised inside a `@mcp.tool()` function
+into exactly that `isError=True` / `str(exc)`-as-text shape, which is exactly how the real engine's
+own MCP tool wrapper would surface a real HTTP 409 it caught internally. No plan_hash, no
+approval_state, no pending state -- none of that exists on the real tool, so none of it is
+modeled here either.
+
+Identical in spirit (same fake-server-over-a-real-socket technique) to its siblings in
 `python/pydantic-ai-algenta/tests/stub_server.py` and `python/langchain-algenta/tests/stub_server.py`,
-adapted only in docstring cross-references -- deliberately not reinvented per package, so a
-behavioral difference across the three Python integrations would show up as a real test
-divergence, not get lost in three different fixture shapes.
+once each is independently corrected against the same real facts -- deliberately not reinvented
+per package, so a behavioral difference across the three Python integrations would show up as a
+real test divergence, not get lost in three different fixture shapes.
 
 Nothing here talks to any real Algenta Engine -- none is reachable from this test environment.
-Every tool below is a hand-built fake shaped like the real, documented governed-execution
-envelope (see `maf_algenta.receipts.GovernedExecutionReceipt`), plus one test-only administrative
-tool (`_test_approve_plan`, not part of the real contract) that lets a test simulate "a human
-approved this plan through the engine's real HTTP endpoint" without an actual engine to call.
 """
 
 from __future__ import annotations
 
 import asyncio
+import json
 import socket
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-#: A plan whose first `execute_decision` call always comes back pending, and which becomes
-#: `approval_state="approved"` only after `_test_approve_plan` has been called for it.
-PENDING_PLAN_HASH = "plan-needs-approval"
+#: A `decision_id` `execute_decision` always blocks on the real `"confidence"` gate for, unless
+#: the call carries `override_safety=True` -- simulates a decision logged with a confidence below
+#: `policy.min_confidence`.
+LOW_CONFIDENCE_DECISION_ID = "decision-low-confidence"
 
-#: A plan `execute_decision` always rejects outright with a named policy-gate code, regardless
-#: of approval state -- simulates a stale/mismatched plan the engine refuses to run at all.
-REJECTED_PLAN_HASH = "plan-stale-hash"
-REJECTED_PLAN_CODE = "stale_plan"
+#: A `decision_id` `execute_decision` always blocks on the real `"risk_floor"` gate for, unless
+#: the call carries `override_safety=True` -- simulates a decision logged with `risk_p5` below
+#: `-policy.risk_floor`.
+LOW_RISK_FLOOR_DECISION_ID = "decision-low-risk-floor"
 
-#: A tool whose result is intentionally *not* a governed-execution envelope, to exercise the
-#: passthrough path for tools that don't return one (e.g. a real `get_contract` discovery blob).
+#: A `decision_id` `execute_decision` succeeds (no 409) for, but with a payload missing a
+#: required `ExecutionReceipt` field -- exercises `AlgentaToolExecutionFailed`'s "the call
+#: completed without error but the payload doesn't validate as a real receipt" anomaly path.
+MALFORMED_RECEIPT_DECISION_ID = "decision-malformed-receipt"
+
+#: A tool whose result is intentionally *not* an `ExecutionReceipt`-shaped envelope at all, to
+#: exercise the passthrough path for tools that don't return one (e.g. a real `get_contract`
+#: discovery blob).
 NON_ENVELOPE_RESULT = {"capabilities": ["query", "simulate", "recommend"], "engine_version": "1.4.0"}
 
 
-def _receipt(
-    *,
-    status: str = "ok",
-    code: str = "ok",
-    retryable: bool = False,
-    approval_state: str = "none",
-    plan_hash: str | None = None,
-    execution_id: str | None = None,
-    idempotency_key: str | None = None,
-    result: Any = None,
-) -> dict[str, Any]:
-    """Build a dict shaped exactly like `GovernedExecutionReceipt`'s real field list."""
+def _blocked(*, gate: str, message: str, override_hint: str) -> dict[str, Any]:
+    """Build the real 409 error body `execute_decision` sends for a named policy-gate denial."""
     return {
-        "status": status,
-        "code": code,
-        "retryable": retryable,
-        "request_id": f"req-{code}",
-        "trace_id": f"trace-{code}",
-        "policy_snapshot_hash": "snap-1",
-        "receipt_version": 1,
-        "plan_hash": plan_hash,
-        "approval_state": approval_state,
-        "execution_id": execution_id,
-        "idempotency_key": idempotency_key,
-        "result": result,
+        "error": {
+            "code": f"execution_blocked_{gate}",
+            "gate": gate,
+            "message": message,
+            "override_hint": override_hint,
+        }
     }
 
 
 def build_stub_algenta_server() -> FastMCP:
-    """Build a fresh stub server instance with its own isolated approval state."""
+    """Build a fresh stub server instance with its own isolated delivery state."""
     mcp = FastMCP("algenta-stub")
-    approved_plans: set[str] = set()
+    delivered_decisions: set[str] = set()
 
     @mcp.tool()
     def get_contract() -> dict:
-        """Fake discovery payload -- deliberately not a governed-execution envelope."""
+        """Fake discovery payload -- deliberately not an `ExecutionReceipt`-shaped envelope."""
         return dict(NON_ENVELOPE_RESULT)
 
     @mcp.tool()
     def query_data(dataset: str) -> dict:
-        return _receipt(result={"dataset": dataset, "rows": [{"value": 1}, {"value": 2}]})
+        return {"dataset": dataset, "rows": [{"value": 1}, {"value": 2}]}
 
     @mcp.tool()
     def simulate(scenario: str) -> dict:
-        return _receipt(result={"scenario": scenario, "expected_value": 42.0})
+        return {"scenario": scenario, "expected_value": 42.0}
 
     @mcp.tool()
     def recommend(scenario: str) -> dict:
-        return _receipt(result={"scenario": scenario, "recommended_action": "hold", "confidence": 0.87})
+        return {"scenario": scenario, "recommended_action": "hold", "confidence": 0.87}
 
     @mcp.tool()
     def plan_decision(scenario: str) -> dict:
-        plan_hash = f"plan-{scenario}"
-        return _receipt(plan_hash=plan_hash, result={"plan_hash": plan_hash, "rationale": "looks fine"})
+        return {"scenario": scenario, "rationale": "looks fine"}
 
     @mcp.tool()
-    def log_decision(plan_hash: str) -> dict:
-        return _receipt(plan_hash=plan_hash, result={"logged": True})
+    def log_decision(chosen_action: str, expected_value: float = 0.0, confidence: float = 0.9) -> dict:
+        decision_id = f"decision-{chosen_action}"
+        return {
+            "decision_id": decision_id,
+            "chosen_action": chosen_action,
+            "expected_value": expected_value,
+            "confidence": confidence,
+            "created_at": "2026-08-23T00:00:00+00:00",
+            "note": "logged",
+        }
 
     @mcp.tool()
-    def execute_decision(plan_hash: str, idempotency_key: str = "idem-1", force: bool = False) -> dict:
-        """The safety-critical, approval-gated tool.
+    def execute_decision(
+        decision_id: str,
+        webhook_url: str,
+        timeout_seconds: int = 30,
+        force: bool = False,
+        override_safety: bool = False,
+    ) -> dict:
+        """The real, safety-critical tool: a real `ExecutionReceipt` (success) or a raised,
+        real synchronous 409 (one of the three real named gates) -- never anything else.
 
-        `force` is declared on this fake tool's schema on purpose, mirroring the real
-        contract's note that `execute_decision` carries an operator-only `force` field on its
-        real schema -- the package under test is responsible for stripping it, not this server.
+        `force`/`override_safety` are declared on this fake tool's schema on purpose, mirroring
+        the real contract's note that they're operator-only fields on the real schema -- the
+        package under test is responsible for stripping/scrubbing them, not this server.
         """
-        execution_id = f"exec-{plan_hash}"
-        if plan_hash == REJECTED_PLAN_HASH:
-            return _receipt(
-                status="error",
-                code=REJECTED_PLAN_CODE,
-                approval_state="rejected",
-                plan_hash=plan_hash,
-                execution_id=execution_id,
-                idempotency_key=idempotency_key,
+        if decision_id in delivered_decisions and not force:
+            raise ValueError(
+                json.dumps(
+                    _blocked(
+                        gate="idempotency",
+                        message=f"decision {decision_id!r} has already been delivered.",
+                        override_hint="Set force=true to allow one re-execution.",
+                    )
+                )
             )
-        if plan_hash in approved_plans:
-            return _receipt(
-                approval_state="approved",
-                plan_hash=plan_hash,
-                execution_id=execution_id,
-                idempotency_key=idempotency_key,
-                result={"executed": True, "plan_hash": plan_hash, "forced": force},
+        if decision_id == LOW_CONFIDENCE_DECISION_ID and not override_safety:
+            raise ValueError(
+                json.dumps(
+                    _blocked(
+                        gate="confidence",
+                        message="decision confidence 0.41 is below policy.min_confidence 0.60.",
+                        override_hint="Set override_safety=true to bypass the confidence gate.",
+                    )
+                )
             )
-        return _receipt(
-            approval_state="pending",
-            plan_hash=plan_hash,
-            execution_id=execution_id,
-            idempotency_key=idempotency_key,
-        )
+        if decision_id == LOW_RISK_FLOOR_DECISION_ID and not override_safety:
+            raise ValueError(
+                json.dumps(
+                    _blocked(
+                        gate="risk_floor",
+                        message="risk_p5 -0.42 is below policy.risk_floor -0.25.",
+                        override_hint="Set override_safety=true to bypass the risk floor gate.",
+                    )
+                )
+            )
 
-    @mcp.tool()
-    def _test_approve_plan(plan_hash: str) -> dict:
-        """Test-only: stand-in for a human approving the plan via the engine's real HTTP
-        endpoint. Not part of the real Algenta MCP tool registry or the tool-profile contract.
-        """
-        approved_plans.add(plan_hash)
-        return {"approved": True, "plan_hash": plan_hash}
+        if decision_id == MALFORMED_RECEIPT_DECISION_ID:
+            # A real bug on the engine side (or a version skew this package hasn't caught up
+            # with) would look like this: HTTP 200, but the body isn't a real receipt --
+            # missing `execution_status` entirely here.
+            return {"decision_id": decision_id, "webhook_url": webhook_url}
+
+        delivered_decisions.add(decision_id)
+        return {
+            "decision_id": decision_id,
+            "webhook_url": webhook_url,
+            "execution_status": "delivered",
+            "response_code": 200,
+            "executed_at": "2026-08-23T00:00:00+00:00",
+            "policy_snapshot_id": "policy-snap-1",
+            "schema_snapshot_id": "schema-snap-1",
+            "manifest_version": "1",
+            "payload_summary": {"decision_id": decision_id, "timeout_seconds": timeout_seconds},
+            "safety_overridden": override_safety,
+        }
 
     return mcp
 

@@ -77,13 +77,18 @@ async def test_mcp_tool_and_connection_arguments_are_mutually_exclusive() -> Non
             pass
 
 
-async def test_execute_decision_gets_approval_mode_under_execute_profile() -> None:
+async def test_execute_decision_gets_no_pre_call_approval_gate() -> None:
+    # The real engine's `execute_decision` has no async, pre-call approval state to gate on --
+    # a call either succeeds synchronously or is denied synchronously, in the same call (see
+    # `maf_algenta.receipts`). So, unlike an earlier version of this package, `execute_decision`
+    # does NOT get MAF's `approval_mode="always_require"` pre-call gate: there is nothing for a
+    # human to approve before the call, only a real, synchronous outcome to observe after it.
     async with create_algenta_tools(mcp_tool=build_full_fake_registry(), profile="execute") as tools:
         execute_decision = next(t for t in tools if t.name == "execute_decision")
-        assert execute_decision.approval_mode == "always_require"
+        assert execute_decision.approval_mode != "always_require"
 
 
-async def test_read_only_tools_get_no_approval_gate() -> None:
-    async with create_algenta_tools(mcp_tool=build_full_fake_registry(), profile="observe") as tools:
+async def test_no_tool_gets_a_pre_call_approval_gate() -> None:
+    async with create_algenta_tools(mcp_tool=build_full_fake_registry(), profile="full") as tools:
         for tool in tools:
             assert tool.approval_mode != "always_require"
