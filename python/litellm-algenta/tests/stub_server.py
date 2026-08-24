@@ -4,12 +4,16 @@ This is a real `fastmcp.FastMCP` server, run over a real HTTP socket on `127.0.0
 in-memory transport shortcut and not a mock of anything this package builds. The real subject
 under test in this package's conformance suite is a real `litellm --config ...` proxy process
 sitting in front of this server, so this stub only needs to be a faithful, deterministic stand-in
-for a self-hosted Algenta engine's MCP tool surface -- same governed-execution receipt envelope
-and tool set as the `pydantic-ai-algenta` / `langchain-algenta` siblings' own stub servers -- plus
-two research-only tools (`echo_trace`, `flaky_after`) that exist purely to observe what the
-gateway actually does to a request/response on the wire, mirroring the exact tools the D4 research
-phase already built and verified against a real litellm proxy (see that research's
-`algenta_stub_server.py`).
+for a self-hosted Algenta engine's MCP tool surface, plus two research-only tools (`echo_trace`,
+`flaky_after`) that exist purely to observe what the gateway actually does to a request/response on
+the wire.
+
+`execute_decision` here mirrors the real engine's tool exactly: it is synchronous, takes
+`decision_id`/`webhook_url` (plus optional `timeout_seconds`/`metadata`, and the operator-only
+`force`/`override_safety`), and either returns a real `ExecutionReceipt` or raises an exception
+carrying one of the three real gate names (`"idempotency"`/`"confidence"`/`"risk_floor"`). There is
+no `plan_hash`, no `approval_state`, and no pending/rejected async state anywhere in this file --
+an earlier version of this stub modeled one; it was fictional.
 
 Nothing here talks to any real Algenta Engine -- none is reachable from this test environment.
 """
@@ -17,6 +21,7 @@ Nothing here talks to any real Algenta Engine -- none is reachable from this tes
 from __future__ import annotations
 
 import asyncio
+import json
 import socket
 from typing import Any
 
@@ -27,46 +32,57 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-#: A plan whose first `execute_decision` call always comes back pending, and which becomes
-#: `approval_state="approved"` only after `_test_approve_plan` has been called for it.
-PENDING_PLAN_HASH = "plan-needs-approval"
+from litellm_algenta.contract import EXECUTE_DECISION_GATES
 
-#: A plan `execute_decision` always rejects outright with a named policy-gate code, regardless
-#: of approval state -- simulates a stale/mismatched plan the engine refuses to run at all.
-REJECTED_PLAN_HASH = "plan-stale-hash"
-REJECTED_PLAN_CODE = "stale_plan"
+#: A decision_id whose confidence is always below `policy.min_confidence` -- `execute_decision`
+#: always refuses it with gate `"confidence"` unless `override_safety=true`.
+DECISION_ID_LOW_CONFIDENCE = "decision-low-confidence"
 
-#: A tool whose result is intentionally *not* a governed-execution envelope, to exercise the
-#: passthrough path for tools that don't return one (e.g. a real `get_contract` discovery blob).
+#: A decision_id whose `risk_p5` is always below `-policy.risk_floor` -- `execute_decision` always
+#: refuses it with gate `"risk_floor"` unless `override_safety=true`.
+DECISION_ID_RISK_FLOOR_BREACH = "decision-risk-floor-breach"
+
+#: A tool whose result is intentionally *not* an `ExecutionReceipt`-shaped envelope, to exercise
+#: the passthrough path for tools that don't return one (e.g. a real `get_contract` discovery
+#: blob).
 NON_ENVELOPE_RESULT = {"capabilities": ["query", "simulate", "recommend"], "engine_version": "1.4.0"}
 
+_OVERRIDE_HINTS: dict[str, str] = {
+    "idempotency": "Pass force=true to override the idempotency gate for one re-execution.",
+    "confidence": "Pass override_safety=true to override the confidence gate.",
+    "risk_floor": "Pass override_safety=true to override the risk-floor gate.",
+}
 
-def _receipt(
-    *,
-    status: str = "ok",
-    code: str = "ok",
-    retryable: bool = False,
-    approval_state: str = "none",
-    plan_hash: str | None = None,
-    execution_id: str | None = None,
-    idempotency_key: str | None = None,
-    result: Any = None,
-) -> dict[str, Any]:
-    """Build a dict shaped exactly like the shared `GovernedExecutionReceipt` field list."""
-    return {
-        "status": status,
-        "code": code,
-        "retryable": retryable,
-        "request_id": f"req-{code}",
-        "trace_id": f"trace-{code}",
-        "policy_snapshot_hash": "snap-1",
-        "receipt_version": 1,
-        "plan_hash": plan_hash,
-        "approval_state": approval_state,
-        "execution_id": execution_id,
-        "idempotency_key": idempotency_key,
-        "result": result,
-    }
+
+class ExecutionBlockedError(Exception):
+    """Mirrors the real engine's synchronous `409` `execution_blocked_<gate>` denial exactly:
+    `{"error": {"code": "execution_blocked_<gate>", "gate": "<gate>", "message": ...,
+    "override_hint": ...}}`.
+
+    Raised from inside the `execute_decision` tool body -- MCP has no independent HTTP status on
+    a `tools/call` JSON-RPC result, so a real MCP-fronting `execute_decision` implementation has
+    no way to hand a caller a `409` except by surfacing it the same way any other tool-body
+    exception surfaces: FastMCP (and any spec-compliant MCP server) turns a raised exception into
+    a `tools/call` result with `isError: true`, carrying the exception's message as text content.
+    That -- not an async/pending state -- is this tool's one and only failure idiom.
+    """
+
+    def __init__(self, gate: str) -> None:
+        if gate not in EXECUTE_DECISION_GATES:
+            raise ValueError(f"not a real execute_decision gate: {gate!r}")
+        self.gate = gate
+        self.code = f"execution_blocked_{gate}"
+        self.message = f"execute_decision blocked: the {gate!r} gate was not satisfied"
+        self.override_hint = _OVERRIDE_HINTS[gate]
+        payload = {
+            "error": {
+                "code": self.code,
+                "gate": self.gate,
+                "message": self.message,
+                "override_hint": self.override_hint,
+            }
+        }
+        super().__init__(json.dumps(payload))
 
 
 class RevokeAfterNCallsMiddleware:
@@ -128,7 +144,7 @@ class RevokeAfterNCallsMiddleware:
 
 
 def build_stub_algenta_server() -> FastMCP:
-    """Build a fresh stub server instance with its own isolated approval/call-count state.
+    """Build a fresh stub server instance with its own isolated delivery/call-count state.
 
     Serving it over HTTP with `flaky_after`'s revoke-after-N behavior wired in is
     `StubServerFixture`'s job (it applies `RevokeAfterNCallsMiddleware` when it starts the real
@@ -136,80 +152,87 @@ def build_stub_algenta_server() -> FastMCP:
     doesn't need that middleware too.
     """
     mcp = FastMCP("algenta-stub")
-    approved_plans: set[str] = set()
+    delivered_decision_ids: set[str] = set()
     call_counts: dict[str, int] = {}
 
     @mcp.tool
     def get_contract() -> dict:
-        """Fake discovery payload -- deliberately not a governed-execution envelope."""
+        """Fake discovery payload -- deliberately not an ExecutionReceipt-shaped envelope."""
         return dict(NON_ENVELOPE_RESULT)
 
     @mcp.tool
     def query_data(dataset: str) -> dict:
-        return _receipt(result={"dataset": dataset, "rows": [{"value": 1}, {"value": 2}]})
+        return {"dataset": dataset, "rows": [{"value": 1}, {"value": 2}]}
 
     @mcp.tool
     def simulate(scenario: str) -> dict:
-        return _receipt(result={"scenario": scenario, "expected_value": 42.0})
+        return {"scenario": scenario, "expected_value": 42.0}
 
     @mcp.tool
     def recommend(scenario: str) -> dict:
-        return _receipt(result={"scenario": scenario, "recommended_action": "hold", "confidence": 0.87})
+        return {"scenario": scenario, "recommended_action": "hold", "confidence": 0.87}
 
     @mcp.tool
     def plan_decision(scenario: str) -> dict:
-        plan_hash = f"plan-{scenario}"
-        return _receipt(plan_hash=plan_hash, result={"plan_hash": plan_hash, "rationale": "looks fine"})
+        return {"scenario": scenario, "rationale": "looks fine"}
 
     @mcp.tool
-    def log_decision(plan_hash: str) -> dict:
-        return _receipt(plan_hash=plan_hash, result={"logged": True})
+    def log_decision(chosen_action: str) -> dict:
+        decision_id = f"decision-{chosen_action}"
+        return {
+            "decision_id": decision_id,
+            "chosen_action": chosen_action,
+            "expected_value": 1.0,
+            "confidence": 0.9,
+            "created_at": "2026-08-23T00:00:00Z",
+            "note": None,
+        }
 
     @mcp.tool
     def execute_decision(
-        plan_hash: str, idempotency_key: str = "idem-1", execution_id: str | None = None, force: bool = False
+        decision_id: str,
+        webhook_url: str,
+        timeout_seconds: int | None = None,
+        metadata: dict | None = None,
+        force: bool = False,
+        override_safety: bool = False,
     ) -> dict:
-        """The safety-critical, approval-gated tool.
+        """The safety-critical tool -- synchronous, no approval-pause, no plan_hash.
 
-        `force` is declared on this fake tool's schema on purpose, mirroring the real contract's
-        note that `execute_decision` carries an operator-only `force` field on its real schema --
-        this package's `allowed_params` config is what's under test for rejecting it, not this
-        server refusing to accept the argument itself.
-        """
-        exec_id = execution_id or f"exec-{plan_hash}"
-        if plan_hash == REJECTED_PLAN_HASH:
-            return _receipt(
-                status="error",
-                code=REJECTED_PLAN_CODE,
-                approval_state="rejected",
-                plan_hash=plan_hash,
-                execution_id=exec_id,
-                idempotency_key=idempotency_key,
-            )
-        if plan_hash in approved_plans:
-            return _receipt(
-                approval_state="approved",
-                plan_hash=plan_hash,
-                execution_id=exec_id,
-                idempotency_key=idempotency_key,
-                result={"executed": True, "plan_hash": plan_hash},
-            )
-        return _receipt(
-            approval_state="pending",
-            plan_hash=plan_hash,
-            execution_id=exec_id,
-            idempotency_key=idempotency_key,
-        )
+        `force`/`override_safety` are declared on this fake tool's schema on purpose, mirroring
+        the real engine's schema carrying an operator-only `force`/`override_safety` field on
+        `execute_decision` -- this package's `allowed_params` config is what's under test for
+        rejecting them before they ever reach here, not this server refusing the argument itself.
 
-    @mcp.tool
-    def _test_approve_plan(plan_hash: str) -> dict:
-        """Test-only: stand-in for a human approving the plan via the engine's real HTTP
-        endpoint. Not part of the real Algenta MCP tool registry or the tool-profile contract --
-        deliberately left out of every real profile's `allowed_tools`, so it's only reachable at
-        all through the `full` profile in the conformance tests.
+        Gate behavior (matching the real engine exactly):
+        - `decision_id == DECISION_ID_LOW_CONFIDENCE`: always the `"confidence"` gate, unless
+          `override_safety=True`.
+        - `decision_id == DECISION_ID_RISK_FLOOR_BREACH`: always the `"risk_floor"` gate, unless
+          `override_safety=True`.
+        - Any other `decision_id` that has already been delivered once by this server instance:
+          the `"idempotency"` gate, unless `force=True` (one re-execution).
+        - Otherwise: a real 200 `ExecutionReceipt`, and the decision_id is marked delivered.
         """
-        approved_plans.add(plan_hash)
-        return {"approved": True, "plan_hash": plan_hash}
+        if decision_id == DECISION_ID_LOW_CONFIDENCE and not override_safety:
+            raise ExecutionBlockedError("confidence")
+        if decision_id == DECISION_ID_RISK_FLOOR_BREACH and not override_safety:
+            raise ExecutionBlockedError("risk_floor")
+        if decision_id in delivered_decision_ids and not force:
+            raise ExecutionBlockedError("idempotency")
+
+        delivered_decision_ids.add(decision_id)
+        return {
+            "decision_id": decision_id,
+            "webhook_url": webhook_url,
+            "execution_status": "delivered",
+            "response_code": 200,
+            "executed_at": "2026-08-23T00:00:00Z",
+            "policy_snapshot_id": "policy-snap-1",
+            "schema_snapshot_id": "schema-snap-1",
+            "manifest_version": "1.0.0",
+            "payload_summary": {"decision_id": decision_id, "timeout_seconds": timeout_seconds, "metadata": metadata},
+            "safety_overridden": bool(force or override_safety),
+        }
 
     @mcp.tool
     def echo_trace() -> dict:
@@ -231,7 +254,7 @@ def build_stub_algenta_server() -> FastMCP:
         returns a raw 401 after `revoke_after` calls bearing `watched_token`. If this tool body
         runs at all, the call got past the middleware -- i.e. this is still a "successful call"."""
         call_counts[key] = call_counts.get(key, 0) + 1
-        return _receipt(result={"key": key, "call_count": call_counts[key]})
+        return {"key": key, "call_count": call_counts[key]}
 
     return mcp
 
