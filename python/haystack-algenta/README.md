@@ -5,9 +5,9 @@ governed-execution-aware `haystack.tools.toolset.Toolset` wrapping your own self
 Engine's MCP tool surface via Haystack's own real
 [`MCPToolset`](https://docs.haystack.deepset.ai/docs/mcptoolset) (a separate PyPI package,
 `mcp-haystack` -- see [Why `mcp-haystack`, not just `haystack-ai`](#why-mcp-haystack-not-just-haystack-ai)),
-plus `build_algenta_governance_hooks`, an `Agent` `before_tool`/`after_tool` hook pair mapping the
-governed-execution receipt contract onto Haystack's own real `ConfirmationHook` human-in-the-loop
-primitive and `after_tool` hook seam.
+plus `build_algenta_governance_hooks`, an `Agent` `after_tool` hook that raises a typed
+`AlgentaToolDenied` for `execute_decision`'s real, synchronous denial, via Haystack's own real
+`after_tool` hook seam.
 
 - **Tool-profile filtering** -- expose only `observe` (read-only, the default), `govern`,
   `execute`, or the opt-in `full` registry, per
@@ -17,8 +17,10 @@ primitive and `after_tool` hook seam.
 - **Two-layer never-model-facing scrubbing** -- `force`/`override_safety` are stripped from every
   returned tool's advertised schema *and* from the arguments dict actually forwarded to the real
   call.
-- **Typed governed-execution receipts** -- parseable via `extract_receipt_from_tool_result`.
-- **An honest approval mapping** -- see [Approval mapping](#approval-mapping) below for the full
+- **Typed `execute_decision` outcomes** -- parseable via `extract_execution_outcome_from_tool_result`
+  into either a real `ExecutionReceipt` (success) or an `ExecutionBlocked` (one of the three real
+  named-gate denials).
+- **An honest denial mapping** -- see [Denial mapping](#denial-mapping) below for the full
   accounting of what Haystack's real primitives do and don't guarantee, verified live against
   installed `haystack-ai` 3.0.0 / `mcp-haystack` 1.4.1, not assumed from documentation.
 
@@ -55,7 +57,7 @@ toolset.close()  # tears down the MCP connection this call built
 ```
 
 `profile="observe"` is also the default if you omit it -- the agent can call `get_contract` /
-`query_data` / `simulate` / `recommend`, and nothing that writes, plans, or executes anything.
+`query_data` / `simulate` / `recommend`, and nothing that plans, logs, or executes a decision.
 
 **Unlike this repository's other four Python siblings, everything here is synchronous.**
 `MCPToolset`'s real, public API (`warm_up()`, `Tool.invoke()`, `Agent.run()`) is itself
@@ -70,7 +72,7 @@ anywhere in this package's own test suite. A genuine framework-level difference 
 |---|---|---|
 | `observe` (default) | `get_contract`, `query_data`, `simulate`, `recommend` | Read-only. |
 | `govern` | + `plan_decision`, `log_decision` | Propose/record decisions; never executes. |
-| `execute` | + `execute_decision` | Real-world execution, approval-gated -- see below. |
+| `execute` | + `execute_decision` | Real-world execution; see [Denial mapping](#denial-mapping). |
 | `full` | everything the connected engine advertises | Opt-in only; admin/ops tooling. |
 
 ```python
@@ -87,29 +89,48 @@ logic (the real contract's `full` profile is ~117 tools) -- `haystack-ai`'s own 
 for that case, worth pairing with `profile="full"` in your own agent if you use it; this package
 doesn't force that choice on you.
 
-## Approval mapping
+## The real `execute_decision` contract
+
+`execute_decision(decision_id, webhook_url, timeout_seconds=None, force=None,
+override_safety=None, metadata=None)` either:
+
+- **succeeds (200)** with a real `ExecutionReceipt`: `{decision_id, webhook_url, execution_status:
+  "delivered"|"failed", response_code, executed_at, policy_snapshot_id, schema_snapshot_id,
+  manifest_version, payload_summary, safety_overridden}` -- note `execution_status` describes
+  whether the *webhook delivery itself* succeeded, not a policy verdict; a `"failed"` delivery is
+  still a completed, non-gated call, or
+- **is blocked, in that same call (409)**, by exactly one of three real, named policy gates:
+  `"idempotency"` (this `decision_id` was already delivered; bypassable only via `force=True`, for
+  one re-execution), `"confidence"` (below `policy.min_confidence`), or `"risk_floor"` (`risk_p5`
+  below `-policy.risk_floor`) -- both of the latter bypassable only via `override_safety=True`.
+  The body is `{"error": {"code": "execution_blocked_<gate>", "gate": "<gate>", "message": "...",
+  "override_hint": "..."}}`.
+
+There is no third outcome. `decision_id` comes from a prior real `log_decision` call, never from a
+model-facing `plan_hash` -- there is no `plan_hash` field anywhere on this tool, and no
+asynchronous "pending approval" state to poll or resume. A genuinely separate, real
+plan/nonce-based human-approval system does exist in the engine (decision-cases/analysis-runs/
+decision-plans HTTP routes), but the engine's own source is explicit that it "is intentionally not
+exposed as an MCP/LLM tool" -- it is out of reach for this package, or any MCP-based integration,
+and this package makes no claim otherwise.
+
+## Denial mapping
 
 Verified live against installed `haystack-ai` 3.0.0 (a real `mcp.server.fastmcp.FastMCP` stub
 server, real HTTP wire, real `Agent` run loop -- see `tests/test_toolset_scenarios.py`), not
-assumed from documentation. Haystack has no single seam that can both gate a pending call *and*
-see the receipt that call eventually produces, the way `maf_algenta`'s one wrapped `FunctionTool`
-does. It has two separate, real primitives this package wires together instead:
+assumed from documentation.
 
-**1. `haystack.hooks.human_in_the_loop.ConfirmationHook` -- a genuine pre-call gate.** A real
-`before_tool` `Agent` hook. Proven live: with `AlwaysAskPolicy()` and a UI that rejects, the real
-MCP server is never contacted at all (no request logged) -- the same shape as MAF's
-`approval_mode="always_require"` or the TypeScript sibling's `needsApproval`.
-`default_confirmation_hook`/`build_algenta_governance_hooks(confirmation_ui=...)` are thin,
-opinionated factories over it, defaulting to gating `execute_decision` only with
-`AlwaysAskPolicy()` (opting into the gate at all is itself the opt-in -- this contract's `execute`
-profile must never be reachable by default).
+**`GovernedReceiptHook` -- this package's own `after_tool` hook.** Parses the real outcome out of
+the tool-result message(s) `Agent._run_step` just wrote into `state.data["messages"]`
+(`haystack_algenta.receipts.extract_execution_outcome_from_tool_result`), and raises
+`AlgentaToolDenied` -- naming the real gate (`error.gate`, one of `"idempotency"`, `"confidence"`,
+`"risk_floor"`) plus the engine's own `message`/`override_hint` -- for the real 409 denial shape. A
+successful `ExecutionReceipt` and any non-`execute_decision` tool's result are both left alone
+(detected by *shape*, not by tool name: nothing else this package can expose validates as either
+`ExecutionReceipt` or `ExecutionBlocked`).
 
-**2. `GovernedReceiptHook` -- this package's own `after_tool` hook.** Parses the governed-execution
-receipt out of the tool-result message(s) `Agent._run_step` just wrote into
-`state.data["messages"]`, and raises `AlgentaToolDenied` / `AlgentaApprovalStillPending` /
-`AlgentaToolExecutionFailed` for anything that isn't a clean success. Proven live that this
-exception propagates out of `agent.run()` **completely unmodified** -- because
-`Agent._run_step`'s `_run_hooks(self.hooks, AFTER_TOOL, state)` call has no surrounding
+Proven live that this exception propagates out of `agent.run()` **completely unmodified** --
+because `Agent._run_step`'s `_run_hooks(self.hooks, AFTER_TOOL, state)` call has no surrounding
 `try`/`except` anywhere in `agent.py` (grep-verified against the installed package). This is
 genuinely the *only* seam in Haystack's `Agent` loop that behaves this way.
 
@@ -123,63 +144,64 @@ MAF's `MiddlewareFailure`, which is explicitly excluded from wrapping). And it g
 just wrapped: a real `Agent`'s documented default is `raise_on_tool_invocation_failure=False`, and
 with that default the wrapped exception is never even re-raised -- it's converted into an ordinary
 error-flagged `ChatMessage` fed back into the conversation, and `agent.run()` returns *normally*.
-Raising a governance exception from inside `haystack_algenta.toolset`'s wrapped calls would
-therefore be exactly the wrong seam for the common, real-`Agent` case -- proven, not assumed
+Raising `AlgentaToolDenied` from inside `haystack_algenta.toolset`'s wrapped calls would therefore
+be exactly the wrong seam for the common, real-`Agent` case -- proven, not assumed
 (`tests/test_toolset_scenarios.py::test_a_blows_up_tool_error_is_wrapped_and_swallowed_by_default`
-reproduces this with a real server-side exception, unrelated to governance, to isolate the claim).
+reproduces this with a real server-side exception, unrelated to the gate mapping, to isolate the
+claim).
 
-**Why both hooks are needed, and why they don't collapse into one concern:** confirming the *call*
-(via `ConfirmationHook`) is a decision about whether the model may attempt `execute_decision` at
-all. It says nothing about whether the connected engine's own out-of-band policy approval for that
-call's `plan_hash` has actually been recorded. Verified live: after a human confirms the call
-through Haystack's gate, the engine's own receipt can still legitimately come back
-`approval_state="pending"` if nobody separately called the engine's real approval endpoint for
-that `plan_hash` -- Haystack's pre-call gate has no idea this happened; it's an ordinary successful
-tool call as far as the `Agent` is concerned until `GovernedReceiptHook` looks at the receipt.
-That is exactly what `AlgentaApprovalStillPending` represents -- and there is no Haystack-native
-resumable pause to fall back to at that point, unlike `langchain-algenta`'s
-`langgraph.types.interrupt()`. This is a one-shot, fail-closed abort: record the real approval
-against `receipt.plan_hash` out of band, then retry with a fresh `agent.run()`.
+**There is no pre-call gate here, and none is needed.** An earlier version of this package also
+wired Haystack's real `ConfirmationHook`/`BlockingConfirmationStrategy` as a `before_tool` gate,
+bridging to an `AlgentaApprovalStillPending` abort if the engine's own (fictional) out-of-band plan
+approval hadn't landed by the time the model's call went through. `execute_decision` has no
+asynchronous approval state to bridge to -- a call is a same-response success or a same-response
+named-gate denial, never "pending, come back later" -- so that whole pre-call/post-call bridge is
+gone, not merely dormant. **Haystack's `ConfirmationHook` itself is unaffected and still a
+perfectly real, general-purpose primitive** -- a caller who wants a human to confirm the model's
+*request* to call `execute_decision` at all, for their own reasons unrelated to this contract, can
+still wire it directly:
 
-A call the engine denies outright (a named policy-gate `code` such as `plan_hash_mismatch`,
-`stale_plan`, `plan_not_approved`, `idempotency_key_conflict`, or `approval_state in ("rejected",
-"expired")`) raises `AlgentaToolDenied`; anything else that isn't a recognized success raises
-`AlgentaToolExecutionFailed`.
+```python
+from haystack.hooks.human_in_the_loop import AlwaysAskPolicy, BlockingConfirmationStrategy, ConfirmationHook
 
-### Where this sits relative to the other four siblings
+gate = ConfirmationHook(
+    confirmation_strategies={
+        "execute_decision": BlockingConfirmationStrategy(confirmation_policy=AlwaysAskPolicy(), confirmation_ui=your_ui)
+    }
+)
+agent = Agent(chat_generator=..., tools=toolset, hooks={"before_tool": [gate], **build_algenta_governance_hooks()})
+```
 
-- `pydantic-ai-algenta` raises `ApprovalRequired` -- a **post-hoc** reaction after the real MCP
-  call already happened, because pydantic-ai has no pre-call approval gate at all.
-- `algenta-tools` (Vercel AI SDK) sets `needsApproval: true` as a **pre-call** gate and still
-  throws if the engine reports pending after that gate passes, because AI SDK has no mid-call
-  pause primitive to fall back on.
-- `langchain-algenta` can pause **mid-call**, genuinely resumably, via
-  `langgraph.types.interrupt()` -- when a checkpointer is present.
-- `maf-algenta` has a real **pre-call** gate (`approval_mode`) and a hard, fail-closed **abort**
-  when the engine's own state is still pending after that gate, raised from *inside* the same
-  wrapped tool call (because `agent_framework.MiddlewareFailure` is explicitly excluded from that
-  framework's own exception-wrapping).
-- `haystack-algenta` (this package) is the only one of the five where the pre-call gate
-  (`ConfirmationHook`) and the fail-closed abort (`GovernedReceiptHook`) **cannot live in the same
-  place** -- Haystack's tool-invocation layer wraps and swallows too aggressively for that, so the
-  abort has to live one level up, in a dedicated `after_tool` hook, the one seam proven to survive
-  intact.
+`tests/test_toolset_scenarios.py::test_a_confirmation_hook_can_still_be_wired_directly_for_a_pre_call_gate`
+proves this composition live -- with a UI that rejects, the real MCP server is genuinely never
+contacted at all. This package just doesn't build or opinionate over that wiring itself anymore,
+because doing so would imply a bridge to an approval state that doesn't exist on the real tool.
 
-### A `Pipeline`, or any direct `Tool.invoke()` caller, gets neither hook
+### Why this package's mapping lives where it does
+
+`haystack-algenta` surfaces the denial from a dedicated `after_tool` hook because that is the one
+seam in Haystack's `Agent` loop proven to let a custom exception type survive `agent.run()` intact
+-- `Tool.invoke()`'s own exception handling is too aggressive (see above) for the mapping to live
+any closer to the real MCP call itself. Each of this repository's other framework packages maps
+`execute_decision`'s real outcome onto whatever *that* framework's own native tool-failure idiom
+is, at whichever seam that framework actually supports -- this section only speaks for this
+package's own, verified-live reasoning, not for any sibling's current implementation.
+
+### A `Pipeline`, or any direct `Tool.invoke()` caller, gets no hook at all
 
 Hooks are an `Agent`-loop concept. `build_algenta_governance_hooks` only helps agents built with
 `haystack.components.agents.Agent`. For a `Pipeline`, or any caller invoking `Tool.invoke()`/
-`invoke_async()` directly, `haystack_algenta.extract_receipt_from_tool_result` is the same parsing
-`GovernedReceiptHook` uses, exposed directly so you can call it yourself on whatever `invoke()`
-returned and decide what to do:
+`invoke_async()` directly, `haystack_algenta.extract_execution_outcome_from_tool_result` is the
+same parsing `GovernedReceiptHook` uses, exposed directly so you can call it yourself on whatever
+`invoke()` returned and decide what to do:
 
 ```python
-from haystack_algenta import extract_receipt_from_tool_result
+from haystack_algenta.receipts import ExecutionBlocked, extract_execution_outcome_from_tool_result
 
-raw_result = execute_decision_tool.invoke(plan_hash="...", idempotency_key="...")
-receipt = extract_receipt_from_tool_result(raw_result)
-if receipt is not None and not receipt.is_success():
-    ...  # your own handling -- this package makes no pause/resume claim for this path
+raw_result = execute_decision_tool.invoke(decision_id="...", webhook_url="...")
+outcome = extract_execution_outcome_from_tool_result(raw_result)
+if isinstance(outcome, ExecutionBlocked):
+    ...  # your own handling -- outcome.gate is one of "idempotency"/"confidence"/"risk_floor"
 ```
 
 This is an honest, undisguised capability, not a fabricated approval-pause mechanism -- the same
@@ -192,13 +214,14 @@ Verified live: `Tool.invoke()` for an `MCPToolset`-built tool returns the raw MC
 a text content block inside that JSON:
 
 ```json
-{"meta": null, "content": [{"type": "text", "text": "{\n  \"status\": \"ok\", ... \"approval_state\": \"pending\", ...}"}], "structuredContent": null, "isError": false}
+{"meta": null, "content": [{"type": "text", "text": "{\n  \"decision_id\": \"decision-1\", ... \"execution_status\": \"delivered\", ...}"}], "structuredContent": null, "isError": false}
 ```
 
 Neither `Tool` nor `MCPToolset` ever unwraps this -- there is zero receipt concept anywhere in
-Haystack's own tool-calling layer, so a governed call and `get_contract`'s plain discovery blob
-are handled completely identically (both are just opaque strings) until something -- this
-package's `unwrap_mcp_tool_result` -- peels both string layers back into a real Python value.
+Haystack's own tool-calling layer, so a real `execute_decision` outcome and `get_contract`'s plain
+discovery blob are handled completely identically (both are just opaque strings) until something
+-- this package's `unwrap_mcp_tool_result` -- peels both string layers back into a real Python
+value.
 
 ## Why `mcp-haystack`, not just `haystack-ai`
 
@@ -224,16 +247,16 @@ this repository's D2/D4 history.
 ## Not a `WrapperToolset`/interceptor
 
 Every real, in-process sibling in this repository (`pydantic-ai-algenta`, `langchain-algenta`,
-`maf-algenta`) builds one wrapper object that filters, scrubs, *and* maps governance in a single
+`maf-algenta`) builds one wrapper object that filters, scrubs, *and* maps denials in a single
 seam. This package deliberately does not: `haystack_algenta.toolset` only does profile filtering
 (native, via `MCPToolset(tool_names=...)`) and the two-layer scrub; `haystack_algenta.hooks` is a
-separate, `Agent`-level hook pair. Haystack genuinely has no single interception point on
+separate, `Agent`-level hook. Haystack genuinely has no single interception point on
 `MCPToolset`/`Tool` to build a combined wrapper on top of -- `Toolset`'s entire public surface is
 `add`/`from_dict`/`get_selectable_tools`/`spawn`/`to_dict`/`warm_up`, and `MCPToolset` builds each
 `Tool`'s call as a closure with no `tool_interceptors=`-style hook anywhere (grep-verified against
 the installed package). Rebuilding each `Tool` via `dataclasses.replace` (what this package does
 for the scrub) is the same escape-hatch pattern `langchain_algenta._wrap_plain_tool` and
-`maf_algenta._wrap_mcp_function` already use for their own non-native-seam cases; the receipt
+`maf_algenta._wrap_mcp_function` already use for their own non-native-seam cases; the denial
 mapping just has to live one layer higher here than it does for them.
 
 ## Testing this package's own test suite (not your agent)

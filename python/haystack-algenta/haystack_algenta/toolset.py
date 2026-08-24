@@ -45,9 +45,8 @@ any exception raised inside a tool's own `function`/`async_function` and re-rais
 `haystack.tools.errors.ToolInvocationError` instead -- and, going through a real `Agent` with its
 documented default `raise_on_tool_invocation_failure=False`, that gets silently swallowed into an
 ordinary tool-result `ChatMessage` fed back to the model, never raised out of `agent.run()` at all
-(verified live -- see the package README). Raising `AlgentaToolDenied`/`AlgentaApprovalStillPending`/
-`AlgentaToolExecutionFailed` from inside this module's wrapped calls would therefore be exactly the
-wrong seam for the common, real-`Agent` case. That mapping lives instead in
+(verified live -- see the package README). Raising `AlgentaToolDenied` from inside this module's
+wrapped calls would therefore be exactly the wrong seam for the common, real-`Agent` case. That mapping lives instead in
 `haystack_algenta.hooks.GovernedReceiptHook`, a Haystack `after_tool` hook -- the one seam proven
 live to let a custom exception type survive `agent.run()` completely unmodified. See that module's
 docstring, and the package README's "Approval mapping" section, for the full reasoning.

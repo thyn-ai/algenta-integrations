@@ -2,7 +2,7 @@
 no-agent) `haystack.components.agents.state.state.State` -- no network, no `Agent` run loop.
 
 `tests/test_toolset_scenarios.py` covers the full, real `Agent`-driven equivalent, including the
-real `ConfirmationHook` pre-call gate and the real stub-server wire round trip.
+real stub-server wire round trip.
 """
 
 from __future__ import annotations
@@ -13,16 +13,8 @@ import json
 import pytest
 from haystack.components.agents.state.state import State
 from haystack.dataclasses import ChatMessage, ToolCall
-from haystack.hooks.human_in_the_loop import AlwaysAskPolicy, ConfirmationHook, NeverAskPolicy
 
-from haystack_algenta import (
-    AlgentaApprovalStillPending,
-    AlgentaGovernanceHooks,
-    AlgentaToolDenied,
-    AlgentaToolExecutionFailed,
-    build_algenta_governance_hooks,
-    default_confirmation_hook,
-)
+from haystack_algenta import AlgentaToolDenied, build_algenta_governance_hooks
 from haystack_algenta.hooks import GovernedReceiptHook
 
 
@@ -34,63 +26,72 @@ def _state_with_tool_result(tool_name: str, result: object, *, error: bool = Fal
 
 
 def _receipt(**overrides: object) -> dict:
-    base = {"status": "ok", "code": "ok", "approval_state": "none", "result": {}}
+    base = {
+        "decision_id": "decision-1",
+        "webhook_url": "https://example.test/hook",
+        "execution_status": "delivered",
+        "safety_overridden": False,
+    }
     base.update(overrides)
     return base
 
 
+def _blocked(gate: str, **overrides: object) -> dict:
+    error = {"code": f"execution_blocked_{gate}", "gate": gate, "message": f"blocked by {gate}", "override_hint": None}
+    error.update(overrides)
+    return {"error": error}
+
+
 def test_successful_receipt_does_not_raise() -> None:
     hook = GovernedReceiptHook()
-    state = _state_with_tool_result("query_data", _receipt())
+    state = _state_with_tool_result("execute_decision", _receipt())
+    hook.run(state)  # must not raise
+
+
+def test_failed_delivery_receipt_does_not_raise() -> None:
+    # execution_status="failed" is a webhook-delivery outcome, not a policy denial.
+    hook = GovernedReceiptHook()
+    state = _state_with_tool_result("execute_decision", _receipt(execution_status="failed", response_code=None))
     hook.run(state)  # must not raise
 
 
 def test_non_envelope_result_is_skipped_regardless_of_tool_name() -> None:
     hook = GovernedReceiptHook()
     state = _state_with_tool_result("get_contract", {"capabilities": ["query"], "engine_version": "1.4.0"})
-    hook.run(state)  # must not raise -- doesn't parse as a receipt at all
+    hook.run(state)  # must not raise -- doesn't parse as a receipt or a denial at all
 
 
-def test_pending_receipt_raises_approval_still_pending() -> None:
+def test_log_decisions_own_result_shape_is_skipped() -> None:
+    # log_decision's real result has decision_id but no webhook_url/execution_status -- must not
+    # be mistaken for an execute_decision outcome.
     hook = GovernedReceiptHook()
     state = _state_with_tool_result(
-        "execute_decision", _receipt(approval_state="pending", plan_hash="plan-x")
+        "log_decision", {"decision_id": "decision-1", "chosen_action": "hold", "note": None}
     )
-    with pytest.raises(AlgentaApprovalStillPending) as exc_info:
+    hook.run(state)  # must not raise
+
+
+@pytest.mark.parametrize("gate", ["idempotency", "confidence", "risk_floor"])
+def test_each_real_named_gate_raises_tool_denied(gate: str) -> None:
+    hook = GovernedReceiptHook()
+    state = _state_with_tool_result("execute_decision", _blocked(gate))
+    with pytest.raises(AlgentaToolDenied) as exc_info:
         hook.run(state)
-    assert exc_info.value.receipt is not None
-    assert exc_info.value.receipt.plan_hash == "plan-x"
+    assert exc_info.value.gate == gate
+    assert exc_info.value.blocked is not None
+    assert exc_info.value.blocked.code == f"execution_blocked_{gate}"
+    assert gate in str(exc_info.value)
 
 
-def test_rejected_receipt_raises_tool_denied() -> None:
+def test_denial_message_includes_the_override_hint_when_present() -> None:
     hook = GovernedReceiptHook()
     state = _state_with_tool_result(
-        "execute_decision",
-        _receipt(status="error", code="stale_plan", approval_state="rejected", plan_hash="plan-y"),
+        "execute_decision", _blocked("confidence", override_hint="Set override_safety=true to bypass.")
     )
     with pytest.raises(AlgentaToolDenied) as exc_info:
         hook.run(state)
-    assert exc_info.value.receipt is not None
-    assert exc_info.value.receipt.code == "stale_plan"
-    assert "stale_plan" in str(exc_info.value)
-
-
-def test_named_policy_gate_code_raises_tool_denied_even_with_approval_state_none() -> None:
-    hook = GovernedReceiptHook()
-    state = _state_with_tool_result(
-        "execute_decision", _receipt(status="error", code="plan_hash_mismatch", approval_state="none")
-    )
-    with pytest.raises(AlgentaToolDenied):
-        hook.run(state)
-
-
-def test_generic_failure_raises_tool_execution_failed() -> None:
-    hook = GovernedReceiptHook()
-    state = _state_with_tool_result(
-        "query_data", _receipt(status="error", code="upstream_timeout", approval_state="none")
-    )
-    with pytest.raises(AlgentaToolExecutionFailed):
-        hook.run(state)
+    assert "Set override_safety=true to bypass." in str(exc_info.value)
+    assert exc_info.value.override_hint == "Set override_safety=true to bypass."
 
 
 def test_hook_is_restricted_to_after_tool() -> None:
@@ -102,45 +103,23 @@ def test_run_async_applies_the_same_mapping() -> None:
     # `Agent.run_async()` itself is real and worth covering, so drive the coroutine with a plain
     # `asyncio.run` from an ordinary sync test instead of adding a whole plugin for one test.
     hook = GovernedReceiptHook()
-    state = _state_with_tool_result("execute_decision", _receipt(approval_state="pending", plan_hash="plan-async"))
-    with pytest.raises(AlgentaApprovalStillPending):
+    state = _state_with_tool_result("execute_decision", _blocked("idempotency"))
+    with pytest.raises(AlgentaToolDenied):
         asyncio.run(hook.run_async(state))
 
 
-# --- default_confirmation_hook / build_algenta_governance_hooks composition ----------------------
+# --- build_algenta_governance_hooks ---------------------------------------------------------------
 
 
-def test_default_confirmation_hook_gates_only_the_requested_tool_names() -> None:
-    hook = default_confirmation_hook(confirmation_ui=object(), confirmation_policy=NeverAskPolicy())
-    assert isinstance(hook, ConfirmationHook)
-    assert "execute_decision" in hook.confirmation_strategies
+def test_build_algenta_governance_hooks_registers_only_after_tool() -> None:
+    hooks = build_algenta_governance_hooks()
+    assert set(hooks) == {"after_tool"}
+    assert len(hooks["after_tool"]) == 1
+    assert isinstance(hooks["after_tool"][0], GovernedReceiptHook)
 
 
-def test_default_confirmation_hook_defaults_to_always_ask() -> None:
-    hook = default_confirmation_hook(confirmation_ui=object())
-    strategy = hook.confirmation_strategies["execute_decision"]
-    assert isinstance(strategy.confirmation_policy, AlwaysAskPolicy)
-
-
-def test_build_algenta_governance_hooks_without_confirmation_ui_only_registers_after_tool() -> None:
-    governance = build_algenta_governance_hooks()
-    assert governance.before_tool == []
-    assert len(governance.after_tool) == 1
-    assert isinstance(governance.after_tool[0], GovernedReceiptHook)
-    agent_hooks = governance.as_agent_hooks()
-    assert "before_tool" not in agent_hooks
-    assert "after_tool" in agent_hooks
-
-
-def test_build_algenta_governance_hooks_with_confirmation_ui_registers_both() -> None:
-    governance = build_algenta_governance_hooks(confirmation_ui=object())
-    assert len(governance.before_tool) == 1
-    assert isinstance(governance.before_tool[0], ConfirmationHook)
-    agent_hooks = governance.as_agent_hooks()
-    assert agent_hooks["before_tool"] == governance.before_tool
-    assert agent_hooks["after_tool"] == governance.after_tool
-
-
-def test_algenta_governance_hooks_container_is_independently_constructible() -> None:
-    governance = AlgentaGovernanceHooks()
-    assert governance.as_agent_hooks() == {}
+def test_build_algenta_governance_hooks_has_no_before_tool_pre_call_gate() -> None:
+    # There is nothing left to confirm pre-call: execute_decision never comes back pending, it is
+    # a same-call success or a same-call named-gate denial. See haystack_algenta.hooks's docstring.
+    hooks = build_algenta_governance_hooks()
+    assert "before_tool" not in hooks
