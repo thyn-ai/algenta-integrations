@@ -21,21 +21,37 @@ from .helpers import mcp_shaped_tool
 EXECUTE_DECISION_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
-        "plan_hash": {"type": "string", "title": "Plan Hash"},
+        "decision_id": {"type": "string", "title": "Decision Id"},
+        "webhook_url": {"type": "string", "title": "Webhook Url"},
         "force": {"type": "boolean", "title": "Force", "default": False},
         "override_safety": {"type": "boolean", "title": "Override Safety", "default": False},
     },
-    "required": ["plan_hash"],
+    "required": ["decision_id", "webhook_url"],
     "title": "execute_decisionArguments",
 }
 
 received_calls: list[dict[str, Any]] = []
 
 
-async def _execute_decision(plan_hash: str, force: bool = False, override_safety: bool = False) -> dict[str, Any]:
+async def _execute_decision(
+    decision_id: str, webhook_url: str, force: bool = False, override_safety: bool = False
+) -> dict[str, Any]:
     """A fake execute_decision whose schema (like the real one) carries operator-only fields."""
-    received_calls.append({"plan_hash": plan_hash, "force": force, "override_safety": override_safety})
-    return {"status": "ok", "code": "ok", "approval_state": "approved", "plan_hash": plan_hash, "result": {}}
+    received_calls.append(
+        {"decision_id": decision_id, "webhook_url": webhook_url, "force": force, "override_safety": override_safety}
+    )
+    return {
+        "decision_id": decision_id,
+        "webhook_url": webhook_url,
+        "execution_status": "delivered",
+        "response_code": 200,
+        "executed_at": "2026-08-23T00:00:00Z",
+        "policy_snapshot_id": "policy-snap-1",
+        "schema_snapshot_id": "schema-snap-1",
+        "manifest_version": "1.0.0",
+        "payload_summary": None,
+        "safety_overridden": override_safety,
+    }
 
 
 def _make_execute_decision_tool():
@@ -49,8 +65,9 @@ async def test_force_and_override_safety_are_absent_from_the_advertised_schema()
     assert "force" not in schema.get("properties", {})
     assert "override_safety" not in schema.get("properties", {})
     assert "force" not in schema.get("required", [])
-    # And the field that IS supposed to be model-facing survives untouched.
-    assert "plan_hash" in schema.get("properties", {})
+    # And the fields that ARE supposed to be model-facing survive untouched.
+    assert "decision_id" in schema.get("properties", {})
+    assert "webhook_url" in schema.get("properties", {})
 
 
 async def test_a_smuggled_force_argument_never_reaches_the_wrapped_tool_call() -> None:
@@ -59,14 +76,23 @@ async def test_a_smuggled_force_argument_never_reaches_the_wrapped_tool_call() -
 
     # Simulates a caller/model that somehow still supplied `force`/`override_safety` despite
     # the schema not advertising them (e.g. copied from an earlier message).
-    result = await tool.ainvoke({"plan_hash": "plan-1", "force": True, "override_safety": True})
+    result = await tool.ainvoke(
+        {"decision_id": "decision-1", "webhook_url": "https://example.com/hook", "force": True, "override_safety": True}
+    )
 
     assert len(received_calls) == 1
     # The underlying tool never saw `force=True`/`override_safety=True` -- it saw its own
     # defaults, because the never-model-facing scrub removed both keys from the arguments dict
     # before forwarding the call.
-    assert received_calls[0] == {"plan_hash": "plan-1", "force": False, "override_safety": False}
-    assert result == {"status": "ok", "code": "ok", "approval_state": "approved", "plan_hash": "plan-1", "result": {}}
+    assert received_calls[0] == {
+        "decision_id": "decision-1",
+        "webhook_url": "https://example.com/hook",
+        "force": False,
+        "override_safety": False,
+    }
+    assert result["decision_id"] == "decision-1"
+    assert result["execution_status"] == "delivered"
+    assert result["safety_overridden"] is False
 
 
 def test_schema_without_never_model_facing_fields_is_returned_unchanged() -> None:

@@ -1,43 +1,40 @@
 """LangChain / LangGraph tool integration for Algenta.
 
 Wraps a self-hosted Algenta Engine's MCP tool surface as a governed-execution-aware list of
-LangChain `BaseTool`s (`create_algenta_tools`) with tool-profile filtering, typed
-governed-execution receipts, and native mapping onto LangGraph's own human-in-the-loop pause
-primitive (`langgraph.types.interrupt` / `Command(resume=...)`) for `execute_decision`'s
-approval-gated path.
+LangChain `BaseTool`s (`create_algenta_tools`) with tool-profile filtering, typed execution
+receipts/denials, and a real `execute_decision` denial mapping: the engine decides
+success-vs-blocked *synchronously, in the same call* (never a separate "pending approval" round
+trip), so a blocked call surfaces as a normal, catchable LangChain tool-call error
+(`AlgentaExecutionBlocked`), not a paused run.
 
-See the package README for a runnable example and for the honest "why" behind the
-approval-mapping design, and `contracts/integration-tool-contract.json` in the
-`algenta-integrations` repository root for the tool-profile contract this package conforms to.
+See the package README for a runnable example and for the honest "why" behind this design, and
+`contracts/integration-tool-contract.json` in the `algenta-integrations` repository root for the
+tool-profile contract this package conforms to.
 """
 
 from .contract import DEFAULT_PROFILE, NEVER_MODEL_FACING_FIELDS, TOOL_PROFILES, ToolProfile
-from .exceptions import (
-    AlgentaApprovalStillPending,
-    AlgentaGovernedCallError,
-    AlgentaToolDenied,
-    AlgentaToolExecutionFailed,
-)
+from .exceptions import AlgentaExecutionBlocked, AlgentaGovernedCallError, AlgentaToolDenied
 from .interceptor import AlgentaToolCallInterceptor
-from .receipts import ApprovalState, GovernedExecutionReceipt, NAMED_POLICY_GATE_CODES, parse_receipt
+from .receipts import NAMED_EXECUTION_GATES, ExecutionDenial, ExecutionGate, ExecutionReceipt, parse_denial, parse_receipt
 from .toolset import ALGENTA_BASE_URL_ENV_VAR, DEFAULT_ALGENTA_BASE_URL, create_algenta_tools
 
 __all__ = [
     "ALGENTA_BASE_URL_ENV_VAR",
     "DEFAULT_ALGENTA_BASE_URL",
     "DEFAULT_PROFILE",
-    "AlgentaApprovalStillPending",
+    "NAMED_EXECUTION_GATES",
+    "AlgentaExecutionBlocked",
     "AlgentaGovernedCallError",
     "AlgentaToolCallInterceptor",
     "AlgentaToolDenied",
-    "AlgentaToolExecutionFailed",
-    "ApprovalState",
-    "GovernedExecutionReceipt",
-    "NAMED_POLICY_GATE_CODES",
+    "ExecutionDenial",
+    "ExecutionGate",
+    "ExecutionReceipt",
     "NEVER_MODEL_FACING_FIELDS",
     "TOOL_PROFILES",
     "ToolProfile",
     "create_algenta_tools",
+    "parse_denial",
     "parse_receipt",
 ]
 
