@@ -8,14 +8,13 @@ from your own self-hosted Algenta Engine's MCP tool surface, and layers on:
 - **Tool-profile filtering** -- expose only `observe` (read-only, the default), `govern`,
   `execute`, or the opt-in `full` registry, per
   [`contracts/integration-tool-contract.json`](../../contracts/integration-tool-contract.json).
-- **Typed governed-execution receipts** -- every tool call's result is parseable into a
-  [`GovernedExecutionReceipt`][receipt] via `parse_receipt`, so your code gets a typed object
-  instead of hand-parsing a raw dict.
-- **Native approval handling** -- a paused, approval-gated `execute_decision` call surfaces
-  through LangGraph's own
-  [`interrupt()`](https://langchain-ai.github.io/langgraph/how-tos/human_in_the_loop/)
-  human-in-the-loop primitive when your agent has a checkpointer -- not a bespoke mechanism --
-  with an honest accounting below of exactly when that's true and what happens when it isn't.
+- **Typed execution receipts and denials** -- a successful `execute_decision` call is parseable
+  into an [`ExecutionReceipt`][receipt] via `parse_receipt`; a blocked one raises
+  `AlgentaExecutionBlocked`, carrying the engine's own named gate.
+- **A real, synchronous denial mapping** -- `execute_decision` either succeeds or is blocked by
+  one of exactly three named policy gates, decided in the *same call* -- never a separate
+  "pending approval" step. A blocked call surfaces as a normal, catchable LangChain tool-call
+  error, not a paused run.
 
 [receipt]: ./langchain_algenta/receipts.py
 
@@ -26,10 +25,13 @@ pip install langchain-algenta
 ```
 
 This package depends on the published [`algenta-sdk`](https://pypi.org/project/algenta-sdk/)
-(the only Algenta-owned dependency any package in this repository may declare) plus three real,
-non-optional runtime dependencies: `langchain-core`, `langchain-mcp-adapters`, and `langgraph`.
-`langgraph` is a hard dependency, not an optional extra, even if you never build a `StateGraph`
-by hand -- see [Why `interrupt()`](#why-interrupt-and-what-happens-after-resume) for why.
+(the only Algenta-owned dependency any package in this repository may declare) plus two real,
+non-optional runtime dependencies: `langchain-core` and `langchain-mcp-adapters`. `langgraph` is
+**not** a runtime dependency of this package -- see [Why no `langgraph`
+dependency](#why-no-langgraph-dependency-honest-history) for why that's worth calling out
+explicitly. The tools `create_algenta_tools` returns are ordinary LangChain `BaseTool`s, fully
+usable inside a `langgraph` agent if that's how you build yours -- that's your own dependency to
+add, not this package's.
 
 ## Self-hosted-first
 
@@ -44,28 +46,26 @@ never a hosted-by-Algenta cloud service. The endpoint resolves, in order, from:
 
 ```python
 from langchain.agents import create_agent
-from langgraph.checkpoint.memory import InMemorySaver
-from langchain_algenta import create_algenta_tools
+from langchain_algenta import AlgentaExecutionBlocked, create_algenta_tools
 
 # Talks to your own self-hosted engine (ALGENTA_BASE_URL, or the base_url= arg below).
-tools = await create_algenta_tools(base_url="http://localhost:8000/mcp", profile="observe")
+tools = await create_algenta_tools(base_url="http://localhost:8000/mcp", profile="execute")
 
-agent = create_agent("openai:gpt-5", tools=tools, checkpointer=InMemorySaver())
+agent = create_agent("openai:gpt-5", tools=tools)
 
-result = await agent.ainvoke(
-    {"messages": [{"role": "user", "content": "What's the expected value of scenario X?"}]},
-    {"configurable": {"thread_id": "session-1"}},
-)
-print(result["messages"][-1].content)
+try:
+    result = await agent.ainvoke(
+        {"messages": [{"role": "user", "content": "Execute the decision we just logged."}]}
+    )
+    print(result["messages"][-1].content)
+except AlgentaExecutionBlocked as blocked:
+    # blocked.gate is one of "idempotency" | "confidence" | "risk_floor"
+    print(f"execute_decision was blocked by the {blocked.gate!r} gate: {blocked.denial.message}")
 ```
 
-`profile="observe"` is also the default if you omit it -- the agent can call
+`profile="observe"` is the default if you omit it -- the agent can call
 `get_contract` / `query_data` / `simulate` / `recommend`, and nothing that writes, plans, or
 executes anything. See [Tool profiles](#tool-profiles) to opt into more.
-
-`checkpointer=InMemorySaver()` (or any real `BaseCheckpointSaver`) is what makes a paused
-`execute_decision` call genuinely resumable rather than a dead end -- see the approval section
-below.
 
 ## Tool profiles
 
@@ -73,7 +73,7 @@ below.
 |---|---|---|
 | `observe` (default) | `get_contract`, `query_data`, `simulate`, `recommend` | Read-only. |
 | `govern` | + `plan_decision`, `log_decision` | Propose/record decisions; never executes. |
-| `execute` | + `execute_decision` | Real-world execution, approval-gated -- see below. |
+| `execute` | + `execute_decision` | Real-world execution -- see below for the denial model. |
 | `full` | everything the connected engine advertises | Opt-in only; admin/ops tooling. |
 
 ```python
@@ -101,9 +101,7 @@ those frameworks -- `langchain-algenta` is built on
 protocol instead. `create_algenta_tools` builds a
 `langchain_mcp_adapters.client.MultiServerMCPClient` with an `AlgentaToolCallInterceptor`
 registered in `tool_interceptors=`; every real tool call that client's tools make is routed
-through it before the real MCP network call happens, and the interceptor's `handler` can be
-called more than once per call -- which is exactly what makes the approval retry below possible
-without any bespoke plumbing.
+through it before the real MCP network call happens.
 
 Tool-*listing* (which names even get returned) is unaffected by interceptors -- they only fire on
 a call, not on `get_tools()` -- so profile filtering and the schema-level `force`/
@@ -113,118 +111,112 @@ shape as the pydantic-ai and TypeScript siblings do it.
 The `tools=` escape hatch (an in-memory list of `BaseTool`s -- a fake registry in a test, or your
 own pre-built tools with no MCP client behind them at all) has no MCP client to attach an
 interceptor to, so it rebuilds each tool's coroutine directly instead, sharing the exact same
-approval-mapping logic (`langchain_algenta.governance.resolve_governed_call`).
+denial-mapping logic (`langchain_algenta.governance.resolve_governed_call`).
 
-## Why `interrupt()`, and what happens after resume
+## The real `execute_decision` denial model
 
-`execute_decision` is real-world execution and is approval-gated. When the connected engine's
-result envelope reports `approval_state == "pending"`, `AlgentaToolCallInterceptor` calls
-[`langgraph.types.interrupt(...)`](https://langchain-ai.github.io/langgraph/concepts/human_in_the_loop/)
-with the plan's identifying fields (`plan_hash`, `execution_id`, `idempotency_key`, and the full
-receipt) as its payload.
+`execute_decision` takes `decision_id` and `webhook_url` (plus the operator-only `force` /
+`override_safety`, and an optional `timeout_seconds`/`metadata`) and dispatches an
+already-planned, already-logged decision for real-world execution. It has exactly two outcomes,
+decided **synchronously, in the same call**:
 
-**This is a genuine, framework-native mid-call pause -- not a documentation claim.** Verified
-directly against the installed `langgraph` 1.2.11 / `langchain-core` 1.6.0: a plain tool's own
-coroutine can call `interrupt()`, and as long as the surrounding agent/graph was built with a
-`checkpointer` (true for `create_agent`/`create_react_agent` the moment you pass one -- which is
-the normal, current way to get resumable human-in-the-loop, not a hand-built `StateGraph`
-requirement), the run genuinely suspends: `agent.ainvoke(...)` returns with `result["__interrupt__"]`
-set instead of raising, and `agent.ainvoke(Command(resume=...), config)` genuinely resumes
-*that exact paused tool call*.
+1. **Success** -- a real `ExecutionReceipt`: `{decision_id, webhook_url, execution_status,
+   response_code, executed_at, policy_snapshot_id, schema_snapshot_id, manifest_version,
+   payload_summary, safety_overridden}`. `execution_status` can be `"delivered"` or `"failed"` --
+   `"failed"` means the webhook target itself rejected delivery; the call still completed and
+   this is still a success from `execute_decision`'s own point of view, not a denial.
+2. **Blocked** -- the engine's `409` response, reporting exactly one of three real, named policy
+   gates:
+   - `"idempotency"`: this `decision_id` was already delivered. `force=true` bypasses *only*
+     this gate, and only for one re-execution.
+   - `"confidence"`: the logged decision's confidence is below `policy.min_confidence`.
+     Bypassable only via `override_safety=true`.
+   - `"risk_floor"`: the logged decision's `risk_p5` is below `-policy.risk_floor`. Bypassable
+     only via `override_safety=true`.
 
-**What resuming actually does, concretely:** `AlgentaToolCallInterceptor` doesn't try to interpret
-whatever value you pass to `Command(resume=...)` as an approval decision -- there's no reliable
-way to distinguish "the human approved it" from "the human said something" from inside the
-interceptor. Instead, once resumed, it retries the *exact same underlying MCP call, once*, on the
-theory that a human (or a policy-engine node reading `result["__interrupt__"]`) went and recorded
-the real, out-of-band approval against `plan_hash` on the engine itself in between. If that retry
-now comes back `approval_state="approved"` (or otherwise successful), you get that fresh result.
-If it's *still* `"pending"` -- the approval genuinely wasn't recorded in time -- this package
-raises `AlgentaApprovalStillPending` rather than pausing a second time: `interrupt()` is
-resumable per call site within one task execution, not idempotent across repeated calls, so
-pausing again here would mean a resumer who actually did approve the plan and resumed could still
-get stuck forever on a slow-to-propagate approval instead of ever seeing a clear outcome.
+`AlgentaToolCallInterceptor` maps a blocked call onto `AlgentaExecutionBlocked` -- a plain
+exception (deliberately *not* a `langchain_core.tools.ToolException`; see [Why plain exceptions,
+not `ToolException`](#why-plain-exceptions-not-toolexception) below) carrying the parsed
+`ExecutionDenial` on `.denial` (`.denial.gate`, `.denial.code`, `.denial.message`,
+`.denial.override_hint`), with `.gate` as a shortcut onto `.denial.gate`:
 
 ```python
-from langgraph.types import Command
+from langchain_algenta import AlgentaExecutionBlocked
 
-result = await agent.ainvoke({"messages": [...]}, config)
-
-if "__interrupt__" in result:
-    pending = result["__interrupt__"][0].value
-    # pending["plan_hash"], pending["execution_id"], pending["idempotency_key"], ...
-    await my_algenta_sdk_client.approve_agent_run(pending["execution_id"])  # your real approval call
-    result = await agent.ainvoke(Command(resume="approved"), config)
+try:
+    result = await execute_decision.ainvoke({"decision_id": "...", "webhook_url": "..."})
+except AlgentaExecutionBlocked as blocked:
+    if blocked.gate == "idempotency":
+        ...  # already delivered; decide whether a real re-execution is actually warranted
+    elif blocked.gate in ("confidence", "risk_floor"):
+        ...  # policy said no; this is not something to silently retry
 ```
 
-**A call the engine denies outright** -- a named policy-gate `code` such as `plan_hash_mismatch`,
-`stale_plan`, `plan_not_approved`, or `idempotency_key_conflict`, or `approval_state in
-("rejected", "expired")` -- never goes through `interrupt()` at all: `AlgentaToolCallInterceptor`
-raises `AlgentaToolDenied` immediately, carrying the engine's own code/message on `.receipt`.
-Anything else that isn't a recognized success raises `AlgentaToolExecutionFailed`.
+An error that *isn't* one of these three recognized gates (a generic transport failure, or some
+future error shape this package doesn't know about yet) is deliberately **not** wrapped in an
+Algenta-specific exception -- it's left to `langchain_mcp_adapters`' own, already-correct handling
+of a generic MCP tool execution error, the native framework idiom for "this tool call failed"
+that this package has no reason to shadow when it isn't one of the three specific gates it
+actually understands.
 
-### What `interrupt()` needs -- the honest limit
+**There is no third, "pending" outcome, and nothing here to pause on.** A genuinely separate,
+`plan_hash`+nonce human-approval system does exist on the real engine, but its own source says
+explicitly that it is intentionally not exposed as an MCP/LLM tool -- no MCP-based integration
+package, this one included, can ever observe or wait on it. `execute_decision` itself commits to
+an answer -- success or one of the three named gates -- in the one call you make.
 
-If your tool call *isn't* running inside a real LangGraph Pregel task at all (no graph, no
-`create_agent`/`create_react_agent`), `langgraph.types.interrupt()` fails instead of pausing --
-verified directly, not assumed, against this package's real dependency versions. The exact
-exception depends on how "bare" the call is: calling a returned tool's `.ainvoke(...)` directly
-(still inside *some* LangChain `Runnable` config context, since `BaseTool` is itself a
-`Runnable`) gets far enough into `interrupt()` to raise `KeyError: '__pregel_scratchpad'` (it
-finds a config, just not LangGraph's own Pregel-scoped scratchpad key in it); calling
-`langgraph.types.interrupt()` itself with no `Runnable` context whatsoever raises the coarser
-`RuntimeError("Called get_config outside of a runnable context")`. And if your graph exists but
-has no `checkpointer`, the run still reports `__interrupt__` correctly, but `Command(resume=...)`
-fails outright with `RuntimeError: Cannot use Command(resume=...) without checkpointer` -- also
-verified directly. None of these is a limitation this package invented or can paper over: they
-are exactly LangGraph's own, current, documented behavior. The only thing that changes based on
-your setup is whether a pending approval becomes a graceful pause or a raised error -- this
-package always calls `interrupt()` unconditionally and lets that decision fall out of whatever
-context you actually run in, rather than trying to detect it ahead of time (there's no cheap way
-to check "does this call have a checkpointer" from inside the interceptor) and silently
-downgrading to always-raise, which would throw away this package's one real advantage over its
-`pydantic-ai-algenta` and `algenta-tools` siblings.
+### Why plain exceptions, not `ToolException`
 
-### Why not just throw, like `algenta-tools` (Vercel AI SDK) does?
+`langchain_core.tools.ToolException` is LangChain's own idiom for "let the agent see this failure
+and try to self-correct" -- it gets swallowed by `BaseTool`'s `handle_tool_error` machinery into
+an error-status `ToolMessage` by default, rather than propagating. `AlgentaExecutionBlocked` (and
+`AlgentaToolDenied`, the unrelated profile-violation guard) are deliberately *not*
+`ToolException` subclasses, so they propagate to your own calling code unmodified -- a policy
+denial on real-world execution is not something this package wants silently absorbed into a chat
+message by default; you decide what an agent should be told about it, if anything.
 
-Because, unlike the AI SDK, LangGraph actually has a real primitive for this that doesn't require
-throwing at all. `algenta-tools` sets `needsApproval: true` on `execute_decision` as a *pre-call*
-gate (the model can't even attempt the call until an app-level approval response arrives) and
-still throws if the engine reports pending *after* that gate passes, because AI SDK has no
-mid-call pause primitive to fall back on. `pydantic-ai-algenta` raises `ApprovalRequired` -- a
-*post-hoc* reaction after the real MCP call already ran, because pydantic-ai has no pre-call
-approval gate at all. `langchain-algenta` can do better than both: because a plain tool's
-coroutine can call `interrupt()` directly, mid-call, and LangGraph's own runtime turns that into a
-real, resumable pause -- when a checkpointer is present, which is the normal case, not an edge
-case.
+### Why no `langgraph` dependency (honest history)
 
-## Typed receipts
+An earlier version of this package called `langgraph.types.interrupt(...)` unconditionally
+whenever the connected engine reported a fictional `approval_state == "pending"` result --
+`execute_decision` never actually returns that; there is no such field and no such state on the
+real tool at all. Once that pause (and the retry-after-resume machinery built around it) was
+removed as dead, fictional code, nothing in this package's own source imports `langgraph`
+anymore, so it was dropped from `dependencies` too. This is a genuine simplification, not a
+missing feature: the real tool has strictly less state to reason about than the fictional one
+did.
 
-Every governed Algenta MCP tool call's result payload is parseable into a
-`GovernedExecutionReceipt`:
+## Typed receipts and denials
+
+A successful `execute_decision` call's result payload is parseable into an `ExecutionReceipt`:
 
 ```python
-from langchain_algenta import GovernedExecutionReceipt, parse_receipt
+from langchain_algenta import ExecutionReceipt, parse_receipt
 
 # tool_message.content is a list of LangChain content blocks; the JSON payload is the first
 # text block's text, same as what a real chat model would see.
 import json
 payload = json.loads(tool_message.content[0]["text"])
-receipt: GovernedExecutionReceipt | None = parse_receipt(payload)
+receipt: ExecutionReceipt | None = parse_receipt(payload)
 if receipt is not None:
-    receipt.status            # "ok" | "error" | ...
-    receipt.code               # "ok" | "plan_hash_mismatch" | "upstream_timeout" | ...
-    receipt.approval_state     # "none" | "pending" | "approved" | "rejected" | "expired"
-    receipt.plan_hash
-    receipt.execution_id
-    receipt.idempotency_key
-    receipt.result              # the tool's actual payload, once unwrapped from the envelope
+    receipt.decision_id
+    receipt.webhook_url
+    receipt.execution_status     # "delivered" | "failed"
+    receipt.is_delivered()       # execution_status == "delivered"
+    receipt.response_code
+    receipt.safety_overridden    # True if override_safety was needed to get here
+    receipt.payload_summary      # what was actually delivered to webhook_url
 ```
 
-### Why no typed receipt on the tool's return value?
+`parse_receipt` returns `None` for any other tool's own result shape -- `get_contract`'s
+discovery payload, `log_decision`'s `{decision_id, chosen_action, expected_value, confidence,
+created_at, note}`, `plan_decision`'s plan summary -- none of those are `execute_decision`
+receipts, and this package never pretends they are.
+
+### Why no typed receipt on the tool's return value
 
 `pydantic-ai-algenta` and `algenta-tools` (Vercel AI SDK) both return the *parsed*
-`GovernedExecutionReceipt` object as the tool call's actual return value -- their frameworks let a
+`ExecutionReceipt` object as the tool call's actual return value -- their frameworks let a
 wrapped tool call return anything. `langchain-algenta` can't do the same thing from inside
 `AlgentaToolCallInterceptor`: `langchain_mcp_adapters.interceptors.ToolCallInterceptor` is typed to
 return `CallToolResult | ToolMessage | Command`, not an arbitrary Python object, and returning
@@ -241,9 +233,9 @@ The test suite (`tests/`) runs a real
 FastMCP -- already a transitive dependency of `langchain-mcp-adapters`, so no extra `fastmcp`
 package is needed) over a real local HTTP socket -- a deliberately fake, deterministic stand-in
 for a self-hosted Algenta MCP endpoint, never a real engine (none is reachable in CI) -- and
-drives it with the real `create_algenta_tools` / `MultiServerMCPClient` / `AlgentaToolCallInterceptor`
-round trip. The `"pending"` -> `interrupt()` -> resume path is exercised against a real, compiled
-LangGraph graph with a real `InMemorySaver` checkpointer -- not just asserted to have been called.
+drives it with the real `create_algenta_tools` / `MultiServerMCPClient` /
+`AlgentaToolCallInterceptor` round trip, including all three real named policy gates on
+`execute_decision`.
 
 ```bash
 cd python

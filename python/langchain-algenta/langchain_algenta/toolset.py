@@ -11,7 +11,7 @@ Layers three things on top of the wrapped MCP tools' real calls:
    tool's advertised JSON schema (this module) *and* from the arguments dict actually forwarded
    to the wrapped MCP call
    (`langchain_algenta.interceptor.AlgentaToolCallInterceptor`/`_wrap_plain_tool` below).
-3. **Governed-execution receipt handling and the approval/denial/failure mapping** -- see
+3. **The real `execute_decision` denial mapping** -- see
    `langchain_algenta.governance.resolve_governed_call`.
 
 The real path (`base_url=`, the common case) builds a `MultiServerMCPClient` with
@@ -32,9 +32,10 @@ import httpx
 from langchain_core.tools import BaseTool, StructuredTool
 
 from .contract import DEFAULT_PROFILE, NEVER_MODEL_FACING_FIELDS, TOOL_PROFILES, ToolProfile, resolve_profile_tool_names
+from .exceptions import AlgentaExecutionBlocked
 from .governance import resolve_governed_call
 from .interceptor import AlgentaToolCallInterceptor
-from .receipts import GovernedExecutionReceipt
+from .receipts import ExecutionDenial, parse_denial
 
 #: Default self-hosted Algenta MCP endpoint. Matches this whole program's standing rule: every
 #: default in this repository points at the caller's own self-hosted deployment, never a
@@ -101,7 +102,7 @@ def _scrub_never_model_facing_args(args: dict[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in args.items() if k not in NEVER_MODEL_FACING_FIELDS}
 
 
-def _wrap_plain_tool(tool: BaseTool, *, receipt_model: type[GovernedExecutionReceipt]) -> BaseTool:
+def _wrap_plain_tool(tool: BaseTool, *, denial_model: type[ExecutionDenial]) -> BaseTool:
     """Rebuild `tool` (already profile-filtered and schema-scrubbed) with a coroutine that scrubs
     call-time arguments and runs the same `resolve_governed_call` mapping the interceptor uses.
 
@@ -112,18 +113,28 @@ def _wrap_plain_tool(tool: BaseTool, *, receipt_model: type[GovernedExecutionRec
     tool's own implementation is sync or async.
     """
 
-    async def _call(**kwargs: Any) -> Any:
-        scrubbed = _scrub_never_model_facing_args(kwargs)
-        raw_result = await tool.ainvoke(scrubbed)
-        return raw_result, raw_result
-
     async def _run(**kwargs: Any) -> Any:
-        raw_result, payload = await _call(**kwargs)
-
-        async def _retry() -> tuple[Any, Any]:
-            return await _call(**kwargs)
-
-        return await resolve_governed_call(tool.name, raw_result, payload, receipt_model=receipt_model, retry=_retry)
+        scrubbed = _scrub_never_model_facing_args(kwargs)
+        try:
+            raw_result = await tool.ainvoke(scrubbed)
+        except Exception as exc:
+            # `tool.ainvoke(...)` in this in-memory escape hatch has no MCP
+            # `CallToolResult.isError` flag to check -- a plain `BaseTool`'s coroutine reports
+            # "this call was blocked" the only way a plain Python function can, by raising.
+            # `parse_denial` accepts the exception's own stringified message directly and
+            # recovers an embedded JSON denial body from it, tolerating surrounding prose the
+            # same way it does for the real MCP `isError=True` path.
+            denial = parse_denial(str(exc), model=denial_model)
+            if denial is not None:
+                raise AlgentaExecutionBlocked(
+                    f"Algenta tool {tool.name!r} was blocked by the {denial.gate!r} policy gate -- {denial.message}",
+                    denial=denial,
+                ) from exc
+            # Not a recognized denial shape (a generic failure, or some future error shape this
+            # package doesn't know about yet) -- propagate the tool's own original exception
+            # unchanged rather than inventing an Algenta-specific one for it.
+            raise
+        return resolve_governed_call(tool.name, raw_result, raw_result, denial_model=denial_model, is_error=False)
 
     scrubbed_schema = _strip_never_model_facing_schema(tool.args_schema)
     return StructuredTool.from_function(
@@ -149,7 +160,7 @@ async def create_algenta_tools(
     server_name: str = _DEFAULT_SERVER_NAME,
     headers: dict[str, str] | None = None,
     auth: httpx.Auth | None = None,
-    receipt_model: type[GovernedExecutionReceipt] = GovernedExecutionReceipt,
+    denial_model: type[ExecutionDenial] = ExecutionDenial,
     **connection_kwargs: Any,
 ) -> list[BaseTool]:
     """Build a governed-execution-aware list of `BaseTool`s from a self-hosted Algenta Engine.
@@ -171,13 +182,13 @@ async def create_algenta_tools(
         client: Advanced escape hatch: an already-constructed
             `langchain_mcp_adapters.client.MultiServerMCPClient` to call `get_tools()` on,
             instead of having this function build one. **You are responsible for registering
-            `AlgentaToolCallInterceptor(profile=profile, receipt_model=receipt_model)` in its own
+            `AlgentaToolCallInterceptor(profile=profile, denial_model=denial_model)` in its own
             `tool_interceptors=` at construction** -- this function still performs
             `get_tools()`-level profile filtering and schema scrubbing regardless, but the
-            call-time enforcement (the approval/denial/failure mapping, and the argument-scrub
-            defense-in-depth layer) only happens if the interceptor is wired into the client
-            itself, which this function cannot retrofit onto a client it didn't build. Mutually
-            exclusive with `tools` and with the MCP-connection arguments.
+            call-time enforcement (the real `execute_decision` denial mapping, and the
+            argument-scrub defense-in-depth layer) only happens if the interceptor is wired into
+            the client itself, which this function cannot retrofit onto a client it didn't
+            build. Mutually exclusive with `tools` and with the MCP-connection arguments.
         server_name: The server name to register this connection under (when this function
             builds its own client) or to call `client.get_tools(server_name=...)` with (when
             `client` is given). Defaults to `"algenta"`.
@@ -189,10 +200,10 @@ async def create_algenta_tools(
             `langchain_mcp_adapters.interceptors.MCPToolCallRequest.override`.
         auth: An `httpx.Auth` instance for the self-hosted endpoint (e.g. OAuth-style dynamic
             auth). Forwarded to the constructed connection's `auth`.
-        receipt_model: The `GovernedExecutionReceipt` subclass to validate tool results against.
-            Override if your engine's receipt envelope has grown fields you want typed (the base
-            model already accepts and preserves unknown fields via `extra="allow"`, so most
-            callers won't need this).
+        denial_model: The `ExecutionDenial` subclass to validate a blocked `execute_decision`
+            call's `{"error": {...}}` body against. Override if your engine's denial envelope
+            has grown fields you want typed (the base model already accepts and preserves
+            unknown fields via `extra="allow"`, so most callers won't need this).
         **connection_kwargs: Any other `langchain_mcp_adapters.sessions.StreamableHttpConnection`
             key (e.g. `timeout`, `sse_read_timeout`, `httpx_client_factory`), forwarded as-is.
 
@@ -224,7 +235,7 @@ async def create_algenta_tools(
         source_tools = {tool.name: tool for tool in tools}
         allowed_names = resolve_profile_tool_names(profile, available_tool_names=frozenset(source_tools))
         return [
-            _wrap_plain_tool(_strip_never_model_facing_tool(tool), receipt_model=receipt_model)
+            _wrap_plain_tool(_strip_never_model_facing_tool(tool), denial_model=denial_model)
             for name, tool in source_tools.items()
             if name in allowed_names
         ]
@@ -239,7 +250,7 @@ async def create_algenta_tools(
         if auth is not None:
             connection["auth"] = auth
         connection.update(connection_kwargs)
-        interceptor = AlgentaToolCallInterceptor(profile=profile, receipt_model=receipt_model)
+        interceptor = AlgentaToolCallInterceptor(profile=profile, denial_model=denial_model)
         client = MultiServerMCPClient({server_name: connection}, tool_interceptors=[interceptor])
 
     raw_tools = await client.get_tools(server_name=server_name)
