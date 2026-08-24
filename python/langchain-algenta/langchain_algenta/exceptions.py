@@ -1,13 +1,21 @@
-"""Exceptions raised by `AlgentaToolCallInterceptor` for a denied or failed governed call.
+"""Exceptions raised by `AlgentaToolCallInterceptor` (and the `tools=` escape hatch in
+`langchain_algenta.toolset`) for a denied or policy-blocked governed call.
 
 Unlike `pydantic-ai` (which has `pydantic_ai.exceptions.ToolFailed` and
 `pydantic_ai.tools.ToolDenied` as first-class primitives), `langchain_core.tools` has no
 denied-vs-failed distinction of its own. Rather than inventing a fake framework primitive, this
-module defines two plain exceptions -- deliberately *not* `langchain_core.tools.ToolException`
+module defines plain exceptions -- deliberately *not* `langchain_core.tools.ToolException`
 subclasses, so they propagate to the caller unmodified rather than being silently swallowed into
 an error-status `ToolMessage` by `BaseTool`'s own `handle_tool_error` machinery (only
 `ToolException` is eligible for that; see the package README's "Why plain exceptions, not
 `ToolException`" section for the full reasoning, verified against `langchain_core.tools.base`).
+
+This surfaces a real, synchronous `execute_decision` denial as a normal LangChain tool-call error
+the enclosing graph can catch with a plain `try`/`except` around `ainvoke(...)` -- there is no
+"pending approval" state on this tool for anything to pause on (a genuinely separate,
+plan_hash+nonce human-approval system does exist on the real engine, but its own source says
+explicitly that it is intentionally not exposed as an MCP/LLM tool, so no MCP-based integration
+package can ever observe or wait on it).
 """
 
 from __future__ import annotations
@@ -15,51 +23,51 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .receipts import GovernedExecutionReceipt
+    from .receipts import ExecutionDenial
 
 
 class AlgentaGovernedCallError(Exception):
-    """Base class for an error raised while resolving a governed-execution receipt.
+    """Base class for an error raised while resolving a governed `execute_decision` call.
 
-    Carries the parsed `receipt` (when one was available) so a caller who does catch this can
-    still inspect `error.receipt.plan_hash`, `error.receipt.execution_id`, etc.
+    Carries the parsed `denial` (when one was available) so a caller who does catch this can
+    still inspect `error.denial.gate`, `error.denial.code`, `error.denial.override_hint`, etc.
     """
 
-    def __init__(self, message: str, *, receipt: "GovernedExecutionReceipt | None" = None) -> None:
+    def __init__(self, message: str, *, denial: "ExecutionDenial | None" = None) -> None:
         super().__init__(message)
-        self.receipt = receipt
+        self.denial = denial
 
 
 class AlgentaToolDenied(AlgentaGovernedCallError):
-    """Raised when the engine denies a governed call outright.
-
-    Corresponds to `GovernedExecutionReceipt.is_denied()`: `approval_state` is `"rejected"` or
-    `"expired"`, or `code` is one of `NAMED_POLICY_GATE_CODES` (e.g. `"plan_hash_mismatch"`).
-    Also raised by `AlgentaToolCallInterceptor` itself, with `receipt=None`, when a tool name is
-    called outside the active tool profile (defense-in-depth against a caller that bypassed the
-    profile-filtered tool list).
+    """Raised by `AlgentaToolCallInterceptor` itself, with `denial=None`, when a tool name is
+    called outside the active tool profile -- defense-in-depth against a caller that bypassed
+    the profile-filtered tool list (e.g. by calling `client.get_tools()` directly on a client
+    this package built). Unrelated to anything the connected engine itself ever reports.
     """
 
 
-class AlgentaToolExecutionFailed(AlgentaGovernedCallError):
-    """Raised when a governed call's receipt is neither a success, a denial, nor a pending
-    approval -- a generic execution-level failure (e.g. `code="upstream_timeout"`)."""
+class AlgentaExecutionBlocked(AlgentaGovernedCallError):
+    """Raised when the real engine blocks an `execute_decision` call synchronously -- its `409`
+    response, in the very same call, never a separate "pending" round trip -- on exactly one of
+    three real, named policy gates:
 
+    - `"idempotency"`: this `decision_id` was already delivered; bypassable only via
+      `force=true`, and only for one re-execution.
+    - `"confidence"`: below `policy.min_confidence`; bypassable only via `override_safety=true`.
+    - `"risk_floor"`: `risk_p5` below `-policy.risk_floor`; bypassable only via
+      `override_safety=true`.
 
-class AlgentaApprovalStillPending(AlgentaGovernedCallError):
-    """Raised when a governed call is still `approval_state == "pending"` after the one retry
-    `AlgentaToolCallInterceptor` performs following `langgraph.types.interrupt(...)`.
-
-    This is the "no checkpointer, or the resume didn't actually get the plan approved in time"
-    case -- see the package README's "What happens after resume" section. It is *not* raised for
-    the first pending observation; that one goes through `interrupt()` instead (see
-    `langchain_algenta.interceptor`).
+    `.denial` carries the parsed `ExecutionDenial` (`gate`, `code`, `message`, `override_hint`);
+    `.gate` is a convenience shortcut onto `denial.gate`.
     """
+
+    @property
+    def gate(self) -> str | None:
+        return self.denial.gate if self.denial is not None else None
 
 
 __all__ = [
-    "AlgentaApprovalStillPending",
+    "AlgentaExecutionBlocked",
     "AlgentaGovernedCallError",
     "AlgentaToolDenied",
-    "AlgentaToolExecutionFailed",
 ]

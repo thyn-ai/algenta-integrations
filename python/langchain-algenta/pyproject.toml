@@ -18,21 +18,23 @@ classifiers = [
     "Typing :: Typed",
 ]
 # The ONLY Algenta dependency any package in this repo may declare. See
-# scripts/check-no-engine-dependency.py, which enforces this on every PR. `langchain-core`,
-# `langchain-mcp-adapters`, and `langgraph` are the other real, runtime dependencies this
-# integration needs -- not dev-only, since `create_algenta_tools` builds a real
-# `langchain_mcp_adapters.client.MultiServerMCPClient` and `AlgentaToolCallInterceptor` calls
-# `langgraph.types.interrupt(...)` unconditionally on a pending approval (see the package
-# README's "Why `interrupt()`" section for why `langgraph` is a hard dependency here, not an
-# optional one, even for callers who never build a `StateGraph` by hand). Version floors below
-# are the exact versions verified against this package's real, current APIs while building it
-# (see the research notes referenced in this package's PR): langchain-core 1.6.0,
-# langchain-mcp-adapters 0.3.2, langgraph 1.2.11.
+# scripts/check-no-engine-dependency.py, which enforces this on every PR. `langchain-core` and
+# `langchain-mcp-adapters` are the other real, runtime dependencies this integration needs --
+# not dev-only, since `create_algenta_tools` builds a real
+# `langchain_mcp_adapters.client.MultiServerMCPClient`. `langgraph` is deliberately NOT a runtime
+# dependency: an earlier version of this package called `langgraph.types.interrupt(...)`
+# unconditionally to pause on a fictional "pending approval" receipt shape the real engine never
+# actually returns (see `langchain_algenta.governance`'s module docstring and the package
+# README); once that pause was removed as dead/fictional code, nothing in this package's own
+# source imports `langgraph` anymore. The tools this package returns are still ordinary LangChain
+# `BaseTool`s, fully usable inside a `langgraph` agent -- that's just your own dependency to add,
+# not this package's. Version floors below are the exact versions verified against this
+# package's real, current APIs while building it (see the research notes referenced in this
+# package's PR): langchain-core 1.6.0, langchain-mcp-adapters 0.3.2.
 dependencies = [
     "algenta-sdk>=1.0.11",
     "langchain-core>=1.6.0",
     "langchain-mcp-adapters>=0.3.2",
-    "langgraph>=1.2.11",
 ]
 
 [project.urls]

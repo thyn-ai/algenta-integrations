@@ -17,7 +17,12 @@ from .helpers import mcp_shaped_tool
 
 _NO_ARGS_SCHEMA = {"type": "object", "properties": {}, "required": []}
 _SCENARIO_SCHEMA = {"type": "object", "properties": {"scenario": {"type": "string"}}, "required": ["scenario"]}
-_PLAN_HASH_SCHEMA = {"type": "object", "properties": {"plan_hash": {"type": "string"}}, "required": ["plan_hash"]}
+_CHOSEN_ACTION_SCHEMA = {"type": "object", "properties": {"chosen_action": {"type": "string"}}, "required": ["chosen_action"]}
+_EXECUTE_DECISION_SCHEMA = {
+    "type": "object",
+    "properties": {"decision_id": {"type": "string"}, "webhook_url": {"type": "string"}},
+    "required": ["decision_id", "webhook_url"],
+}
 
 
 async def _get_contract() -> dict:
@@ -25,27 +30,38 @@ async def _get_contract() -> dict:
 
 
 async def _query_data(dataset: str) -> dict:
-    return {"status": "ok", "code": "ok", "approval_state": "none", "result": {"dataset": dataset}}
+    return {"dataset": dataset, "rows": []}
 
 
 async def _simulate(scenario: str) -> dict:
-    return {"status": "ok", "code": "ok", "approval_state": "none", "result": {"scenario": scenario}}
+    return {"scenario": scenario, "expected_value": 1.0}
 
 
 async def _recommend(scenario: str) -> dict:
-    return {"status": "ok", "code": "ok", "approval_state": "none", "result": {"scenario": scenario}}
+    return {"scenario": scenario, "recommended_action": "hold"}
 
 
 async def _plan_decision(scenario: str) -> dict:
-    return {"status": "ok", "code": "ok", "approval_state": "none", "plan_hash": "p1", "result": {}}
+    return {"plan_id": "p1", "scenario": scenario}
 
 
-async def _log_decision(plan_hash: str) -> dict:
-    return {"status": "ok", "code": "ok", "approval_state": "none", "result": {}}
+async def _log_decision(chosen_action: str) -> dict:
+    return {"decision_id": "d1", "chosen_action": chosen_action}
 
 
-async def _execute_decision(plan_hash: str) -> dict:
-    return {"status": "ok", "code": "ok", "approval_state": "approved", "result": {}}
+async def _execute_decision(decision_id: str, webhook_url: str) -> dict:
+    return {
+        "decision_id": decision_id,
+        "webhook_url": webhook_url,
+        "execution_status": "delivered",
+        "response_code": 200,
+        "executed_at": "2026-08-23T00:00:00Z",
+        "policy_snapshot_id": "policy-snap-1",
+        "schema_snapshot_id": "schema-snap-1",
+        "manifest_version": "1.0.0",
+        "payload_summary": None,
+        "safety_overridden": False,
+    }
 
 
 async def _admin_only_diagnostic_tool() -> dict:
@@ -61,8 +77,8 @@ def _all_fake_tools() -> list[BaseTool]:
         mcp_shaped_tool("simulate", schema=_SCENARIO_SCHEMA, coroutine=_simulate),
         mcp_shaped_tool("recommend", schema=_SCENARIO_SCHEMA, coroutine=_recommend),
         mcp_shaped_tool("plan_decision", schema=_SCENARIO_SCHEMA, coroutine=_plan_decision),
-        mcp_shaped_tool("log_decision", schema=_PLAN_HASH_SCHEMA, coroutine=_log_decision),
-        mcp_shaped_tool("execute_decision", schema=_PLAN_HASH_SCHEMA, coroutine=_execute_decision),
+        mcp_shaped_tool("log_decision", schema=_CHOSEN_ACTION_SCHEMA, coroutine=_log_decision),
+        mcp_shaped_tool("execute_decision", schema=_EXECUTE_DECISION_SCHEMA, coroutine=_execute_decision),
         mcp_shaped_tool("admin_only_diagnostic_tool", schema=_NO_ARGS_SCHEMA, coroutine=_admin_only_diagnostic_tool),
     ]
 
