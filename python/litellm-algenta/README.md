@@ -124,7 +124,7 @@ requirement that `execute`-tier gating be enforced server-side, not by the calli
 **`allowed_params.execute_decision` is a real, call-time 403 gate on *arguments*.** Confirmed by
 reading `MCPServerManager.validate_allowed_params` (called before the upstream request is ever
 made) and by a live proxy run: an `execute_decision` call carrying `force: true` against a server
-configured with `allowed_params: {execute_decision: ["plan_hash", "idempotency_key", "execution_id"]}`
+configured with `allowed_params: {execute_decision: ["decision_id", "webhook_url", "timeout_seconds", "metadata"]}`
 gets a real `403` -- the argument never reaches the upstream engine. `build_mcp_server_entry` sets
 this **unconditionally on every profile under which `execute_decision` is reachable, including
 `full`** -- the contract's `never_model_facing_note` says `force`/`override_safety` may never be
@@ -152,20 +152,32 @@ key never reaches the upstream at all.
   `langchain-algenta`, which strip the schema themselves because their frameworks hand them the
   schema to edit before the model ever sees it. A LiteLLM-fronted deployment doesn't have that
   seam; this package does not pretend otherwise.
-- **It has no approval-pause primitive at all.** A `pending`/`rejected`/`expired`
-  `approval_state` on a governed-execution receipt passes through the gateway completely
-  unchanged -- `isError: false` at the gateway level regardless of `approval_state`. There is no
-  LiteLLM-native equivalent of `pydantic_ai_algenta`'s `ApprovalRequired` or `langchain_algenta`'s
-  `interrupt()`-based pause. Whatever built the chat-completion request that triggered the tool
-  call is entirely on its own to notice `approval_state` in the JSON result and decide what to
-  do -- there is no config key, callback, or webhook this package could wire up that would change
-  that, because the gateway is receipt-blind by design (it has no opinion on what's inside a
-  tool's JSON result).
+- **There is no approval-pause primitive, and the real tool never needs one.** `execute_decision`
+  is synchronous: a call either comes back `200` with a real `ExecutionReceipt`
+  (`decision_id`/`webhook_url`/`execution_status`/`response_code`/`executed_at`/
+  `policy_snapshot_id`/`schema_snapshot_id`/`manifest_version`/`payload_summary`/
+  `safety_overridden`) or is refused outright, in that same call, with exactly one of three real
+  named gates -- `"idempotency"` (bypassable only via `force=true`, for one re-execution),
+  `"confidence"`, or `"risk_floor"` (both bypassable only via `override_safety=true`). There is no
+  `pending`/`rejected`/`expired` state to come back and poll later -- a denial and a receipt are
+  both final, in the same call that produced them. A JSON-RPC `tools/call` result carries no HTTP
+  status of its own, so the only way that denial can reach a caller over MCP is the same way any
+  other tool-body exception does: `isError: true`, with the gate name/code/message/override_hint
+  inside the result content -- confirmed to pass through this gateway completely unchanged, exactly
+  like the already-verified static-credential-401 case above (see
+  `tests/test_gateway_conformance.py::test_execute_decision_gate_denial_surfaces_as_iserror`). A
+  successful receipt passes through just as unchanged, `isError: false`. There is no LiteLLM-native
+  equivalent of `pydantic_ai_algenta`'s `ApprovalRequired` or `langchain_algenta`'s
+  `interrupt()`-based pause, and this tool never has anything for one of those to pause on.
+  Whatever built the chat-completion request that triggered the tool call is entirely on its own
+  to notice `isError` and read the result -- there is no config key, callback, or webhook this
+  package could wire up that would change that, because the gateway is receipt-blind by design (it
+  has no opinion on what's inside a tool's JSON result).
 - **Response headers do not round-trip.** `extra_headers` (see below) forwards a caller-sent
   header to the upstream engine, one direction only -- the gateway's own HTTP response back to
   the caller never carries anything the upstream returned as a response header. Any upstream
-  signal that needs to reach the caller has to travel inside the JSON receipt body, which
-  Algenta's receipts already do via `trace_id`/`request_id`.
+  signal that needs to reach the caller has to travel inside the JSON receipt body instead --
+  correlate by the receipt's own `decision_id` echo-back.
 
 ### Trace headers
 

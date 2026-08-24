@@ -23,8 +23,9 @@ mcp_servers:
     - simulate
     allowed_params:
       execute_decision:
-      - execution_id
-      - idempotency_key
-      - plan_hash
+      - decision_id
+      - metadata
+      - timeout_seconds
+      - webhook_url
     extra_headers:
     - x-trace-id
