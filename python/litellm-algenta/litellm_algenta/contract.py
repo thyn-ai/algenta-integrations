@@ -88,15 +88,34 @@ discovered by the gateway at connect time, not known ahead of time by this packa
 NEVER_MODEL_FACING_FIELDS: Final[frozenset[str]] = frozenset({"force", "override_safety"})
 
 #: The `execute_decision` parameters this package's `execute`/`full` profile templates put in
-#: `allowed_params.execute_decision` -- every real, contract-sanctioned parameter the model is
-#: allowed to supply, and nothing else. Sourced from the contract's `execute` profile
-#: `requires_all_of` (a caller-supplied idempotency key; the plan_hash of an already-planned,
-#: already-logged decision) plus the receipt's own `execution_id` echo-back, which the real
-#: engine's schema also accepts as an idempotent-retry correlation hint. Deliberately excludes
-#: every field in `NEVER_MODEL_FACING_FIELDS`.
+#: `allowed_params.execute_decision` -- every real parameter on the tool's actual request schema
+#: that the model is allowed to supply, and nothing else. The real tool takes `decision_id`
+#: (required -- the id returned by an already-called `log_decision`) and `webhook_url` (required
+#: -- where the engine delivers the execution), plus the optional `timeout_seconds` and `metadata`.
+#: There is no `plan_hash`, `idempotency_key`, or `execution_id` argument anywhere on the real
+#: tool: `execute_decision` is not called against a `plan_decision` plan_hash at all, and the
+#: engine's own idempotency gate (see `EXECUTE_DECISION_GATES` below) is keyed off `decision_id`
+#: server-side, not a caller-supplied key. Deliberately excludes every field in
+#: `NEVER_MODEL_FACING_FIELDS`.
 EXECUTE_DECISION_MODEL_FACING_PARAMS: Final[frozenset[str]] = frozenset(
-    {"plan_hash", "idempotency_key", "execution_id"}
+    {"decision_id", "webhook_url", "timeout_seconds", "metadata"}
 )
+
+#: The three, real, literal gate names `execute_decision` can name in a synchronous `409` denial
+#: (`{"error": {"code": "execution_blocked_<gate>", "gate": "<gate>", "message": ...,
+#: "override_hint": ...}}`). There is no fourth gate and no async/pending state: a call either
+#: returns a `200` `ExecutionReceipt` or one of these three denials, in the same call.
+#:
+#: - `"idempotency"` -- this decision was already delivered; bypassable only via `force=true`,
+#:   for one re-execution.
+#: - `"confidence"` -- the logged decision's confidence is below `policy.min_confidence`;
+#:   bypassable only via `override_safety=true`.
+#: - `"risk_floor"` -- the logged decision's `risk_p5` is below `-policy.risk_floor`; bypassable
+#:   only via `override_safety=true`.
+#:
+#: `force` and `override_safety` are exactly `NEVER_MODEL_FACING_FIELDS` -- a model-facing caller
+#: can never self-bypass any of these three gates, by construction, regardless of profile.
+EXECUTE_DECISION_GATES: Final[frozenset[str]] = frozenset({"idempotency", "confidence", "risk_floor"})
 
 
 def resolve_profile_tool_names(profile: ToolProfile, *, available_tool_names: frozenset[str]) -> frozenset[str]:

@@ -168,7 +168,7 @@ def test_lint_flags_never_model_facing_field_leaked_into_allowed_params() -> Non
             "x": {
                 "url": "http://localhost:8000/mcp",
                 "allowed_tools": [EXECUTE_DECISION],
-                "allowed_params": {EXECUTE_DECISION: ["plan_hash", "force"]},
+                "allowed_params": {EXECUTE_DECISION: ["decision_id", "force"]},
             }
         }
     }

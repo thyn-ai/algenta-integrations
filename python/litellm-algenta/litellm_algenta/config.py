@@ -30,7 +30,7 @@ exact checks as an executable test suite rather than asking you to trust this do
   reading `MCPServerManager.validate_allowed_params` (`mcp_server_manager.py`, called from
   `call_tool` before the upstream request is ever made) and by a live proxy run: an
   `execute_decision` call carrying a `force` argument against a server configured with
-  `allowed_params: {execute_decision: ["plan_hash", "idempotency_key"]}` gets a real `403`
+  `allowed_params: {execute_decision: ["decision_id", "webhook_url"]}` gets a real `403`
   (`"Parameters ['force'] are not allowed for tool execute_decision. ..."`) -- the argument never
   reaches the upstream Algenta MCP server at all. **`build_mcp_server_entry` sets this
   automatically, on every profile under which `execute_decision` is reachable (`execute` and
@@ -58,13 +58,27 @@ exact checks as an executable test suite rather than asking you to trust this do
   these fields to begin with, or run this package's config in front of a schema-stripping proxy of
   your own) -- not something any `mcp_servers:` config key can do, and this package does not
   pretend otherwise.
-- **It has no approval-pause primitive.** Confirmed directly (see the sibling packages' research
-  and `tests/test_gateway_conformance.py::test_pending_approval_receipt_passes_through_unchanged`):
-  a `pending`/`rejected`/`expired` `approval_state` on a governed-execution receipt passes through
-  the gateway completely unchanged, `isError: false` at the gateway level either way. There is no
+- **There is no approval-pause primitive, and the real tool never needs one.** `execute_decision`
+  is synchronous, full stop: a call either comes back `200` with a real `ExecutionReceipt`
+  (`decision_id`/`webhook_url`/`execution_status`/`response_code`/`executed_at`/
+  `policy_snapshot_id`/`schema_snapshot_id`/`manifest_version`/`payload_summary`/
+  `safety_overridden`) or is refused outright, in that same call, as a `409` naming exactly one of
+  three real gates (`"idempotency"`, `"confidence"`, `"risk_floor"` -- see
+  `litellm_algenta.contract.EXECUTE_DECISION_GATES`) -- never a `pending`/`rejected`/`expired`
+  state to come back and check on later. A JSON-RPC `tools/call` result has no HTTP status of its
+  own, so the only way that `409` denial can appear on this transport is the same way any other
+  tool-body exception does: a real MCP-fronting `execute_decision` implementation surfaces it as
+  `isError: true`, with the gate/code/message/override_hint inside the result content -- and this
+  gateway passes that through completely unchanged, exactly like the already-verified
+  static-credential-401 case below (see
+  `tests/test_gateway_conformance.py::test_execute_decision_gate_denial_surfaces_as_iserror`). A
+  successful `200` receipt passes through just as unchanged, `isError: false`. There is no
   LiteLLM-native equivalent of `pydantic_ai_algenta`'s `ApprovalRequired` or `langchain_algenta`'s
-  `interrupt()`-based pause. Whatever built the chat-completion request that triggered the tool
-  call is entirely on its own to notice `approval_state` in the JSON result and decide what to do.
+  `interrupt()`-based pause, and this tool never has anything for one of those to pause on. Whatever
+  built the chat-completion request that triggered the tool call is entirely on its own to notice
+  `isError` and read the result -- there is no config key, callback, or webhook this package could
+  wire up that would change that, because the gateway is receipt-blind by design (it has no opinion
+  on what's inside a tool's JSON result).
 
 ## Env-var-first, self-hosted-only by construction
 
@@ -210,8 +224,8 @@ def build_mcp_server_entry(
         extra_headers: Caller-set HTTP headers LiteLLM forwards from the model-calling client to
             the upstream MCP server (confirmed real and verbatim -- see the module docstring's
             trace-header note; response headers do NOT round-trip the other way, so any upstream
-            signal you need back has to travel inside the JSON receipt body instead, as Algenta's
-            receipts already do via `trace_id`/`request_id`). Defaults to `("x-trace-id",)`.
+            signal you need back has to travel inside the JSON receipt body instead -- correlate
+            by the receipt's own `decision_id` echo-back). Defaults to `("x-trace-id",)`.
         extra_server_fields: Additional literal `mcp_servers.<server_name>` fields this function
             doesn't model directly (e.g. `token_url`/`client_id`/`client_secret` for `oauth2`,
             `dcr_bridge` for `true_passthrough`/`oauth_delegate`). Raises `ConfigError` if a key
