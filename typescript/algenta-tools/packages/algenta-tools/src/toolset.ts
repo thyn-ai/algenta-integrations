@@ -1,6 +1,6 @@
 /**
- * `createAlgentaTools` -- builds a governed-execution-aware Vercel AI SDK `ToolSet` from a
- * self-hosted Algenta Engine's MCP tool surface.
+ * `createAlgentaTools` -- builds an Algenta-aware Vercel AI SDK `ToolSet` from a self-hosted
+ * Algenta Engine's MCP tool surface.
  *
  * Layers three things on top of the wrapped MCP tools' real calls:
  *
@@ -10,8 +10,11 @@
  * 2. Never-model-facing scrubbing: `force`/`override_safety` are stripped from every tool's
  *    advertised JSON schema *and* from the arguments object actually forwarded to the wrapped
  *    MCP call, in every profile, for every tool -- not just `execute_decision`.
- * 3. Typed governed-execution receipts, and the approval/denial/failure mapping onto AI SDK's
- *    own primitives -- see `wrapAlgentaTool` below for the exact mapping and why.
+ * 3. `execute_decision`'s typed success/denial contract: a successful call is parsed into a
+ *    typed `ExecutionReceipt`; a blocked call's named gate is surfaced as a typed
+ *    `ExecutionBlockedError` thrown from `execute()` -- see `wrapAlgentaTool` below for the exact
+ *    mapping and why. Every other tool's result is returned unchanged (they're freeform
+ *    passthroughs to their own real response bodies, not this same shape).
  */
 import { asSchema, jsonSchema, tool, type Tool, type ToolSet } from "ai";
 import type { MCPClient } from "@ai-sdk/mcp";
@@ -24,17 +27,11 @@ import {
   resolveProfileToolNames,
   type ToolProfile,
 } from "./contract.js";
-import {
-  denialReason,
-  isDenied,
-  isPendingApproval,
-  isSuccess,
-  parseReceipt,
-} from "./receipts.js";
+import { ExecutionBlockedError, parseExecutionBlockedBody, parseExecutionReceipt } from "./receipts.js";
 import { connectAlgentaMCPClient, type ConnectAlgentaMCPClientOptions } from "./mcp-client.js";
 
-/** A governed-execution-aware Algenta `ToolSet`, ready to pass as `tools:` to `generateText` /
- * `streamText` / `Agent`. */
+/** An Algenta-aware `ToolSet`, ready to pass as `tools:` to `generateText` / `streamText` /
+ * `Agent`. */
 export type AlgentaToolSet = ToolSet;
 
 export interface CreateAlgentaToolsOptions extends ConnectAlgentaMCPClientOptions {
@@ -141,26 +138,26 @@ function isMcpErrorResult(callResult: unknown): boolean {
 
 /**
  * Wraps one source `Tool` (an MCP tool exposed by `@ai-sdk/mcp`'s `client.tools()`, or a fake in
- * a test) with never-model-facing scrubbing and governed-execution receipt handling.
+ * a test) with never-model-facing scrubbing and `execute_decision`'s success/denial mapping.
  *
- * The approval design (see the package README for the full write-up): Algenta's contract already
- * requires `execute_decision`'s out-of-band policy approval to be recorded *before* the call, not
- * paused mid-call awaiting one. That maps onto AI SDK's pre-call `needsApproval` gate: set
- * unconditionally on `execute_decision` (never an input-inspecting function) so no call reaches
- * the wrapped MCP client until a human approves it in the app's own approval flow.
+ * `execute_decision` either succeeds synchronously (a real `ExecutionReceipt`) or is blocked
+ * synchronously, in the same call, naming exactly one of its three real safety gates
+ * (`"idempotency"` | `"confidence"` | `"risk_floor"`) -- there is no separate pending/approval
+ * state to model at all, so there's nothing here for AI SDK's pre-call `needsApproval` gate (or
+ * any pause/resume primitive) to gate on; this package sets neither for `execute_decision`, same
+ * as every other tool.
  *
- * The engine is still the final authority, though -- it can return `approval_state: "pending"` on
- * *any* governed call's receipt even after the client-side gate passed. Since AI SDK already
- * invoked `execute()` in that case, there is no framework primitive to retroactively pause, so
- * this throws from `execute()` with a clear "still pending server-side approval" message instead
- * of returning it as if it had succeeded (AI SDK surfaces a thrown error as a tool-error part).
- * `approval_state` `"rejected"`/`"expired"`, or a named policy-gate `code`, also throw -- AI SDK
- * has no separate denied-vs-failed distinction the way pydantic-ai has `ToolDenied`/`ToolFailed`,
- * so the thrown message states plainly that the failure is a policy denial. A successful receipt,
- * or a non-receipt result (e.g. `get_contract`'s discovery payload), is returned normally.
+ * A blocked call comes back over MCP as a tool-error result. That's the same native idiom every
+ * other tool-level failure in this package already goes through (a thrown error, surfaced by AI
+ * SDK as a `tool-error` part) -- so a denial for `execute_decision` throws an `ExecutionBlockedError`
+ * carrying the engine's real `gate`/`code`/`overrideHint`, instead of a plain `Error`, letting a
+ * caller branch on `error.gate` without re-parsing the message. Any other tool-error result (for
+ * `execute_decision` without the named-gate body, or for any other tool) throws a plain `Error`.
+ * A successful `execute_decision` call is parsed into a typed `ExecutionReceipt`; every other
+ * tool's result -- including `execute_decision`'s only if it doesn't validate against the receipt
+ * shape -- is returned unchanged.
  */
 async function wrapAlgentaTool(name: string, sourceTool: Tool): Promise<Tool> {
-  const needsApproval = name === EXECUTE_DECISION ? (true as const) : undefined;
   const execute = sourceTool.execute;
 
   const rawSchema = (await asSchema(sourceTool.inputSchema).jsonSchema) as JsonSchemaObject;
@@ -175,53 +172,40 @@ async function wrapAlgentaTool(name: string, sourceTool: Tool): Promise<Tool> {
     return tool({
       description: sourceTool.description,
       inputSchema,
-      needsApproval,
     }) as Tool;
   }
 
   return tool({
     description: sourceTool.description,
     inputSchema,
-    needsApproval,
     execute: async (input, options) => {
       const scrubbedInput = scrubNeverModelFacingArgs((input ?? {}) as Record<string, unknown>);
       const rawResult = await execute(scrubbedInput, options);
       const payload = extractToolPayload(rawResult);
-      const receipt = parseReceipt(payload);
 
-      if (receipt === null) {
-        if (isMcpErrorResult(rawResult)) {
-          throw new Error(
-            `Algenta tool '${name}' failed: ${typeof payload === "string" ? payload : JSON.stringify(payload)}`,
-          );
+      if (isMcpErrorResult(rawResult)) {
+        if (name === EXECUTE_DECISION) {
+          const blocked = parseExecutionBlockedBody(payload);
+          if (blocked !== null) {
+            throw new ExecutionBlockedError(name, blocked);
+          }
         }
-        // Not a governed-execution envelope at all (e.g. get_contract's discovery payload) --
-        // pass through unchanged.
-        return payload;
-      }
-
-      if (isPendingApproval(receipt)) {
         throw new Error(
-          `Algenta tool '${name}' is still pending server-side policy approval ` +
-            `(plan_hash=${receipt.plan_hash ?? "unknown"}, execution_id=${receipt.execution_id ?? "unknown"}). ` +
-            "The client-side approval gate for this call already passed, but the engine is the final " +
-            "authority on execute_decision and has not recorded an out-of-band approval for this plan yet. " +
-            "Record that approval against the plan_hash above (and the matching idempotency_key: " +
-            `${receipt.idempotency_key ?? "unknown"}), then retry the call.`,
+          `Algenta tool '${name}' failed: ${typeof payload === "string" ? payload : JSON.stringify(payload)}`,
         );
       }
 
-      if (isDenied(receipt)) {
-        throw new Error(`Algenta tool '${name}' was denied by policy -- ${denialReason(receipt)}`);
+      if (name === EXECUTE_DECISION) {
+        const receipt = parseExecutionReceipt(payload);
+        if (receipt !== null) {
+          return receipt;
+        }
       }
 
-      if (!isSuccess(receipt)) {
-        throw new Error(
-          `Algenta tool '${name}' did not complete successfully (status=${receipt.status}, code=${receipt.code}).`,
-        );
-      }
-
-      return receipt;
+      // Not `execute_decision`, or `execute_decision`'s result didn't validate as a receipt --
+      // either way, return the tool's real payload unchanged rather than inventing a shape for
+      // it (e.g. get_contract's discovery payload, or plan_decision's freeform DecisionPlan).
+      return payload;
     },
   }) as Tool;
 }
@@ -236,9 +220,8 @@ function connectionOptionsGiven(options: CreateAlgentaToolsOptions): boolean {
 }
 
 /**
- * Builds a governed-execution-aware `ToolSet` from a self-hosted Algenta Engine's MCP tool
- * surface, filtered to `profile` (default `"observe"`) and scrubbed of never-model-facing
- * fields.
+ * Builds an Algenta-aware `ToolSet` from a self-hosted Algenta Engine's MCP tool surface,
+ * filtered to `profile` (default `"observe"`) and scrubbed of never-model-facing fields.
  *
  * Connects to the caller's own self-hosted engine (`baseUrl`, `ALGENTA_BASE_URL`, or
  * `http://localhost:8000/mcp`) unless an already-connected `client` or a pre-built `tools` map is
