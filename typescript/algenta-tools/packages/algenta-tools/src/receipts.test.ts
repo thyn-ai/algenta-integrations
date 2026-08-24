@@ -1,161 +1,135 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  denialReason,
-  governedExecutionReceiptSchema,
-  isDenied,
-  isPendingApproval,
-  isSuccess,
-  parseReceipt,
+  ExecutionBlockedError,
+  executionReceiptSchema,
+  parseExecutionBlockedBody,
+  parseExecutionReceipt,
 } from "./receipts.js";
 
-const FULL_ENVELOPE = {
-  status: "ok",
-  code: "ok",
-  retryable: false,
-  request_id: "req-1",
-  trace_id: "trace-1",
-  policy_snapshot_hash: "snap-1",
-  receipt_version: 1,
-  plan_hash: "plan-abc",
-  approval_state: "approved",
-  execution_id: "exec-1",
-  idempotency_key: "idem-1",
-  result: { executed: true },
+const FULL_RECEIPT = {
+  decision_id: "decision-1",
+  webhook_url: "https://example.com/hooks/decision",
+  execution_status: "delivered",
+  response_code: 200,
+  executed_at: "2026-08-23T00:00:00.000Z",
+  policy_snapshot_id: "policy-snap-1",
+  schema_snapshot_id: "schema-snap-1",
+  manifest_version: 1,
+  payload_summary: { delivered: true },
+  safety_overridden: false,
 };
 
-describe("parseReceipt", () => {
+describe("parseExecutionReceipt", () => {
   it("round-trips every documented field", () => {
-    const receipt = parseReceipt(FULL_ENVELOPE);
+    const receipt = parseExecutionReceipt(FULL_RECEIPT);
     expect(receipt).not.toBeNull();
-    expect(receipt).toMatchObject(FULL_ENVELOPE);
+    expect(receipt).toMatchObject(FULL_RECEIPT);
   });
 
   it("tolerates unknown future fields", () => {
-    const receipt = parseReceipt({ ...FULL_ENVELOPE, engine_build: "2026.08.1" });
+    const receipt = parseExecutionReceipt({ ...FULL_RECEIPT, engine_build: "2026.08.1" });
     expect(receipt).not.toBeNull();
     expect((receipt as Record<string, unknown>).engine_build).toBe("2026.08.1");
   });
 
-  it("returns null for a non-envelope object (missing status/code)", () => {
-    expect(parseReceipt({ capabilities: ["query"], engine_version: "1.4.0" })).toBeNull();
+  it("returns null for a non-envelope object (missing required fields)", () => {
+    expect(parseExecutionReceipt({ capabilities: ["query"], engine_version: "1.4.0" })).toBeNull();
   });
 
   it("returns null for non-object values", () => {
-    expect(parseReceipt("plain string result")).toBeNull();
-    expect(parseReceipt(null)).toBeNull();
-    expect(parseReceipt(undefined)).toBeNull();
-    expect(parseReceipt(["a", "list"])).toBeNull();
-    expect(parseReceipt(42)).toBeNull();
+    expect(parseExecutionReceipt("plain string result")).toBeNull();
+    expect(parseExecutionReceipt(null)).toBeNull();
+    expect(parseExecutionReceipt(undefined)).toBeNull();
+    expect(parseExecutionReceipt(["a", "list"])).toBeNull();
+    expect(parseExecutionReceipt(42)).toBeNull();
   });
 
-  it("returns a typed object for a real envelope", () => {
-    const receipt = parseReceipt(FULL_ENVELOPE);
-    expect(receipt?.execution_id).toBe("exec-1");
+  it("returns a typed object for a real receipt, including execution_status: failed", () => {
+    const receipt = parseExecutionReceipt({ ...FULL_RECEIPT, execution_status: "failed" });
+    expect(receipt?.execution_status).toBe("failed");
   });
 
-  it("applies documented defaults for a minimal envelope", () => {
-    const receipt = parseReceipt({ status: "ok", code: "ok" });
-    expect(receipt).toMatchObject({
-      status: "ok",
-      code: "ok",
-      retryable: false,
-      request_id: null,
-      trace_id: null,
-      policy_snapshot_hash: null,
-      receipt_version: null,
-      plan_hash: null,
-      approval_state: "none",
-      execution_id: null,
-      idempotency_key: null,
-      result: null,
-    });
-  });
-});
-
-describe("governedExecutionReceiptSchema", () => {
-  it("rejects an unknown approval_state", () => {
-    const result = governedExecutionReceiptSchema.safeParse({
-      ...FULL_ENVELOPE,
-      approval_state: "cancelled",
-    });
+  it("rejects an unknown execution_status", () => {
+    const result = executionReceiptSchema.safeParse({ ...FULL_RECEIPT, execution_status: "pending" });
     expect(result.success).toBe(false);
   });
+
+  it("applies documented defaults for a minimal receipt", () => {
+    const receipt = parseExecutionReceipt({
+      decision_id: "decision-1",
+      webhook_url: "https://example.com/hooks/decision",
+      execution_status: "delivered",
+      executed_at: "2026-08-23T00:00:00.000Z",
+    });
+    expect(receipt).toMatchObject({
+      response_code: null,
+      policy_snapshot_id: null,
+      schema_snapshot_id: null,
+      manifest_version: null,
+      payload_summary: null,
+      safety_overridden: false,
+    });
+  });
 });
 
-describe("isPendingApproval / isDenied / isSuccess", () => {
-  it("is pending when approval_state is pending", () => {
-    const pending = parseReceipt({ ...FULL_ENVELOPE, approval_state: "pending" })!;
-    expect(isPendingApproval(pending)).toBe(true);
-    expect(isDenied(pending)).toBe(false);
-    expect(isSuccess(pending)).toBe(false);
+describe("parseExecutionBlockedBody", () => {
+  it("parses the real three-field denial shape", () => {
+    const body = parseExecutionBlockedBody({
+      error: {
+        code: "execution_blocked_confidence",
+        gate: "confidence",
+        message: "confidence 0.2 is below the policy minimum of 0.5.",
+        override_hint: "Set override_safety=true to bypass the confidence gate.",
+      },
+    });
+    expect(body).toEqual({
+      code: "execution_blocked_confidence",
+      gate: "confidence",
+      message: "confidence 0.2 is below the policy minimum of 0.5.",
+      overrideHint: "Set override_safety=true to bypass the confidence gate.",
+    });
   });
 
-  it("is denied via approval_state rejected", () => {
-    const rejected = parseReceipt({
-      ...FULL_ENVELOPE,
-      approval_state: "rejected",
-      status: "error",
-      code: "policy_rejected",
-    })!;
-    expect(isDenied(rejected)).toBe(true);
-    expect(isPendingApproval(rejected)).toBe(false);
-    expect(isSuccess(rejected)).toBe(false);
-    expect(denialReason(rejected)).toContain("the decision plan was rejected by policy");
+  it("defaults a missing override_hint to null", () => {
+    const body = parseExecutionBlockedBody({
+      error: { code: "execution_blocked_idempotency", gate: "idempotency", message: "already delivered." },
+    });
+    expect(body?.overrideHint).toBeNull();
   });
 
-  it("is denied via a named policy-gate code, even without approval_state rejected", () => {
-    // A named 409-style gate can fire with approval_state left at "none" -- e.g. it never got as
-    // far as an approval decision, because the plan_hash itself didn't match.
-    const receipt = parseReceipt({
-      ...FULL_ENVELOPE,
-      approval_state: "none",
-      status: "error",
-      code: "plan_hash_mismatch",
-    })!;
-    expect(isDenied(receipt)).toBe(true);
+  it("returns null for a body with no error object", () => {
+    expect(parseExecutionBlockedBody({ message: "generic failure" })).toBeNull();
   });
 
-  it("is denied via expired approval", () => {
-    const expired = parseReceipt({ ...FULL_ENVELOPE, approval_state: "expired", status: "error" })!;
-    expect(isDenied(expired)).toBe(true);
-    expect(denialReason(expired)).toContain("approval window");
+  it("returns null for non-object values", () => {
+    expect(parseExecutionBlockedBody("plain string")).toBeNull();
+    expect(parseExecutionBlockedBody(null)).toBeNull();
+    expect(parseExecutionBlockedBody(undefined)).toBeNull();
   });
 
-  it("is success for approval_state none or approved with an ok status", () => {
-    const none = parseReceipt({ ...FULL_ENVELOPE, approval_state: "none" })!;
-    const approved = parseReceipt({ ...FULL_ENVELOPE, approval_state: "approved" })!;
-    expect(isSuccess(none)).toBe(true);
-    expect(isSuccess(approved)).toBe(true);
+  it("preserves a gate name this package doesn't yet know about", () => {
+    const body = parseExecutionBlockedBody({
+      error: { code: "execution_blocked_future_gate", gate: "future_gate", message: "not yet known." },
+    });
+    expect(body?.gate).toBe("future_gate");
   });
+});
 
-  it("is success for status success (not only ok)", () => {
-    const receipt = parseReceipt({ ...FULL_ENVELOPE, approval_state: "none", status: "success" })!;
-    expect(isSuccess(receipt)).toBe(true);
-  });
-
-  it("is not success when status is error even without a named gate", () => {
-    // A generic upstream failure: not a policy denial, not pending -- just failed.
-    const receipt = parseReceipt({
-      ...FULL_ENVELOPE,
-      approval_state: "none",
-      status: "error",
-      code: "upstream_timeout",
-    })!;
-    expect(isSuccess(receipt)).toBe(false);
-    expect(isDenied(receipt)).toBe(false);
-    expect(isPendingApproval(receipt)).toBe(false);
-  });
-
-  it("denial reason prefers a message embedded in result", () => {
-    const receipt = parseReceipt({
-      ...FULL_ENVELOPE,
-      approval_state: "rejected",
-      code: "plan_hash_mismatch",
-      result: { message: "the plan changed after this call was issued" },
-    })!;
-    expect(denialReason(receipt)).toBe(
-      "plan_hash_mismatch: the plan changed after this call was issued",
-    );
+describe("ExecutionBlockedError", () => {
+  it("carries the real gate/code/overrideHint verbatim and is a real Error", () => {
+    const error = new ExecutionBlockedError("execute_decision", {
+      code: "execution_blocked_risk_floor",
+      gate: "risk_floor",
+      message: "risk_p5 -80 is below the policy risk floor of -50.",
+      overrideHint: "Set override_safety=true to bypass the risk floor gate.",
+    });
+    expect(error).toBeInstanceOf(Error);
+    expect(error.name).toBe("ExecutionBlockedError");
+    expect(error.gate).toBe("risk_floor");
+    expect(error.code).toBe("execution_blocked_risk_floor");
+    expect(error.overrideHint).toBe("Set override_safety=true to bypass the risk floor gate.");
+    expect(error.message).toContain("risk_floor");
+    expect(error.message).toContain("risk_p5 -80 is below the policy risk floor of -50.");
   });
 });

@@ -2,8 +2,8 @@
 
 Vercel AI SDK (`ai` v7) tool integration for [Algenta](https://algenta.ai): `createAlgentaTools`,
 a factory that connects to your own self-hosted Algenta Engine's MCP endpoint (via
-[`@ai-sdk/mcp`](https://www.npmjs.com/package/@ai-sdk/mcp)'s real MCP client) and returns a
-governed-execution-aware AI SDK [`ToolSet`](https://ai-sdk.dev/docs/ai-sdk-core/tools-and-tool-calling)
+[`@ai-sdk/mcp`](https://www.npmjs.com/package/@ai-sdk/mcp)'s real MCP client) and returns an
+Algenta-aware AI SDK [`ToolSet`](https://ai-sdk.dev/docs/ai-sdk-core/tools-and-tool-calling)
 ready to pass to `generateText` / `streamText` / an `Agent`. It layers on:
 
 - **Tool-profile filtering** — expose only `observe` (read-only, the default), `govern`,
@@ -13,12 +13,10 @@ ready to pass to `generateText` / `streamText` / an `Agent`. It layers on:
   fields on `execute_decision`'s real schema) are stripped from every tool's advertised JSON
   Schema *and* from the arguments object actually forwarded to the wrapped MCP call, in every
   profile.
-- **Typed governed-execution receipts** — a governed tool call's result is parsed into a
-  [`GovernedExecutionReceipt`](./src/receipts.ts) when it validates as one, so your code gets a
-  typed object instead of an untyped value.
-- **A `needsApproval`-based approval flow** for `execute_decision` — see
-  [The approval flow](#the-approval-flow) below for the full design write-up, including the one
-  place where this is *stricter* than a naive port of the sibling Python package's approach.
+- **`execute_decision`'s typed success/denial contract** — a successful call is parsed into a
+  typed [`ExecutionReceipt`](./src/receipts.ts); a blocked call surfaces as a typed
+  [`ExecutionBlockedError`](./src/receipts.ts) thrown from `execute()`, carrying the engine's real
+  named safety gate. See [Executing a decision](#executing-a-decision) below for the full mapping.
 
 ## Install
 
@@ -67,11 +65,9 @@ const result = streamText({
 `query_data` / `simulate` / `recommend`, and nothing that writes, plans, or executes anything.
 See [Tool profiles](#tool-profiles) to opt into more.
 
-Every governed tool call's result comes back as a typed
-[`GovernedExecutionReceipt`](#typed-receipts) (when the connected tool returns Algenta's
-governed-execution envelope — a tool like `get_contract` that doesn't is returned unchanged), so
-downstream code can do `result.result`, `result.approval_state`, etc. instead of indexing into a
-raw value.
+Every other tool's result is returned as its own real, freeform response body (a plain
+pass-through). `execute_decision` is the one exception — see [Executing a
+decision](#executing-a-decision) below.
 
 ## Tool profiles
 
@@ -79,7 +75,7 @@ raw value.
 |---|---|---|
 | `observe` (default) | `get_contract`, `query_data`, `simulate`, `recommend` | Read-only. |
 | `govern` | + `plan_decision`, `log_decision` | Propose/record decisions; never executes. |
-| `execute` | + `execute_decision` | Real-world execution, approval-gated — see below. |
+| `execute` | + `execute_decision` | Real-world execution — see below. |
 | `full` | everything the connected engine advertises | Opt-in only; admin/ops tooling. |
 
 ```ts
@@ -92,77 +88,68 @@ An `observe`-profile `ToolSet` genuinely does not contain `execute_decision` (or
 JSON Schema *and* scrubbed from the arguments object actually forwarded to the wrapped MCP call,
 in case something upstream still tried to pass one.
 
-## The approval flow
+## Executing a decision
 
-`execute_decision` is real-world execution and is approval-gated. The contract already requires
-its out-of-band policy approval to be recorded **before** the call is made at all — not paused
-mid-call awaiting one (see `contracts/integration-tool-contract.json`'s
-`profiles.execute.requires_all_of`). That maps cleanly onto AI SDK's real, pre-call gate: every
-tool created by `createAlgentaTools` sets
+`execute_decision(decision_id, webhook_url, timeout_seconds?, force?, override_safety?, metadata?)`
+dispatches one already-logged decision (from `log_decision`) for real-world execution — a webhook
+delivery. There is no separate approval-pending state to wait out: the real engine's call is
+**synchronous**. It either:
+
+- **Succeeds (200)** and returns a real `ExecutionReceipt` — `decision_id`, `webhook_url`,
+  `execution_status` (`"delivered"` | `"failed"`), `response_code`, `executed_at`,
+  `policy_snapshot_id`, `schema_snapshot_id`, `manifest_version`, `payload_summary`,
+  `safety_overridden` — which `createAlgentaTools` parses and returns from `execute()` like any
+  other successful tool call, or
+- **Is blocked**, in the same call, naming exactly one of three real safety gates:
+  - `"idempotency"` — this `decision_id` was already delivered; bypassable only by a human
+    operator passing `force: true` for one re-execution,
+  - `"confidence"` — the logged decision's confidence is below `policy.min_confidence`,
+  - `"risk_floor"` — the logged decision's `risk_p5` is below `-policy.risk_floor`,
+
+  the last two bypassable only by a human operator passing `override_safety: true`. Neither
+  `force` nor `override_safety` is ever model-facing — see [Tool
+  profiles](#tool-profiles) above.
+
+A blocked call throws an [`ExecutionBlockedError`](./src/receipts.ts) from `execute()` — the same
+native "tool call failed" idiom every other tool-level error in this package already goes
+through (AI SDK surfaces a thrown error as a `tool-error` part). `ExecutionBlockedError` carries
+the engine's real `gate` (`"idempotency"` | `"confidence"` | `"risk_floor"`), `code` (e.g.
+`"execution_blocked_confidence"`), and `overrideHint`, so your code can branch on `error.gate`
+directly instead of re-parsing `error.message`:
 
 ```ts
-needsApproval: name === "execute_decision" ? true : undefined
+import { ExecutionBlockedError } from "algenta-tools";
+
+try {
+  const receipt = await tools.execute_decision!.execute!(
+    { decision_id, webhook_url },
+    executionOptions,
+  );
+} catch (error) {
+  if (error instanceof ExecutionBlockedError) {
+    // error.gate: "idempotency" | "confidence" | "risk_floor"
+    // error.code, error.overrideHint carry the engine's own values verbatim.
+  }
+}
 ```
 
-unconditionally — never an input-inspecting function. AI SDK will not call `execute()` for
-`execute_decision` until your application's own approval flow supplies a
-[`ToolApprovalResponseOutput`](https://ai-sdk.dev/docs) for that call. This is a genuinely
-*stronger, earlier* gate than the sibling `pydantic-ai-algenta` package's design, which inspects
-the receipt returned by an already-made call (`ApprovalRequired`, raised post-hoc from inside
-`call_tool`) — here, no call reaches the wrapped MCP client at all until a human (or your policy
-engine) approves it client-side first.
+There is no approval-pause state here, so `createAlgentaTools` sets no `needsApproval` (or any
+other pause/resume gate) on `execute_decision` — same as every other tool. A prior version of
+this package modeled an approval-pending flow keyed on a `plan_hash`/`approval_state` shape;
+that shape does not exist anywhere on the real `execute_decision` tool, and has been removed.
 
-**The engine is still the final authority, though.** It can return `approval_state: "pending"` on
-*any* governed call's receipt even after the client-side `needsApproval` gate already passed —
-the client-side gate is defense-in-depth UX, never a substitute for the engine's own check.
-Since AI SDK has already invoked `execute()` by the time that receipt comes back, there is no
-framework primitive to retroactively pause the call the way `needsApproval` does *before* it —
-so `execute()` **throws** a clear "still pending server-side policy approval" error instead of
-returning the receipt as if it had succeeded (AI SDK surfaces a thrown error from `execute()` as
-a `tool-error` part, which a model can see and react to, e.g. by telling the user execution is
-still awaiting approval). A `"rejected"`/`"expired"` `approval_state`, or a named policy-gate
-`code` (`plan_not_approved`, `stale_plan`, `plan_hash_mismatch`, `idempotency_key_conflict`), also
-throw — AI SDK has no separate denied-vs-failed distinction the way `pydantic-ai-algenta` has
-`ToolDenied`/`ToolFailed`, so the thrown message states plainly that the failure is a **policy
-denial** rather than an ordinary error, and includes the engine's own code and message. A
-successful receipt, or a non-receipt result (e.g. `get_contract`'s discovery payload), is
-returned from `execute()` normally — exactly like every other tool.
+This is the full mapping `execute_decision` goes through:
 
-This is the full mapping every wrapped tool call goes through:
-
-| Receipt state | Result |
+| Real engine response | Result |
 |---|---|
-| Not a governed-execution envelope (e.g. `get_contract`) | Returned as-is |
-| `approval_state: "none"` or `"approved"`, `status: "ok"`/`"success"` | Returned as a typed `GovernedExecutionReceipt` |
-| `approval_state: "pending"` | Throws: still pending server-side approval |
-| `approval_state: "rejected"`/`"expired"`, or a named policy-gate `code` | Throws: denied by policy, with the engine's reason |
-| Anything else (a generic failure) | Throws: did not complete successfully |
+| 200, a valid `ExecutionReceipt` | Returned as a typed `ExecutionReceipt` |
+| Blocked on a named gate (`idempotency` / `confidence` / `risk_floor`) | Throws `ExecutionBlockedError`, with `gate`/`code`/`overrideHint` |
+| Any other tool-error result | Throws a plain `Error` |
 
-## Typed receipts
-
-```ts
-import { type GovernedExecutionReceipt } from "algenta-tools";
-
-const receipt = (await tools.query_data!.execute!(
-  { dataset: "orders" },
-  executionOptions,
-)) as GovernedExecutionReceipt;
-
-receipt.status;          // "ok" | "error" | ...
-receipt.code;             // "ok" | "plan_hash_mismatch" | "upstream_timeout" | ...
-receipt.approval_state;   // "none" | "pending" | "approved" | "rejected" | "expired"
-receipt.plan_hash;
-receipt.execution_id;
-receipt.idempotency_key;
-receipt.result;            // the tool's actual payload, once unwrapped from the envelope
-```
-
-A tool whose result *doesn't* validate as this envelope (e.g. a real `get_contract`'s discovery
-payload) passes through unchanged as an ordinary result — `createAlgentaTools` doesn't assume
-every tool on a self-hosted Algenta MCP endpoint returns this exact shape, only that governed
-decision/execution tools do. Extra fields the engine adds over time are tolerated, not dropped —
-`parseReceipt` uses a `.passthrough()` schema, so a newer engine talking to an older client isn't
-penalized for sending one more field than this package knows about.
+Every other tool's result — `plan_decision`'s `DecisionPlan` summary, `log_decision`'s
+`{decision_id, chosen_action, expected_value, confidence, created_at, note}`, `query_data`'s rows,
+etc. — is returned from `execute()` unchanged; none of them share `execute_decision`'s
+receipt/denial shape, so this package doesn't try to parse them into it.
 
 ## Why `@ai-sdk/mcp` and not `ai` itself?
 
