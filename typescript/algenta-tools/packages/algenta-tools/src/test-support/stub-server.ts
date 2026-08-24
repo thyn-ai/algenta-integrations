@@ -9,10 +9,13 @@
  * would actually be caught here, unlike a test that mocks `callTool` directly.
  *
  * Nothing here talks to any real Algenta Engine -- none is reachable in this test environment.
- * Every tool below is a hand-built fake shaped like the real, documented governed-execution
- * envelope (see `../receipts.ts`), plus one test-only administrative tool
- * (`admin_only_diagnostic_tool`, not part of the real contract) that represents part of a real
- * server's wider registry that only the `"full"` profile should ever see.
+ * `execute_decision` below is a hand-built fake shaped like the real, documented
+ * `ExecutionReceipt` success shape and the real three-named-gate denial shape (see
+ * `../receipts.ts`); every other tool is a freeform passthrough to its own plain fake payload,
+ * matching the real engine's contract that only `execute_decision` has this particular
+ * success/denial shape. `admin_only_diagnostic_tool` is a test-only administrative tool (not part
+ * of the real contract) representing part of a real server's wider registry that only the
+ * `"full"` profile should ever see.
  */
 import { randomUUID } from "node:crypto";
 import { createServer, type IncomingMessage, type Server as HttpServer, type ServerResponse } from "node:http";
@@ -21,60 +24,21 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 
-/** A plan whose first `execute_decision` call always comes back pending, and which becomes
- * `approval_state: "approved"` only after `_test_approve_plan` has been called for it. */
-export const PENDING_PLAN_HASH = "plan-needs-approval";
-
-/** A plan `execute_decision` always rejects outright with a named policy-gate code, regardless
- * of approval state -- simulates a stale/mismatched plan the engine refuses to run at all. */
-export const REJECTED_PLAN_HASH = "plan-stale-hash";
-export const REJECTED_PLAN_CODE = "stale_plan";
-
-/** A tool whose result is intentionally *not* a governed-execution envelope, to exercise the
- * passthrough path for tools that don't return one (e.g. a real `get_contract` discovery blob). */
+/** A tool whose result is intentionally *not* an `ExecutionReceipt` (or any other invented
+ * envelope), to exercise the passthrough path for tools that don't return one -- which, per the
+ * real contract, is every tool except `execute_decision`. */
 export const NON_ENVELOPE_RESULT = {
   capabilities: ["query", "simulate", "recommend"],
   engine_version: "1.4.0",
 };
 
-interface ReceiptOptions {
-  status?: string;
-  code?: string;
-  retryable?: boolean;
-  approvalState?: "none" | "pending" | "approved" | "rejected" | "expired";
-  planHash?: string | null;
-  executionId?: string | null;
-  idempotencyKey?: string | null;
-  result?: unknown;
-}
-
-/** Builds an object shaped exactly like `GovernedExecutionReceipt`'s real field list. */
-function buildReceipt(options: ReceiptOptions = {}): Record<string, unknown> {
-  const {
-    status = "ok",
-    code = "ok",
-    retryable = false,
-    approvalState = "none",
-    planHash = null,
-    executionId = null,
-    idempotencyKey = null,
-    result = null,
-  } = options;
-  return {
-    status,
-    code,
-    retryable,
-    request_id: `req-${code}`,
-    trace_id: `trace-${code}`,
-    policy_snapshot_hash: "snap-1",
-    receipt_version: 1,
-    plan_hash: planHash,
-    approval_state: approvalState,
-    execution_id: executionId,
-    idempotency_key: idempotencyKey,
-    result,
-  };
-}
+/** The fake policy thresholds this stub's `execute_decision` gates on, mirroring the real
+ * engine's `policy.min_confidence` / `policy.risk_floor`. A `log_decision` call whose `confidence`
+ * is below {@link POLICY_MIN_CONFIDENCE}, or whose `risk_p5` is below the negative of
+ * {@link POLICY_RISK_FLOOR}, produces a decision that `execute_decision` blocks on the matching
+ * named gate. */
+export const POLICY_MIN_CONFIDENCE = 0.5;
+export const POLICY_RISK_FLOOR = 50;
 
 /** Wraps a JSON-serializable payload as a real MCP `CallToolResult`: both a `structuredContent`
  * field (the modern, outputSchema-driven shape) and a text content block carrying the same JSON
@@ -87,11 +51,53 @@ function jsonResult(payload: unknown): CallToolResult {
   };
 }
 
+/** Builds the real, synchronous denial shape: a tool-error result whose payload is
+ * `{"error": {"code", "gate", "message", "override_hint"}}`. */
+function blockedResult(gate: string, message: string, overrideHint: string): CallToolResult {
+  return {
+    isError: true,
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify({
+          error: { code: `execution_blocked_${gate}`, gate, message, override_hint: overrideHint },
+        }),
+      },
+    ],
+  };
+}
+
+/** Builds an object shaped exactly like the real `ExecutionReceipt`'s field list. */
+function buildExecutionReceipt(options: {
+  decisionId: string;
+  webhookUrl: string;
+  safetyOverridden?: boolean;
+}): Record<string, unknown> {
+  return {
+    decision_id: options.decisionId,
+    webhook_url: options.webhookUrl,
+    execution_status: "delivered",
+    response_code: 200,
+    executed_at: new Date().toISOString(),
+    policy_snapshot_id: "policy-snap-1",
+    schema_snapshot_id: "schema-snap-1",
+    manifest_version: 1,
+    payload_summary: { delivered: true },
+    safety_overridden: options.safetyOverridden ?? false,
+  };
+}
+
 export interface ExecuteDecisionCall {
-  plan_hash: string;
-  idempotency_key: string;
+  decision_id: string;
+  webhook_url: string;
   force: boolean;
   override_safety: boolean;
+}
+
+interface StoredDecision {
+  confidence?: number;
+  risk_p5?: number;
+  delivered: boolean;
 }
 
 export interface StubAlgentaServer {
@@ -102,118 +108,127 @@ export interface StubAlgentaServer {
   executeDecisionCalls: ExecuteDecisionCall[];
 }
 
-/** Builds a fresh stub server instance with its own isolated approval state. */
+/** Builds a fresh stub server instance with its own isolated decision/gate state. */
 export function buildStubAlgentaServer(): StubAlgentaServer {
   const server = new McpServer({ name: "algenta-stub", version: "0.0.0-test" });
-  const approvedPlans = new Set<string>();
+  const decisions = new Map<string, StoredDecision>();
   const executeDecisionCalls: ExecuteDecisionCall[] = [];
 
   server.registerTool(
     "get_contract",
-    { description: "Fake discovery payload -- deliberately not a governed-execution envelope." },
+    { description: "Fake discovery payload." },
     async () => jsonResult(NON_ENVELOPE_RESULT),
   );
 
   server.registerTool(
     "query_data",
     { description: "Fake query_data.", inputSchema: { dataset: z.string() } },
-    async ({ dataset }) =>
-      jsonResult(buildReceipt({ result: { dataset, rows: [{ value: 1 }, { value: 2 }] } })),
+    async ({ dataset }) => jsonResult({ dataset, rows: [{ value: 1 }, { value: 2 }] }),
   );
 
   server.registerTool(
     "simulate",
     { description: "Fake simulate.", inputSchema: { scenario: z.string() } },
-    async ({ scenario }) =>
-      jsonResult(buildReceipt({ result: { scenario, expected_value: 42.0 } })),
+    async ({ scenario }) => jsonResult({ scenario, expected_value: 42.0 }),
   );
 
   server.registerTool(
     "recommend",
     { description: "Fake recommend.", inputSchema: { scenario: z.string() } },
-    async ({ scenario }) =>
-      jsonResult(
-        buildReceipt({ result: { scenario, recommended_action: "hold", confidence: 0.87 } }),
-      ),
+    async ({ scenario }) => jsonResult({ scenario, recommended_action: "hold", confidence: 0.87 }),
   );
 
   server.registerTool(
     "plan_decision",
-    { description: "Fake plan_decision.", inputSchema: { scenario: z.string() } },
-    async ({ scenario }) => {
-      const planHash = `plan-${scenario}`;
-      return jsonResult(
-        buildReceipt({ planHash, result: { plan_hash: planHash, rationale: "looks fine" } }),
-      );
-    },
+    { description: "Fake plan_decision -- freeform DecisionPlan summary.", inputSchema: { scenario: z.string() } },
+    async ({ scenario }) => jsonResult({ plan_id: `plan-${scenario}`, scenario, summary: "looks fine" }),
   );
 
   server.registerTool(
     "log_decision",
-    { description: "Fake log_decision.", inputSchema: { plan_hash: z.string() } },
-    async ({ plan_hash }) => jsonResult(buildReceipt({ planHash: plan_hash, result: { logged: true } })),
+    {
+      description: "Fake log_decision -- persists a decision record, returns its decision_id.",
+      inputSchema: {
+        chosen_action: z.string(),
+        confidence: z.number().optional(),
+        risk_p5: z.number().optional(),
+        expected_value: z.number().optional(),
+      },
+    },
+    async ({ chosen_action, confidence, risk_p5, expected_value }) => {
+      const decision_id = `decision-${randomUUID()}`;
+      decisions.set(decision_id, { confidence, risk_p5, delivered: false });
+      return jsonResult({
+        decision_id,
+        chosen_action,
+        expected_value: expected_value ?? null,
+        confidence: confidence ?? null,
+        created_at: new Date().toISOString(),
+        note: null,
+      });
+    },
   );
 
   server.registerTool(
     "execute_decision",
     {
-      description: "The safety-critical, approval-gated tool.",
+      description: "Dispatch an already-logged decision for real-world execution (webhook delivery).",
       // `force`/`override_safety` are declared on this fake tool's schema on purpose, mirroring
       // the real contract's note that `execute_decision` carries operator-only fields on its
       // real schema -- `createAlgentaTools` is the thing under test for stripping them, not this
       // server.
       inputSchema: {
-        plan_hash: z.string(),
-        idempotency_key: z.string().default("idem-1"),
+        decision_id: z.string(),
+        webhook_url: z.string(),
+        timeout_seconds: z.number().optional(),
         force: z.boolean().default(false),
         override_safety: z.boolean().default(false),
       },
     },
-    async ({ plan_hash, idempotency_key, force, override_safety }) => {
-      executeDecisionCalls.push({ plan_hash, idempotency_key, force, override_safety });
-      const executionId = `exec-${plan_hash}`;
-      if (plan_hash === REJECTED_PLAN_HASH) {
-        return jsonResult(
-          buildReceipt({
-            status: "error",
-            code: REJECTED_PLAN_CODE,
-            approvalState: "rejected",
-            planHash: plan_hash,
-            executionId,
-            idempotencyKey: idempotency_key,
-          }),
+    async ({ decision_id, webhook_url, force, override_safety }) => {
+      executeDecisionCalls.push({ decision_id, webhook_url, force, override_safety });
+      const decision = decisions.get(decision_id);
+
+      if (decision?.delivered && !force) {
+        return blockedResult(
+          "idempotency",
+          "This decision has already been delivered.",
+          "Override the idempotency gate for one re-execution.",
         );
       }
-      if (approvedPlans.has(plan_hash)) {
-        return jsonResult(
-          buildReceipt({
-            approvalState: "approved",
-            planHash: plan_hash,
-            executionId,
-            idempotencyKey: idempotency_key,
-            result: { executed: true, plan_hash },
-          }),
+      if (
+        decision?.confidence !== undefined &&
+        decision.confidence < POLICY_MIN_CONFIDENCE &&
+        !override_safety
+      ) {
+        return blockedResult(
+          "confidence",
+          `confidence ${decision.confidence} is below the policy minimum of ${POLICY_MIN_CONFIDENCE}.`,
+          "Set override_safety=true to bypass the confidence gate.",
         );
+      }
+      if (
+        decision?.risk_p5 !== undefined &&
+        decision.risk_p5 < -POLICY_RISK_FLOOR &&
+        !override_safety
+      ) {
+        return blockedResult(
+          "risk_floor",
+          `risk_p5 ${decision.risk_p5} is below the policy risk floor of ${-POLICY_RISK_FLOOR}.`,
+          "Set override_safety=true to bypass the risk floor gate.",
+        );
+      }
+
+      if (decision) {
+        decision.delivered = true;
       }
       return jsonResult(
-        buildReceipt({
-          approvalState: "pending",
-          planHash: plan_hash,
-          executionId,
-          idempotencyKey: idempotency_key,
+        buildExecutionReceipt({
+          decisionId: decision_id,
+          webhookUrl: webhook_url,
+          safetyOverridden: Boolean(override_safety),
         }),
       );
-    },
-  );
-
-  // Test-only: stand-in for a human approving the plan via the engine's real HTTP endpoint. Not
-  // part of the real Algenta MCP tool registry or the tool-profile contract.
-  server.registerTool(
-    "_test_approve_plan",
-    { description: "Test-only approval stand-in.", inputSchema: { plan_hash: z.string() } },
-    async ({ plan_hash }) => {
-      approvedPlans.add(plan_hash);
-      return jsonResult({ approved: true, plan_hash });
     },
   );
 
