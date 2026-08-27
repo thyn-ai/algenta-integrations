@@ -1,0 +1,85 @@
+name: Fleet Python
+description: >-
+  Resolve a Python that actually has pip on whatever runner this job landed on, and install into
+  a per-job virtualenv. Discovers the interpreter instead of assuming a path.
+
+# WHY THIS EXISTS
+#
+# Five steps across ci.yml (x3), sync-on-sdk-release.yml and auto-release.yml said:
+#
+#     echo "$RUNNER_TOOL_CACHE/Python/3.14.7/arm64/bin" >> "$GITHUB_PATH"
+#
+# Three hardcoded promises about one machine -- a version, an architecture, and a tool-cache
+# layout -- all of which broke at once when the org-wide RUNNER_LABELS moved these jobs off the
+# retired Mac fleet onto Linux. That directory does not exist there, so PATH gains nothing and the
+# step silently no-ops. `python` then resolves to the root-owned system interpreter the
+# orchestrator symlinks, whose site-packages is not writable, and the next `pip install` dies:
+#
+#     ERROR: Could not install packages due to an OSError:
+#     [Errno 13] Permission denied: '/usr/local/lib/python3.14/dist-packages/...'
+#
+# `--user` is no escape, because those same steps export PYTHONNOUSERSITE=1.
+#
+# The `arm64` in that path is the tell -- written for macOS, and working only for as long as the
+# jobs happened to land there. publish-cli.yml is the CLI RELEASE pipeline, so this took the whole
+# release path down; it had not fired only because no release ran between the fleet move and now.
+#
+# Two lessons, both encoded here:
+#   1. DISCOVER, never hardcode. No pinned version, arch, or interpreter name -- each is a promise
+#      about one machine that breaks the moment the job lands on another.
+#   2. A name on PATH is not a usable interpreter. The fleet image guarantees an interpreter, NOT
+#      a writable site-packages (algenta infra/ci/image/manifest.toml). A venv needs no privileges
+#      and behaves identically on every runner.
+#
+# All five call sites in this repo move to this action -- unlike codna, none of them had a
+# working inline resolver to preserve.
+
+inputs:
+  venv-name:
+    description: Directory name for the per-job virtualenv.
+    required: false
+    default: integrations-ci-venv
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve a Python with pip, into a venv
+      shell: bash
+      run: |
+        set -uo pipefail
+        CANDIDATES=""
+        # Whatever versions/architectures this particular machine's tool cache happens to carry.
+        if [ -n "${RUNNER_TOOL_CACHE:-}" ] && [ -d "$RUNNER_TOOL_CACHE/Python" ]; then
+          for b in $(find "$RUNNER_TOOL_CACHE/Python" -type d -name bin 2>/dev/null | sort -Vr); do
+            for n in python3 python; do
+              [ -x "$b/$n" ] && CANDIDATES="$CANDIDATES $b/$n"
+            done
+          done
+        fi
+        # Every python* already on PATH, discovered from PATH itself, newest first.
+        for d in $(printf '%s' "$PATH" | tr ':' ' '); do
+          [ -d "$d" ] || continue
+          for f in $(ls "$d" 2>/dev/null | grep -xE 'python3?(\.[0-9]+)?' | sort -Vr); do
+            CANDIDATES="$CANDIDATES $d/$f"
+          done
+        done
+
+        PY=""
+        for c in $CANDIDATES; do
+          if [ -x "$c" ] && "$c" -m pip --version >/dev/null 2>&1; then PY="$c"; break; fi
+        done
+        if [ -z "$PY" ]; then
+          echo "::error::No Python with pip on this runner. That is a RUNNER IMAGE gap, not a defect in this pull request."
+          echo "candidates probed:"; for c in $CANDIDATES; do echo "  $c"; done
+          exit 1
+        fi
+
+        VENV="${RUNNER_TEMP:-$PWD}/${{ inputs.venv-name }}"
+        "$PY" -m venv "$VENV"
+        PY="$VENV/bin/python"
+        echo "$VENV/bin" >> "$GITHUB_PATH"
+        echo "PY=$PY" >> "$GITHUB_ENV"
+        # Isolate from the runner user's site-packages: stale leftovers there shadow and break
+        # freshly installed deps on a long-lived self-hosted runner.
+        echo "PYTHONNOUSERSITE=1" >> "$GITHUB_ENV"
+        echo "resolved interpreter: $PY ($("$PY" --version 2>&1))"

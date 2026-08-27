@@ -32,10 +32,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Fleet Python 3.14 (pre-provisioned tool cache)
-        run: |
-          echo "$RUNNER_TOOL_CACHE/Python/3.14.7/arm64/bin" >> "$GITHUB_PATH"
-          echo "PYTHONNOUSERSITE=1" >> "$GITHUB_ENV"
+      # Discovered, never hardcoded -- the old tool-cache path pinned a version, an arch and a
+      # layout, and all three broke when the fleet moved off macOS. See the action for detail.
+      - name: Fleet Python (discovered, into a venv)
+        uses: ./.github/actions/fleet-python
       - name: Run the checker against this repository
         run: python scripts/check-no-engine-dependency.py --root .
       - name: Run the checker's own regression tests (proves it catches violations)
@@ -50,10 +50,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Fleet Python 3.14 (pre-provisioned tool cache)
-        run: |
-          echo "$RUNNER_TOOL_CACHE/Python/3.14.7/arm64/bin" >> "$GITHUB_PATH"
-          echo "PYTHONNOUSERSITE=1" >> "$GITHUB_ENV"
+      # Discovered, never hardcoded -- the old tool-cache path pinned a version, an arch and a
+      # layout, and all three broke when the fleet moved off macOS. See the action for detail.
+      - name: Fleet Python (discovered, into a venv)
+        uses: ./.github/actions/fleet-python
       - name: Run compute_release_bumps.py's regression tests
         run: python scripts/test_compute_release_bumps.py
 
@@ -63,10 +63,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Fleet Python 3.14 (pre-provisioned tool cache)
-        run: |
-          echo "$RUNNER_TOOL_CACHE/Python/3.14.7/arm64/bin" >> "$GITHUB_PATH"
-          echo "PYTHONNOUSERSITE=1" >> "$GITHUB_ENV"
+      # Discovered, never hardcoded -- the old tool-cache path pinned a version, an arch and a
+      # layout, and all three broke when the fleet moved off macOS. See the action for detail.
+      - name: Fleet Python (discovered, into a venv)
+        uses: ./.github/actions/fleet-python
       - name: Install uv
         run: python -m pip install --quiet --disable-pip-version-check uv
       # --all-extras is required, not cosmetic: pytest/pytest-asyncio/anyio only live under each
