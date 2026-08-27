@@ -37,10 +37,10 @@ jobs:
           persist-credentials: false
           fetch-depth: 0 # full history + tags -- the script needs both
 
-      - name: Fleet Python 3.14 (pre-provisioned tool cache)
-        run: |
-          echo "$RUNNER_TOOL_CACHE/Python/3.14.7/arm64/bin" >> "$GITHUB_PATH"
-          echo "PYTHONNOUSERSITE=1" >> "$GITHUB_ENV"
+      # Discovered, never hardcoded -- the old tool-cache path pinned a version, an arch and a
+      # layout, and all three broke when the fleet moved off macOS. See the action for detail.
+      - name: Fleet Python (discovered, into a venv)
+        uses: ./.github/actions/fleet-python
 
       - name: Compute and apply version bumps
         id: bumps
