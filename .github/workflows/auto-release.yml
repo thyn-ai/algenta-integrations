@@ -13,12 +13,17 @@
 # commit + tag whatever it changed, push, create a GitHub Release per tag.
 #
 # Convergence is simpler here than in codna's version: codna reconciles against PyPI (an external,
-# cache-prone truth source), which needs an "is HEAD my own bump commit" guard to terminate. This
-# repo doesn't publish anywhere yet (a separate, explicit, owner-gated decision for later -- see the
-# removed release-please.yml's original header), so the only state being reconciled is "do this
-# package's git tags already cover every commit that touches it", which is self-consistent: the
-# moment a bump is tagged, that tag becomes the new boundary, so the immediate re-trigger from this
-# very push sees zero new commits and computes no further bump. No self-commit detection needed.
+# cache-prone truth source), which needs an "is HEAD my own bump commit" guard to terminate. Here
+# the only state being reconciled is "do this package's git tags already cover every commit that
+# touches it", which is self-consistent: the moment a bump is tagged, that tag becomes the new
+# boundary, so the immediate re-trigger from this very push sees zero new commits and computes no
+# further bump. No self-commit detection needed.
+#
+# Publishing is a SEPARATE workflow (publish.yml), triggered by the GitHub Releases this one
+# creates. Keeping it separate is what makes the registry side re-runnable on its own: a publish
+# that was skipped (registry not yet configured) or that failed can be replayed for one tag without
+# recomputing or re-tagging anything. It also keeps `id-token: write` out of this workflow, which
+# holds a repo-write App token.
 name: auto-release
 
 on:
