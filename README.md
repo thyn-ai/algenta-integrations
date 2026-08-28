@@ -145,13 +145,31 @@ anything yet — check the table above and each package's own README.
   Status & Roadmap table above for exactly what each one is. `demo/`'s
   conformance fixture set (D9), D6's remaining n8n/Ray Serve/vLLM lanes, and
   whatever D7-D8 turn out to cover remain planned.
-- **No publishing.** `.github/workflows/auto-release.yml` computes per-package
-  semantic-version bumps from Conventional Commits and pushes them straight to
-  main, tagging a GitHub Release per bumped package (zero PR — see
-  `scripts/compute_release_bumps.py`), but there is no PyPI or npm publish step
-  anywhere in this repository, no `PYPI_TOKEN`/`NPM_TOKEN`, and no OIDC Trusted
-  Publisher registration. This repository is private; publishing is a separate,
-  explicit, owner-gated decision for later.
+- **Not on PyPI or npm yet — two owner actions away.** Every package here 404s
+  on both registries today. `pip install langchain-algenta` does not work, and
+  no claim in this repository should imply otherwise.
+
+  What exists: `.github/workflows/auto-release.yml` computes per-package
+  semantic-version bumps from Conventional Commits, pushes them to main, and
+  tags a GitHub Release per bumped package (zero PR — see
+  `scripts/compute_release_bumps.py`). `.github/workflows/publish.yml` then
+  builds the released package, verifies the artifacts carry the tagged version,
+  and runs `twine check --strict` / `npm pack` — **on every release, right now**,
+  so the pipeline is exercised before it is ever trusted with a real upload.
+
+  What is missing is registry-side configuration, which only the account owner
+  can do:
+
+  1. Register a Trusted Publisher per package — PyPI
+     [pending publishers](https://pypi.org/manage/account/publishing/) (owner
+     `thyn-ai`, repo `algenta-integrations`, workflow `publish.yml`, environment
+     `pypi`); npm package settings → Trusted Publisher → GitHub Actions.
+  2. Set the repository variable `PUBLISH_TO_REGISTRIES` to `true`.
+
+  Until then each publish job explains exactly this in its run summary and exits
+  cleanly rather than reddening every release. There are deliberately **no**
+  `PYPI_TOKEN`/`NPM_TOKEN` secrets: publishing uses short-lived OIDC tokens, so
+  there is nothing to rotate or leak.
 - **No repository visibility change.** This repository stays private until
   its owner decides otherwise.
 

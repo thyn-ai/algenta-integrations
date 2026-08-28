@@ -56,6 +56,10 @@ jobs:
         uses: ./.github/actions/fleet-python
       - name: Run compute_release_bumps.py's regression tests
         run: python scripts/test_compute_release_bumps.py
+      - name: Run resolve_release_target.py's regression tests
+        # The tag -> package resolver publish.yml depends on. It must agree with
+        # compute_release_bumps.py on the tag format, and only that script writes tags.
+        run: python scripts/test_resolve_release_target.py
 
   python:
     runs-on: ${{ fromJSON(vars.RUNNER_LABELS) }}
