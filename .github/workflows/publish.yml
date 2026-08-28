@@ -1,0 +1,228 @@
+# Publish a released package to PyPI or npm.
+#
+# WHAT THIS FIXES. auto-release.yml versions, tags and creates GitHub Releases -- and stops there.
+# Seven packages carried GitHub Releases (0.1.1 / 0.2.1) while every one of them 404'd on PyPI and
+# npm, because no publish step existed anywhere in the repo. A GitHub Release is not a release: a
+# user runs `pip install langchain-algenta`, not `gh release download`.
+#
+# TRUSTED PUBLISHING, NO LONG-LIVED TOKENS. Both registries accept a short-lived OIDC token minted
+# per run, so there is no API token to store, rotate, or leak. That is also why `id-token: write`
+# is scoped to the individual publish jobs and nowhere else in the file.
+#
+# THE BUILD-AND-VERIFY STEPS RUN UNCONDITIONALLY, even before publishing is switched on. A job that
+# does nothing until someone flips a variable rots quietly; this way every release proves right now
+# that its artifacts build, carry the right version, and pass the registry's own metadata check --
+# so the first real publish is not also the first real test of this pipeline.
+#
+# TURNING IT ON is two owner actions, once per package, and then this is automatic forever:
+#
+#   1. Register a Trusted Publisher on each registry, pointing at THIS repository and THIS
+#      workflow FILENAME (publish.yml) -- the filename is part of what the registry verifies, so
+#      renaming this file breaks publishing until the registry config is updated to match.
+#        - PyPI: https://pypi.org/manage/account/publishing/ -- add a "pending publisher" per
+#          package name (owner `thyn-ai`, repo `algenta-integrations`, workflow `publish.yml`,
+#          environment `pypi`). Pending publishers exist precisely so a project that does not
+#          exist yet can be claimed by its first publish, so the names do not need reserving first.
+#        - npm: package settings -> Trusted Publisher -> GitHub Actions, same repo + workflow.
+#   2. Set the repository variable `PUBLISH_TO_REGISTRIES` to `true`.
+#
+# Until step 2, each publish job explains what is missing in the run summary and exits cleanly:
+# reds on every release would train everyone to ignore a red release.
+#
+# scripts/resolve_release_target.py owns the tag -> package mapping and REFUSES a tag whose version
+# no longer matches the package on that commit; this workflow only wires it up.
+
+name: publish
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to publish (e.g. langchain-algenta-v0.1.1). Reconciles a release whose publish was skipped or failed."
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  # Keyed on the tag, so releases of different packages publish in parallel while a re-run of the
+  # same one cannot race itself into a duplicate-version error.
+  group: publish-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  resolve:
+    name: Resolve the release tag
+    runs-on: ${{ fromJSON(vars.RUNNER_LABELS) }}
+    outputs:
+      name: ${{ steps.target.outputs.name }}
+      version: ${{ steps.target.outputs.version }}
+      registry: ${{ steps.target.outputs.registry }}
+      directory: ${{ steps.target.outputs.directory }}
+      publishing_enabled: ${{ steps.gate.outputs.enabled }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Check out the TAG, not the branch head: a release publishes the code that was tagged,
+          # and main may have moved on since.
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: ./.github/actions/fleet-python
+
+      - name: Resolve the tag to a package
+        id: target
+        run: |
+          python3 scripts/resolve_release_target.py \
+            --tag "${{ github.event.release.tag_name || inputs.tag }}" \
+            --github-output
+
+      - name: Is publishing switched on
+        id: gate
+        run: echo "enabled=${{ vars.PUBLISH_TO_REGISTRIES == 'true' }}" >> "$GITHUB_OUTPUT"
+
+  pypi:
+    name: PyPI
+    needs: resolve
+    if: needs.resolve.outputs.registry == 'pypi'
+    runs-on: ${{ fromJSON(vars.RUNNER_LABELS) }}
+    environment: pypi
+    permissions:
+      contents: read
+      id-token: write # mint the OIDC token PyPI Trusted Publishing verifies
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: ./.github/actions/fleet-python
+
+      - name: Install uv
+        # Same as ci.yml: uv is not on the fleet image, it is pip-installed per job.
+        run: python -m pip install --quiet --disable-pip-version-check uv
+
+      - name: Build the distribution
+        working-directory: ${{ needs.resolve.outputs.directory }}
+        run: uv build --out-dir dist
+
+      - name: Check the artifacts before offering them to a registry
+        working-directory: ${{ needs.resolve.outputs.directory }}
+        run: |
+          set -euo pipefail
+          uvx twine check --strict dist/*
+          # The filename carries the version, so this catches a build that silently produced a
+          # different one from the tag -- a bad sdist name is not recoverable once uploaded.
+          version="${{ needs.resolve.outputs.version }}"
+          ls dist/
+          for artifact in dist/*; do
+            case "$(basename "$artifact")" in
+              *"$version"*) ;;
+              *) echo "::error::$artifact does not carry version $version"; exit 1 ;;
+            esac
+          done
+
+      - name: Explain the skip (publishing not switched on)
+        if: needs.resolve.outputs.publishing_enabled != 'true'
+        run: |
+          {
+            echo "### PyPI publish skipped for \`${{ needs.resolve.outputs.name }}\` ${{ needs.resolve.outputs.version }}"
+            echo
+            echo "The distribution built and passed \`twine check --strict\`, but publishing is off."
+            echo
+            echo "To switch it on (once per package, then permanently automatic):"
+            echo "1. Add a PyPI **pending publisher** at <https://pypi.org/manage/account/publishing/>:"
+            echo "   - PyPI project: \`${{ needs.resolve.outputs.name }}\`"
+            echo "   - Owner: \`thyn-ai\` · Repository: \`algenta-integrations\`"
+            echo "   - Workflow: \`publish.yml\` · Environment: \`pypi\`"
+            echo "2. Set the repository variable \`PUBLISH_TO_REGISTRIES\` to \`true\`."
+            echo
+            echo "Then re-run this workflow with tag \`${{ github.event.release.tag_name || inputs.tag }}\`."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish to PyPI
+        if: needs.resolve.outputs.publishing_enabled == 'true'
+        uses: pypa/gh-action-pypi-publish@a892a5a61159132606e93a2fa6f4358831b04d26 # v1.14.2
+        with:
+          packages-dir: ${{ needs.resolve.outputs.directory }}/dist
+          # PEP 740 attestations, signed with the same OIDC identity. Free provenance on the
+          # artifact itself, which Track B4's supply-chain work wants anyway.
+          attestations: true
+
+  npm:
+    name: npm
+    needs: resolve
+    if: needs.resolve.outputs.registry == 'npm'
+    runs-on: ${{ fromJSON(vars.RUNNER_LABELS) }}
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write # npm Trusted Publishing + `--provenance`
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "20"
+          registry-url: https://registry.npmjs.org
+          # See ci.yml: on a persistent self-hosted runner setup-node's npm cache never resets
+          # across jobs and grows unbounded.
+          package-manager-cache: false
+
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
+        with:
+          version: 9
+
+      - name: Upgrade npm for OIDC trusted publishing
+        # Node 20 ships npm 10, which has no OIDC support -- it would fall back to looking for an
+        # auth token and fail with a confusing 401 rather than an honest "unsupported".
+        run: |
+          npm install -g npm@latest
+          npm --version
+
+      - name: Build the package
+        working-directory: typescript/algenta-tools
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm turbo run build
+
+      - name: Check the tarball before offering it to a registry
+        working-directory: ${{ needs.resolve.outputs.directory }}
+        run: |
+          set -euo pipefail
+          npm pack --dry-run
+          packed_version=$(node -p "require('./package.json').version")
+          if [ "$packed_version" != "${{ needs.resolve.outputs.version }}" ]; then
+            echo "::error::package.json is at $packed_version but the tag says ${{ needs.resolve.outputs.version }}"
+            exit 1
+          fi
+
+      - name: Explain the skip (publishing not switched on)
+        if: needs.resolve.outputs.publishing_enabled != 'true'
+        run: |
+          {
+            echo "### npm publish skipped for \`${{ needs.resolve.outputs.name }}\` ${{ needs.resolve.outputs.version }}"
+            echo
+            echo "The package built and packed cleanly, but publishing is off."
+            echo
+            echo "To switch it on (once, then permanently automatic):"
+            echo "1. On npmjs.com, open the \`${{ needs.resolve.outputs.name }}\` package settings and add a"
+            echo "   **Trusted Publisher**: GitHub Actions · \`thyn-ai/algenta-integrations\` · workflow \`publish.yml\` · environment \`npm\`."
+            echo "   (A package that does not exist yet must be created by a first manual publish or claimed by the org.)"
+            echo "2. Set the repository variable \`PUBLISH_TO_REGISTRIES\` to \`true\`."
+            echo
+            echo "Then re-run this workflow with tag \`${{ github.event.release.tag_name || inputs.tag }}\`."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish to npm
+        if: needs.resolve.outputs.publishing_enabled == 'true'
+        working-directory: ${{ needs.resolve.outputs.directory }}
+        run: npm publish --provenance --access public
