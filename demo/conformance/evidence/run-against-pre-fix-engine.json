@@ -1,0 +1,156 @@
+{
+  "blocked": 3,
+  "engine": "http://localhost:8102",
+  "failed": 7,
+  "passed": 2,
+  "results": [
+    {
+      "detail": "lifecycle=proposed hash_len=64",
+      "evidence": {
+        "nonce_present": true,
+        "plan_hash_prefix": "35c66e82351ae294"
+      },
+      "key": "read_only_recommendation",
+      "number": 1,
+      "outcome": "PASS",
+      "status": "exercisable",
+      "title": "Successful read-only recommendation"
+    },
+    {
+      "detail": "status=409 code=http_error",
+      "evidence": {
+        "code": "http_error",
+        "status": 409
+      },
+      "key": "execution_denied_by_policy",
+      "number": 2,
+      "outcome": "FAIL",
+      "status": "exercisable",
+      "title": "Execution denied by policy (409 named gate)"
+    },
+    {
+      "detail": "The engine REFUSES rather than PAUSES. /v1/decision-plans/{id}/execute on an unapproved plan returns 409 plan_not_approved and the plan stays 'proposed' -- there is no suspended execution to resume, and no continuation token. Approval is a separate prior call (propose -> approve -> execute), which is a sound design but is not the pause/resume semantics this scenario describes. Interruption + continuation is Track C1 work (the Responses-protocol approval-required event); asserting it now would be asserting a design intention.",
+      "evidence": {},
+      "key": "execution_paused_for_approval",
+      "number": 3,
+      "outcome": "BLOCKED",
+      "status": "needs_capability",
+      "title": "Execution paused for approval"
+    },
+    {
+      "detail": "approve=200 execute=200 lifecycle=executed",
+      "evidence": {
+        "approval_status": "approved",
+        "lifecycle": "executed"
+      },
+      "key": "approval_granted_then_execute",
+      "number": 4,
+      "outcome": "PASS",
+      "status": "exercisable",
+      "title": "Approval granted, execution resumed"
+    },
+    {
+      "detail": "status=403 code=http_error",
+      "evidence": {
+        "code": "http_error",
+        "status": 403
+      },
+      "key": "approval_rejected",
+      "number": 5,
+      "outcome": "FAIL",
+      "status": "exercisable",
+      "title": "Approval rejected"
+    },
+    {
+      "detail": "first=200 second=409 code=http_error",
+      "evidence": {
+        "code": "http_error",
+        "first": 200,
+        "second": 409
+      },
+      "key": "duplicate_execution_prevented",
+      "number": 6,
+      "outcome": "FAIL",
+      "status": "exercisable",
+      "title": "Duplicate execution prevented"
+    },
+    {
+      "detail": "first=200 replay=409 code=http_error",
+      "evidence": {
+        "code": "http_error",
+        "replay_status": 409
+      },
+      "key": "reused_challenge_rejected",
+      "number": 7,
+      "outcome": "FAIL",
+      "status": "exercisable",
+      "title": "Expired / reused approval rejected"
+    },
+    {
+      "detail": "status=403 code=http_error",
+      "evidence": {
+        "code": "http_error",
+        "status": 403
+      },
+      "key": "modified_plan_hash_rejected",
+      "number": 8,
+      "outcome": "FAIL",
+      "status": "exercisable",
+      "title": "Modified plan_hash rejected"
+    },
+    {
+      "detail": "Requires a dependency that actually times out. The governed path exercised here talks only to Postgres; provoking a real timeout means either a fault-injection proxy in front of an upstream or the Mojo compute worker under load, neither of which this environment has. Fabricating one by patching a client would test the mock, not the engine. Belongs in the nightly live tier against a booted stack (plan section 6).",
+      "evidence": {},
+      "key": "upstream_timeout_typed_retryable",
+      "number": 9,
+      "outcome": "BLOCKED",
+      "status": "needs_infra",
+      "title": "Upstream timeout surfaces as a typed retryable error"
+    },
+    {
+      "detail": "status=200 failed=['receipt_version', 'execution_id_distinct', 'plan_hash_bound', 'approval_state', 'trace_adopted', 'idempotency_echoed', 'status_executed']",
+      "evidence": {
+        "checks": {
+          "approval_state": false,
+          "execution_id_distinct": false,
+          "idempotency_echoed": false,
+          "plan_hash_bound": false,
+          "receipt_version": false,
+          "status_executed": false,
+          "trace_adopted": false
+        },
+        "policy_snapshot_hash": null,
+        "receipt_version": null
+      },
+      "key": "execution_receipt_versioned",
+      "number": 10,
+      "outcome": "FAIL",
+      "status": "exercisable",
+      "title": "Successful execution receipt (versioned envelope)"
+    },
+    {
+      "detail": "status=404 match=False rows=None",
+      "evidence": {
+        "advertised": "",
+        "bytes": 22,
+        "recomputed": "37ec4665a8102d115ffd1ac20dae94c98b4dac64b0c1a68228aa2a531caeb35d",
+        "rows": null
+      },
+      "key": "audit_export_hash_verifies",
+      "number": 11,
+      "outcome": "FAIL",
+      "status": "exercisable",
+      "title": "Audit export whose X-Content-SHA256 verifies"
+    },
+    {
+      "detail": "Determinism is a property of the Mojo compute kernels, and this environment runs with ALGENTA_SKIP_MOJO_RUNTIME=1 -- the governed-execution semantics under test here do not need the worker, but replay identity does. Comparing two runs of the safe-MVP execute path would compare an artifact list to itself and prove nothing about determinism. Belongs in the nightly live tier with the worker running.",
+      "evidence": {},
+      "key": "replay_is_deterministic",
+      "number": 12,
+      "outcome": "BLOCKED",
+      "status": "needs_infra",
+      "title": "Replay produces the same deterministic result"
+    }
+  ],
+  "total": 12
+}
