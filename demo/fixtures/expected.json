@@ -1,0 +1,71 @@
+{
+  "_provenance": {
+    "engine_config": "ALGENTA_SKIP_MOJO_RUNTIME=1 (governed-execution semantics need no compute worker)",
+    "engine_git_sha": "01114e6897ed",
+    "how_to_reproduce": "ALGENTA_BASE_URL=... ALGENTA_API_KEY=... python -m demo.conformance.runner",
+    "note": "Values here were OBSERVED, not authored. Regenerate rather than edit by hand.",
+    "recorded_from": "a live thyn-ai/algenta engine over HTTP with a real Postgres"
+  },
+  "expected_outcomes": {
+    "approval_granted_then_execute": {
+      "outcome": "PASS",
+      "status": "exercisable"
+    },
+    "approval_rejected": {
+      "outcome": "PASS",
+      "status": "exercisable"
+    },
+    "audit_export_hash_verifies": {
+      "outcome": "PASS",
+      "status": "exercisable"
+    },
+    "duplicate_execution_prevented": {
+      "outcome": "PASS",
+      "status": "exercisable"
+    },
+    "execution_denied_by_policy": {
+      "outcome": "PASS",
+      "status": "exercisable"
+    },
+    "execution_paused_for_approval": {
+      "outcome": "BLOCKED",
+      "status": "needs_capability"
+    },
+    "execution_receipt_versioned": {
+      "outcome": "PASS",
+      "status": "exercisable"
+    },
+    "modified_plan_hash_rejected": {
+      "outcome": "PASS",
+      "status": "exercisable"
+    },
+    "read_only_recommendation": {
+      "outcome": "PASS",
+      "status": "exercisable"
+    },
+    "replay_is_deterministic": {
+      "outcome": "BLOCKED",
+      "status": "needs_infra"
+    },
+    "reused_challenge_rejected": {
+      "outcome": "PASS",
+      "status": "exercisable"
+    },
+    "upstream_timeout_typed_retryable": {
+      "outcome": "BLOCKED",
+      "status": "needs_infra"
+    }
+  },
+  "named_error_codes": {
+    "approval_rejected": "invalid_nonce",
+    "duplicate_execution_prevented": "plan_not_approved",
+    "execution_denied_by_policy": "plan_not_approved",
+    "modified_plan_hash_rejected": "plan_hash_mismatch",
+    "reused_challenge_rejected": "plan_not_approvable"
+  },
+  "totals": {
+    "blocked": 3,
+    "failed": 0,
+    "passed": 9
+  }
+}
