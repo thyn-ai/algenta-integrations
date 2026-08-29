@@ -155,6 +155,33 @@ jobs:
               subprocess.run(['git', 'push', 'origin', b['tag']], check=True)
           "
 
+      # The shared fleet image doesn't ship the gh CLI (same "not every tool is pre-installed"
+      # story as fleet-python's own README above), and this runner has no passwordless sudo, so
+      # apt-get is not an option -- install a static binary into a per-job dir instead. Discover
+      # os/arch from `uname` rather than hardcoding "linux_amd64", matching fleet-python's own
+      # "discover, never hardcode" precedent in this same repo.
+      - name: Ensure the GitHub CLI is available
+        if: steps.bumps.outputs.bumped == 'true' && steps.creds.outputs.configured == 'true'
+        run: |
+          set -euo pipefail
+          if command -v gh >/dev/null 2>&1; then
+            echo "gh already on PATH: $(gh --version | head -1)"
+            exit 0
+          fi
+          os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+          arch="$(uname -m)"
+          case "$arch" in
+            x86_64) arch="amd64" ;;
+            aarch64|arm64) arch="arm64" ;;
+            *) echo "unsupported arch: $arch" >&2; exit 1 ;;
+          esac
+          version="2.98.0"
+          dest="$RUNNER_TEMP/gh-cli"
+          mkdir -p "$dest"
+          curl -fsSL "https://github.com/cli/cli/releases/download/v${version}/gh_${version}_${os}_${arch}.tar.gz" \
+            | tar -xz -C "$dest" --strip-components=1
+          echo "$dest/bin" >> "$GITHUB_PATH"
+
       - name: Create a GitHub Release per bumped package
         if: steps.bumps.outputs.bumped == 'true' && steps.creds.outputs.configured == 'true'
         env:
