@@ -1,0 +1,18 @@
+{
+	"node": "n8n-nodes-algenta.algenta",
+	"nodeVersion": "1.0",
+	"codexVersion": "1.0",
+	"categories": ["Data & Storage", "Development"],
+	"resources": {
+		"credentialDocumentation": [
+			{
+				"url": "https://docs.algenta.ai/sdk/mcp"
+			}
+		],
+		"primaryDocumentation": [
+			{
+				"url": "https://docs.algenta.ai/sdk/mcp"
+			}
+		]
+	}
+}

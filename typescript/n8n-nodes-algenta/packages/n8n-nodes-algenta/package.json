@@ -1,0 +1,49 @@
+{
+  "name": "n8n-nodes-algenta",
+  "version": "0.1.0",
+  "description": "n8n community node for Algenta: a governed-execution-aware node exposing your own self-hosted Algenta Engine's MCP tool surface (get_contract, query_data, simulate, recommend, plan_decision, log_decision, execute_decision) as typed n8n operations, with a real ExecutionReceipt/ExecutionBlockedError contract on execute_decision.",
+  "keywords": [
+    "n8n-community-node-package",
+    "algenta",
+    "mcp",
+    "decision",
+    "governed-execution"
+  ],
+  "license": "MIT",
+  "homepage": "https://docs.algenta.ai",
+  "author": { "name": "Thyn AI", "email": "security@algenta.ai" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/thyn-ai/algenta-integrations.git",
+    "directory": "typescript/n8n-nodes-algenta/packages/n8n-nodes-algenta"
+  },
+  "bugs": { "url": "https://github.com/thyn-ai/algenta-integrations/issues" },
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "n8n-node build",
+    "build:watch": "tsc --watch",
+    "dev": "n8n-node dev",
+    "lint": "n8n-node lint",
+    "lint:fix": "n8n-node lint --fix",
+    "test": "vitest run",
+    "prepublishOnly": "n8n-node prerelease"
+  },
+  "files": ["dist", "README.md"],
+  "n8n": {
+    "n8nNodesApiVersion": 1,
+    "strict": false,
+    "credentials": ["dist/credentials/AlgentaApi.credentials.js"],
+    "nodes": ["dist/nodes/Algenta/Algenta.node.js"]
+  },
+  "dependencies": { "@modelcontextprotocol/sdk": "^1.30.0" },
+  "peerDependencies": { "n8n-workflow": "*" },
+  "devDependencies": {
+    "@n8n/node-cli": "*",
+    "@types/node": "^22.0.0",
+    "n8n-workflow": "^2.0.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0",
+    "zod": "^3.25.0"
+  },
+  "engines": { "node": ">=18.10" }
+}
