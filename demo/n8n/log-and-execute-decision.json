@@ -1,0 +1,158 @@
+{
+  "name": "Algenta: log and execute a governed decision",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "b2b6b8b0-1a1a-4a1a-9a1a-000000000001",
+      "name": "When clicking \"Execute workflow\"",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [-720, 0]
+    },
+    {
+      "parameters": {
+        "operation": "log_decision",
+        "profile": "govern",
+        "arguments": "{\n  \"chosen_action\": \"renew\",\n  \"confidence\": 0.9,\n  \"expected_value\": 1250.0\n}"
+      },
+      "id": "b2b6b8b0-1a1a-4a1a-9a1a-000000000002",
+      "name": "Log Decision",
+      "type": "n8n-nodes-algenta.algenta",
+      "typeVersion": 1,
+      "position": [-500, 0],
+      "credentials": {
+        "algentaApi": {
+          "id": "1",
+          "name": "Algenta API (self-hosted)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "execute_decision",
+        "profile": "execute",
+        "decisionId": "={{ $json.decision_id }}",
+        "webhookUrl": "https://your-automation.example.com/hooks/renewal"
+      },
+      "id": "b2b6b8b0-1a1a-4a1a-9a1a-000000000003",
+      "name": "Execute Decision",
+      "type": "n8n-nodes-algenta.algenta",
+      "typeVersion": 1,
+      "position": [-280, 0],
+      "credentials": {
+        "algentaApi": {
+          "id": "1",
+          "name": "Algenta API (self-hosted)"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "b2b6b8b0-1a1a-4a1a-9a1a-000000000010",
+              "leftValue": "={{ $json.error }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b2b6b8b0-1a1a-4a1a-9a1a-000000000004",
+      "name": "Blocked by policy?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [-60, 0]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "b2b6b8b0-1a1a-4a1a-9a1a-000000000020",
+              "name": "notify",
+              "type": "string",
+              "value": "=Execution was blocked by policy gate '{{ $json.gate }}': {{ $json.error }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b2b6b8b0-1a1a-4a1a-9a1a-000000000005",
+      "name": "Format policy-denial alert",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [160, -120]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "b2b6b8b0-1a1a-4a1a-9a1a-000000000021",
+              "name": "notify",
+              "type": "string",
+              "value": "=Decision {{ $json.decision_id }} delivered to {{ $json.webhook_url }} at {{ $json.executed_at }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b2b6b8b0-1a1a-4a1a-9a1a-000000000006",
+      "name": "Format success receipt",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [160, 120]
+    }
+  ],
+  "connections": {
+    "When clicking \"Execute workflow\"": {
+      "main": [[{ "node": "Log Decision", "type": "main", "index": 0 }]]
+    },
+    "Log Decision": {
+      "main": [[{ "node": "Execute Decision", "type": "main", "index": 0 }]]
+    },
+    "Execute Decision": {
+      "main": [[{ "node": "Blocked by policy?", "type": "main", "index": 0 }]]
+    },
+    "Blocked by policy?": {
+      "main": [
+        [{ "node": "Format policy-denial alert", "type": "main", "index": 0 }],
+        [{ "node": "Format success receipt", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "meta": {
+    "instructions": [
+      "This workflow is a governed-decision example, not a live automation -- the Webhook URL above",
+      "points at a placeholder (https://your-automation.example.com/hooks/renewal). Replace it with",
+      "your own downstream automation endpoint before running for real.",
+      "",
+      "1. Create an 'Algenta API' credential pointing at your own self-hosted Algenta Engine's base",
+      "   URL (e.g. http://localhost:8000), with an API key if your engine requires one.",
+      "2. Log Decision runs under the 'govern' profile and persists a decision record.",
+      "3. Execute Decision runs under the 'execute' profile. 'Continue on Fail' is enabled on this",
+      "   node (onError: continueRegularOutput) so a policy-blocked call flows into the branch below",
+      "   instead of stopping the workflow -- this is exactly the shape the package's own",
+      "   'continueOnFail turns a blocked execution into an item-level error' test exercises.",
+      "4. Blocked by policy? branches on whether the item carries an 'error' field (set by this",
+      "   node's blocked-call handling) to tell a policy denial apart from a real ExecutionReceipt.",
+      "",
+      "See typescript/n8n-nodes-algenta/packages/n8n-nodes-algenta/README.md for the full node",
+      "reference (operations, tool profiles, and why this node needs a real dependency)."
+    ]
+  }
+}

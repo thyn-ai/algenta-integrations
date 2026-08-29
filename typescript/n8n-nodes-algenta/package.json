@@ -1,0 +1,27 @@
+{
+  "name": "n8n-nodes-algenta-workspace",
+  "version": "0.0.0",
+  "private": true,
+  "description": "pnpm + turbo workspace root for the n8n-nodes-algenta community node package. Not published — see packages/n8n-nodes-algenta for the real package.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/thyn-ai/algenta-integrations.git",
+    "directory": "typescript/n8n-nodes-algenta"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "lint": "turbo run lint"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "packageManager": "pnpm@9.15.0",
+  "pnpm": {
+    "neverBuiltDependencies": ["isolated-vm"]
+  }
+}
