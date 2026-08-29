@@ -1,0 +1,77 @@
+[project]
+name = "ray-serve-algenta"
+version = "0.1.0"
+description = "Deploy Algenta's stateless /mcp surface behind Ray Serve: a byte-transparent reverse-proxy Deployment, a KubeRay RayService manifest, and a real multi-replica conformance test suite"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+license-files = ["../../LICENSE"]
+keywords = ["algenta", "ray", "ray-serve", "kuberay", "mcp", "agent", "decision"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Typing :: Typed",
+]
+# No `algenta-sdk` dependency -- see README's "Why no algenta-sdk dependency" section.
+# `ray_serve_algenta.deployment.AlgentaMCPProxy` is a byte-transparent reverse proxy: it never
+# parses MCP JSON-RPC content, never names a tool, and never needs an SDK client of any kind --
+# only an HTTP client (`httpx`) forwarding bytes to whatever `ALGENTA_BASE_URL` is configured to.
+#
+# Unlike litellm-algenta (D4), where `litellm[proxy]` is a *test-only* dependency because
+# `litellm_algenta.config`'s own code works standalone without litellm installed, `ray[serve]` /
+# `fastapi` / `httpx` are real, non-optional runtime dependencies here: `ray_serve_algenta
+# .deployment` cannot be imported, let alone deployed, without them -- there is no "config
+# generator that also works standalone" shape available for an actual running proxy process.
+#
+# `jinja2` is listed explicitly despite not being imported anywhere in this package's own source:
+# verified live against ray[serve]==2.58.0 on a clean venv, `ray.serve._private.haproxy` imports
+# `jinja2` unconditionally as soon as `ray.serve` itself is imported, but `ray[serve]`'s own
+# published extra does not declare it as a dependency -- `pip install "ray[serve]"` alone leaves
+# `import ray.serve` raising `ModuleNotFoundError: No module named 'jinja2'`. Reproduced directly,
+# not assumed from a changelog. Pinning it here means a caller who only does
+# `pip install ray-serve-algenta` doesn't have to rediscover that gap themselves.
+dependencies = [
+    "ray[serve]>=2.58.0",
+    "fastapi>=0.100",
+    "httpx>=0.27",
+    "jinja2>=3.1",
+]
+
+[project.urls]
+Homepage = "https://algenta.ai"
+Documentation = "https://docs.algenta.ai"
+Repository = "https://github.com/thyn-ai/algenta-integrations"
+
+[project.optional-dependencies]
+# `fastmcp` (full, server-side) backs the test suite's stub Algenta MCP server
+# (tests/stub_server.py) -- a real server on a real socket, never a mock. Never imported by any
+# non-test module in this package. `pytest-asyncio` drives the async conformance tests.
+dev = [
+    "pytest",
+    "pytest-asyncio>=0.24",
+    "fastmcp>=3.4",
+]
+
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["ray_serve_algenta*"]
+
+[tool.setuptools.package-data]
+ray_serve_algenta = ["py.typed"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+# ray.serve's own internals (not this package's code) construct several of their internal
+# pydantic config models using an extra-kwargs Field() pattern pydantic 2.13 has deprecated --
+# real, verified noise from ray==2.58.0's source, not from anything in ray_serve_algenta itself.
+filterwarnings = [
+    "ignore:Using extra keyword arguments on `Field`:DeprecationWarning",
+]
