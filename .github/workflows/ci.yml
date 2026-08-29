@@ -162,6 +162,19 @@ jobs:
         with:
           # Matches the "packageManager" pin shared by every typescript/*/package.json workspace.
           version: 9
+      # n8n-workflow (a peer dependency of typescript/n8n-nodes-algenta) transitively depends on
+      # @n8n/expression-runtime -> isolated-vm, a native addon that runs `node-gyp rebuild` at
+      # install time. A live run on this fleet failed with the literal error
+      # "/bin/sh: 1: node-gyp: not found" -- the shared runner image is not guaranteed to carry a
+      # C++ toolchain or a global node-gyp binary for every repo that never needed one before this
+      # workspace existed. Installed unconditionally (idempotent either way -- apt and npm both
+      # no-op cleanly when a package is already at the requested state) rather than guarded behind
+      # a presence check, so this doesn't silently stop working if the image's contents change.
+      - name: Ensure a native-addon build toolchain (python3, make, g++, node-gyp) is present
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends python3 make g++
+          npm install -g node-gyp
       # Workspace list is DISCOVERED, not hardcoded -- same reasoning as the `python` job's own
       # discovery loop above: a newly-added typescript/* workspace (its own package.json +
       # pnpm-workspace.yaml root, mirroring typescript/algenta-tools's layout) is picked up here
