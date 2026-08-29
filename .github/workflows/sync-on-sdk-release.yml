@@ -166,6 +166,32 @@ jobs:
       # entirely-scaffolded repo. Leaving this as a normal PR for a human
       # (or a separate, explicitly-approved auto-merge rule added later)
       # rather than assuming the convention transfers here by default.
+      # The shared fleet image doesn't ship the gh CLI and this runner has no passwordless sudo,
+      # so apt-get is not an option here -- install a static binary into a per-job dir instead.
+      # Discover os/arch from `uname` rather than hardcoding "linux_amd64", matching fleet-python's
+      # own "discover, never hardcode" precedent in this same repo.
+      - name: Ensure the GitHub CLI is available
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          if command -v gh >/dev/null 2>&1; then
+            echo "gh already on PATH: $(gh --version | head -1)"
+            exit 0
+          fi
+          os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+          arch="$(uname -m)"
+          case "$arch" in
+            x86_64) arch="amd64" ;;
+            aarch64|arm64) arch="arm64" ;;
+            *) echo "unsupported arch: $arch" >&2; exit 1 ;;
+          esac
+          version="2.98.0"
+          dest="$RUNNER_TEMP/gh-cli"
+          mkdir -p "$dest"
+          curl -fsSL "https://github.com/cli/cli/releases/download/v${version}/gh_${version}_${os}_${arch}.tar.gz" \
+            | tar -xz -C "$dest" --strip-components=1
+          echo "$dest/bin" >> "$GITHUB_PATH"
+
       - name: Open the version-bump PR
         if: steps.diff.outputs.changed == 'true'
         env:
