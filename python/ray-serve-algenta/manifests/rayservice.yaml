@@ -1,0 +1,108 @@
+# KubeRay RayService manifest for ray_serve_algenta.deployment.AlgentaMCPProxy.
+#
+# Prerequisites this file does NOT set up for you:
+#   - The KubeRay operator installed in your cluster (https://github.com/ray-project/kuberay).
+#   - A container image with `ray-serve-algenta` installed (see the commented `image:` fields
+#     below) -- this repository does not build or publish one.
+#   - A Secret named `algenta-mcp-upstream` in the target namespace with a key `base-url`
+#     holding YOUR OWN self-hosted Algenta engine's MCP endpoint (e.g.
+#     `http://algenta-engine.your-namespace.svc.cluster.local:8000/mcp`), and, if your engine
+#     requires one, an `Authorization` header configured on your engine's own ingress/gateway --
+#     this proxy forwards whatever headers a caller sends it straight through unchanged (see
+#     ray_serve_algenta/deployment.py), it does not inject credentials of its own.
+#
+# Self-hosted-only, matching every other package in this repository: there is no default upstream
+# baked into this manifest, on purpose -- `ALGENTA_BASE_URL` below is deliberately sourced from a
+# Secret you create, never a literal Algenta-hosted URL.
+apiVersion: ray.io/v1
+kind: RayService
+metadata:
+  name: algenta-mcp-proxy
+  labels:
+    app.kubernetes.io/name: algenta-mcp-proxy
+    app.kubernetes.io/part-of: algenta-integrations
+spec:
+  # Ray Serve's own zero-downtime rolling upgrade for the Serve application config below --
+  # unrelated to the RayCluster's own pod-level upgrade strategy (rayClusterConfig, further down).
+  serveConfigV2: |
+    applications:
+      - name: algenta-mcp-proxy
+        import_path: ray_serve_algenta.deployment:app
+        route_prefix: /
+        deployments:
+          - name: AlgentaMCPProxy
+            # >=2 always -- see ray_serve_algenta/deployment.py's module docstring for why a
+            # floor below 2 would defeat this package's entire purpose. Values below match this
+            # package's own shipped Python default (ray_serve_algenta.deployment
+            # ._DEFAULT_MIN_REPLICAS/_DEFAULT_MAX_REPLICAS/_DEFAULT_TARGET_ONGOING_REQUESTS) --
+            # repeated explicitly here, rather than left implicit, so an operator tuning replica
+            # counts edits ONE file (this manifest) without needing to also touch and redeploy
+            # the Python package to see the change take effect; serveConfigV2 deployment-level
+            # settings override the `@serve.deployment(...)`-decorated class's own defaults.
+            autoscaling_config:
+              min_replicas: 2
+              max_replicas: 8
+              target_ongoing_requests: 10
+            ray_actor_options:
+              # This proxy does no computation of its own -- it forwards bytes -- so it needs no
+              # GPU and very little CPU. Size workers to the requests/sec you actually expect;
+              # these are a conservative starting point, not a measured benchmark.
+              num_cpus: 0.5
+              memory: 268435456 # 256 MiB
+  rayClusterConfig:
+    rayVersion: "2.58.0" # matches the floor this package's own pyproject.toml pins (ray[serve]>=2.58.0)
+    headGroupSpec:
+      rayStartParams:
+        dashboard-host: "0.0.0.0"
+      template:
+        spec:
+          containers:
+            - name: ray-head
+              # Build this from a ray-project/ray base image with `ray-serve-algenta` installed
+              # (`pip install ray-serve-algenta` or your own internal build) -- no image is
+              # published by this repository.
+              image: your-registry.example.com/algenta-mcp-proxy:latest
+              resources:
+                requests:
+                  cpu: "500m"
+                  memory: "1Gi"
+                limits:
+                  cpu: "1"
+                  memory: "2Gi"
+              ports:
+                - containerPort: 6379
+                  name: gcs
+                - containerPort: 8265
+                  name: dashboard
+                - containerPort: 8000
+                  name: serve
+              env:
+                - name: ALGENTA_BASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: algenta-mcp-upstream
+                      key: base-url
+    workerGroupSpecs:
+      - groupName: proxy-workers
+        replicas: 2
+        minReplicas: 2
+        maxReplicas: 8
+        rayStartParams: {}
+        template:
+          spec:
+            containers:
+              - name: ray-worker
+                image: your-registry.example.com/algenta-mcp-proxy:latest
+                resources:
+                  requests:
+                    cpu: "250m"
+                    memory: "512Mi"
+                  limits:
+                    cpu: "1"
+                    memory: "1Gi"
+                env:
+                  - name: ALGENTA_BASE_URL
+                    valueFrom:
+                      secretKeyRef:
+                        name: algenta-mcp-upstream
+                        key: base-url
