@@ -1,0 +1,55 @@
+[project]
+name = "vllm-algenta"
+version = "0.1.0"
+description = "Point vLLM (or any OpenAI-client-based consumer) at Algenta's own OpenAI-compatible /v1/chat/completions and /v1/responses surface -- a thin base-url/api-key helper plus a real, honest capability-fidelity conformance suite"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+license-files = ["../../LICENSE"]
+keywords = ["algenta", "vllm", "openai", "openai-compatible", "agent", "decision"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Typing :: Typed",
+]
+# No `algenta-sdk` dependency, for the same reason as litellm-algenta (D4) and ray-serve-algenta
+# (D6): `vllm_algenta.client` never constructs an MCP client or calls a tool -- it only computes a
+# `base_url`/`api_key` pair for the standard `openai` client, which is itself the one real
+# framework dependency this package needs (the direction this package builds is "an OpenAI-client
+# -shaped consumer talks to Algenta's own HTTP API", not "Algenta talks out to a vLLM-hosted
+# model" -- see README for why the reverse direction isn't buildable in this repository at all).
+dependencies = [
+    "openai>=1.50",
+]
+
+[project.urls]
+Homepage = "https://algenta.ai"
+Documentation = "https://docs.algenta.ai"
+Repository = "https://github.com/thyn-ai/algenta-integrations"
+
+[project.optional-dependencies]
+# `fastapi` + `uvicorn` back the test suite's stub Algenta HTTP server (tests/stub_server.py) --
+# a real server on a real socket, never a mock. `httpx` drives the /v1/responses SSE assertions
+# directly (bypassing the openai SDK's own event parsing -- see that test file's module
+# docstring for why). Never imported by any non-test module in this package.
+dev = [
+    "pytest",
+    "fastapi>=0.100",
+    "uvicorn>=0.30",
+    "httpx>=0.27",
+]
+
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["vllm_algenta*"]
+
+[tool.setuptools.package-data]
+vllm_algenta = ["py.typed"]
