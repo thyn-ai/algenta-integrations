@@ -203,6 +203,7 @@ class StubServerFixture:
     def __init__(self) -> None:
         self._sock: socket.socket | None = None
         self._task: asyncio.Task[None] | None = None
+        self._server: Any = None
         self.base_url: str = ""
 
     async def __aenter__(self) -> StubServerFixture:
@@ -219,6 +220,7 @@ class StubServerFixture:
         app = mcp.streamable_http_app()
         config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning")
         server = uvicorn.Server(config)
+        self._server = server
         self._task = asyncio.create_task(server.serve(sockets=[sock]))
         await _wait_until_serving(port)
         self.base_url = f"http://127.0.0.1:{port}/mcp"
@@ -226,9 +228,23 @@ class StubServerFixture:
 
     async def __aexit__(self, *exc_info: object) -> None:
         assert self._task is not None
-        self._task.cancel()
+        # `server.should_exit = True` asks uvicorn's own serve loop to return on its next
+        # iteration -- a clean shutdown ASGI `lifespan.shutdown` sees coming, unlike
+        # `task.cancel()`, which interrupts uvicorn's lifespan handling mid-`await` and makes it
+        # log a spurious `CancelledError` traceback on every teardown (harmless, but exactly the
+        # kind of noise a real end user running this fixture themselves -- see the README's "Try
+        # it locally" section -- shouldn't have to explain away). Falls back to a hard cancel if
+        # the server doesn't exit promptly, so teardown still can't hang.
+        if self._server is not None:
+            self._server.should_exit = True
         try:
-            await self._task
+            await asyncio.wait_for(self._task, timeout=5.0)
+        except asyncio.TimeoutError:
+            self._task.cancel()
+            try:
+                await self._task
+            except (asyncio.CancelledError, Exception):
+                pass
         except (asyncio.CancelledError, Exception):
             pass
         if self._sock is not None:
