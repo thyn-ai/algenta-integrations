@@ -1806,9 +1806,9 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "haystack-ai", specifier = ">=3.0.0" },
-    { name = "mcp", specifier = ">=1.29.0" },
-    { name = "mcp-haystack", specifier = ">=1.4.0" },
+    { name = "haystack-ai", specifier = ">=3.0.0,<3.2.0" },
+    { name = "mcp", specifier = ">=1.29.0,<2.0.0" },
+    { name = "mcp-haystack", specifier = ">=1.4.0,<1.6.0" },
     { name = "pytest", marker = "extra == 'dev'" },
     { name = "uvicorn", marker = "extra == 'dev'", specifier = ">=0.34" },
 ]
