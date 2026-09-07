@@ -6,12 +6,12 @@
 	"resources": {
 		"credentialDocumentation": [
 			{
-				"url": "https://docs.algenta.ai/sdk/mcp"
+				"url": "https://docs.algenta.ai/sdks/mcp"
 			}
 		],
 		"primaryDocumentation": [
 			{
-				"url": "https://docs.algenta.ai/sdk/mcp"
+				"url": "https://docs.algenta.ai/sdks/mcp"
 			}
 		]
 	}
