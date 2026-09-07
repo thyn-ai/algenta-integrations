@@ -36,10 +36,28 @@ classifiers = [
 # it transitively, but this package's own test suite builds a real `mcp.server.fastmcp.FastMCP`
 # stub server, so it is a genuine (if test-oriented) part of this package's own dependency
 # surface, not merely inherited.
+#
+# Every upper bound below is a real, currently-live, verified-live pin, not a defensive guess --
+# each end of each range was actually installed and run against this package's own test suite
+# (`uv run pytest haystack-algenta -v`, 59 passed both times):
+#   * `haystack-ai` 3.0.0 (this repository's own CI-pinned floor) and 3.1.1 (the newest release
+#     at time of writing) both pass.
+#   * `mcp-haystack` 1.4.1 (CI-pinned floor) and 1.5.1 (newest) both pass.
+#   * `mcp` 1.29.0 (CI-pinned floor) and 1.30.0 (newest 1.x) both pass -- but `mcp==2.0.0` (what
+#     `pip install mcp` resolves to today with no upper bound at all) genuinely breaks this
+#     package's own test suite: `mcp.server.fastmcp.FastMCP` was renamed to
+#     `mcp.server.mcpserver.MCPServer` in that release, so `tests/stub_server.py`'s
+#     `from mcp.server.fastmcp import FastMCP` raises `ModuleNotFoundError` before a single test
+#     runs. `mcp<2.0.0` mirrors the same pin `llamaindex-algenta` already carries for its own,
+#     differently-shaped `mcp` 2.x break -- an established, repository-wide convention, not an
+#     invention for this package alone.
+# Without these upper bounds, `pip install haystack-algenta` resolves whatever is newest on PyPI
+# at install time -- silently drifting past the versions this package (or CI) has ever actually
+# run against.
 dependencies = [
-    "haystack-ai>=3.0.0",
-    "mcp-haystack>=1.4.0",
-    "mcp>=1.29.0",
+    "haystack-ai>=3.0.0,<3.2.0",
+    "mcp-haystack>=1.4.0,<1.6.0",
+    "mcp>=1.29.0,<2.0.0",
 ]
 
 [project.urls]

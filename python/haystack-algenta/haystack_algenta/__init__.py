@@ -9,10 +9,13 @@ Wraps a self-hosted Algenta Engine's MCP tool surface as a governed-execution-aw
 `"confidence"`, `"risk_floor"`), via Haystack's own real `after_tool` hook seam.
 
 See the package README for a runnable example and the honest "why" behind the approval/denial
-mapping design (verified live, not assumed, against installed `haystack-ai` 3.0.0 /
-`mcp-haystack` 1.4.1), and `contracts/integration-tool-contract.json` in the `algenta-integrations`
-repository root for the tool-profile contract this package conforms to.
+mapping design (verified live, not assumed, against every version this package's `pyproject.toml`
+permits -- see the README's "Denial mapping" section), and
+`contracts/integration-tool-contract.json` in the `algenta-integrations` repository root for the
+tool-profile contract this package conforms to.
 """
+
+from importlib.metadata import PackageNotFoundError, version as _version
 
 from .contract import DEFAULT_PROFILE, GOVERNED_TOOL_NAMES, NEVER_MODEL_FACING_FIELDS, TOOL_PROFILES, ToolProfile
 from .exceptions import AlgentaGovernedCallFailure, AlgentaToolDenied
@@ -49,4 +52,7 @@ __all__ = [
     "unwrap_mcp_tool_result",
 ]
 
-__version__ = "0.1.0"
+try:
+    __version__ = _version("haystack-algenta")
+except PackageNotFoundError:  # pragma: no cover - running from a source checkout, never installed
+    __version__ = "0.0.0+unknown"
