@@ -19,8 +19,9 @@
   ],
   "scripts": {
     "build": "tsup",
-    "lint": "tsc --noEmit",
-    "test": "vitest run"
+    "lint": "tsc --noEmit && tsc --noEmit -p examples",
+    "test": "vitest run",
+    "example": "tsx examples/try-it-locally.ts"
   },
   "keywords": [
     "algenta",
@@ -54,6 +55,7 @@
     "@types/node": "^26.0.0",
     "ai": "^7.0.77",
     "tsup": "^8.5.1",
+    "tsx": "^4.23.13",
     "typescript": "~5.6.3",
     "vitest": "^4.1.11",
     "zod": "^4.4.3"

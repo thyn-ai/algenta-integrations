@@ -18,14 +18,55 @@ ready to pass to `generateText` / `streamText` / an `Agent`. It layers on:
   [`ExecutionBlockedError`](./src/receipts.ts) thrown from `execute()`, carrying the engine's real
   named safety gate. See [Executing a decision](#executing-a-decision) below for the full mapping.
 
+## Prerequisites
+
+- **Node.js 22 or later.**
+- **Your own running, self-hosted Algenta Engine**, reachable over HTTP — `createAlgentaTools`
+  never talks to any Algenta-hosted service (see [Self-hosted-only](#self-hosted-only) below). If
+  you don't have one running yet, skip to [Try it locally](#try-it-locally-no-live-engine-required)
+  below — it exercises this package's real tool listing, schemas, and receipt shapes against a
+  local stub server instead, no engine required.
+- **A model provider configured for the AI SDK** (an API key such as `OPENAI_API_KEY`, set however
+  your chosen [AI SDK provider](https://ai-sdk.dev/providers/ai-sdk-providers) expects it) — only
+  needed once you get to an actual `generateText` / `streamText` call in [Quickstart](#quickstart)
+  below; nothing before that requires one.
+
 ## Install
+
+`algenta-tools` is not yet published to npm — install it from source until it is.
+
+### Install from source
+
+```bash
+git clone https://github.com/thyn-ai/algenta-integrations.git
+cd algenta-integrations/typescript/algenta-tools
+pnpm install
+pnpm --filter algenta-tools build
+cd packages/algenta-tools
+pnpm pack   # writes algenta-tools-<version>.tgz in this directory
+```
+
+Then, from your own project:
+
+```bash
+npm install /path/to/algenta-integrations/typescript/algenta-tools/packages/algenta-tools/algenta-tools-<version>.tgz ai zod
+```
+
+(swap in whichever package manager your project already uses — `pnpm add`/`yarn add` accept a
+local tarball path the same way).
+
+### Once published to npm
 
 ```bash
 npm install algenta-tools ai zod
 ```
 
-`ai` (`^7.0.0`) and `zod` (`^4.0.0`) are peer dependencies — you already have them in any project
-using the AI SDK. This package's only real dependency is
+This will replace the source install above once the first release goes out — track it via the
+[Status](https://github.com/thyn-ai/algenta-integrations/blob/main/README.md#status--roadmap)
+section of the repository root README.
+
+Either way, `ai` (`^7.0.0`) and `zod` (`^4.0.0`) are peer dependencies — you already have them in
+any project using the AI SDK. This package's only real dependency is
 [`@ai-sdk/mcp`](https://www.npmjs.com/package/@ai-sdk/mcp), the AI SDK's own current MCP client
 package (see [Why `@ai-sdk/mcp` and not `ai`](#why-ai-sdkmcp-and-not-ai-itself) below). It does
 **not** depend on the published `algenta-sdk` npm package — that package is a thin HTTP/gRPC
@@ -36,16 +77,21 @@ constants](#why-not-reuse-algenta-sdks-mcp_endpointdefault_base_url-constants) b
 overlap that was considered and rejected). This package never depends on, imports, or bundles any
 part of the Algenta Engine itself.
 
-## Self-hosted-first
+## Self-hosted-only
 
-`createAlgentaTools` talks to **your own self-hosted Algenta Engine** over its MCP endpoint —
-never a hosted-by-Algenta cloud service. The endpoint resolves, in order, from:
+`createAlgentaTools` talks to **your own self-hosted Algenta Engine** over its MCP endpoint. There
+is no Algenta-hosted cloud service for it to fall back to — the endpoint always resolves to
+somewhere you run, in this order:
 
 1. `baseUrl` passed to `createAlgentaTools`,
 2. the `ALGENTA_BASE_URL` environment variable,
 3. `http://localhost:8000/mcp` (the default for a local self-hosted engine).
 
-## Quick start
+## Quickstart
+
+Needs a running self-hosted engine and a configured model provider — see
+[Prerequisites](#prerequisites) above. No engine yet? See [Try it
+locally](#try-it-locally-no-live-engine-required) below instead.
 
 ```ts
 import { streamText } from "ai";
@@ -68,6 +114,32 @@ See [Tool profiles](#tool-profiles) to opt into more.
 Every other tool's result is returned as its own real, freeform response body (a plain
 pass-through). `execute_decision` is the one exception — see [Executing a
 decision](#executing-a-decision) below.
+
+## Try it locally (no live engine required)
+
+Everything in this package except an actual model turn can be exercised without a live Algenta
+Engine, using the same stub MCP server this package's own test suite runs against
+(`src/test-support/stub-server.ts`). This needs a clone of this repository (see [Install from
+source](#install-from-source) above) — the stub server isn't part of the published package.
+
+```bash
+cd algenta-integrations/typescript/algenta-tools
+pnpm install
+pnpm --filter algenta-tools example
+```
+
+That runs [`examples/try-it-locally.ts`](./examples/try-it-locally.ts), which:
+
+1. starts the stub server and connects `createAlgentaTools` to it like a real engine,
+2. lists the real tool names in the `observe` and `execute` profiles,
+3. prints `execute_decision`'s real advertised schema, showing `force`/`override_safety` already
+   stripped,
+4. calls `log_decision` and `execute_decision` for real and prints the real
+   `ExecutionReceipt`, and
+5. calls `execute_decision` again on the same `decision_id` and prints the real
+   `ExecutionBlockedError` this produces (the `"idempotency"` gate).
+
+Swap the stub's URL for your own engine's and the same code talks to the real thing.
 
 ## Tool profiles
 
@@ -167,7 +239,7 @@ directly rather than assuming it ships bundled inside `ai`.
 The published `algenta-sdk` package exports `DEFAULT_BASE_URL` (`https://api.algenta.ai`) and
 `MCP_ENDPOINT` (`https://api.algenta.ai/mcp`) — checked directly against the installed package
 while building this integration. Both point at Algenta's **hosted cloud** endpoint, which is
-exactly the default this package must never use (see [Self-hosted-first](#self-hosted-first)
+exactly the default this package must never use (see [Self-hosted-only](#self-hosted-only)
 above and the contract's `self_hosted_only_note`). `createAlgentaTools` therefore defines its own
 `DEFAULT_ALGENTA_BASE_URL = "http://localhost:8000/mcp"`, matching the sibling
 `pydantic-ai-algenta` package's own default, instead of importing a constant from `algenta-sdk`
@@ -220,3 +292,6 @@ cd typescript/algenta-tools
 pnpm install
 pnpm --filter algenta-tools test
 ```
+
+For a hands-on, interactive walkthrough instead of the automated suite, see [Try it
+locally](#try-it-locally-no-live-engine-required) above.
