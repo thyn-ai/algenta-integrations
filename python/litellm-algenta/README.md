@@ -26,6 +26,20 @@ What this package ships instead:
   against a real stub Algenta MCP server and asserts against the gateway's actual HTTP behavior --
   see [Testing this package](#testing-this-package).
 
+## Prerequisites
+
+- **A self-hosted Algenta Engine, already running and reachable.** This package only generates
+  and validates a config fragment that points at it -- it never runs an engine for you, and it
+  never talks to any Algenta-operated service. There is no Algenta-hosted API and no Algenta
+  account to sign up for.
+- **That engine's MCP endpoint URL and bearer credential** (or OAuth2 client credentials, if
+  your engine uses those instead) -- set as environment variables, never as literal values in a
+  config file (see [Self-hosted-first](#self-hosted-first) below).
+- **Python 3.10+.**
+- **`litellm[proxy]`, installed separately, only once you're ready to actually run the gateway**
+  (see [Install](#install) below) -- generating and linting a config needs nothing but this
+  package itself.
+
 ## Install
 
 ```bash
@@ -41,6 +55,10 @@ deployment). Running the gateway yourself needs `litellm[proxy]` separately:
 ```bash
 pip install 'litellm[proxy]'
 ```
+
+This one pulls in LiteLLM's full proxy-server dependency tree (the proxy server itself, database
+clients, and other packages the gateway process needs) -- several hundred MB and a minute or more
+to install, not a mistake or a hang.
 
 ## Self-hosted-first
 
@@ -79,11 +97,51 @@ export ALGENTA_MCP_TOKEN="..."
 litellm --config config.yaml --port 4000
 ```
 
+Or use the bundled command-line interface, which does the same thing as the Python snippet above
+without writing any Python:
+
+```bash
+python -m litellm_algenta.config --profile observe --server-name algenta --merge-into config.yaml
+```
+
+```
+merged mcp_servers.algenta (observe profile) into config.yaml
+```
+
+Leave off `--merge-into` to print the generated YAML to stdout instead of writing it to a file, or
+run `python -m litellm_algenta.config --help` for the full flag list (`--base-url-env-var`,
+`--auth-type`, `--token-env-var`, `--no-lint`).
+
 Either way, once the gateway is running, a caller talks to it exactly like any other MCP server --
 over the native aggregate `/mcp` endpoint (tool names get the server name prefixed, e.g.
 `algenta-query_data`) or LiteLLM's own REST convenience API (`GET /mcp-rest/tools/list`,
 `POST /mcp-rest/tools/call`) -- this package does not sit on that call path at all once the
 gateway is configured; there is nothing left for it to do at request time.
+
+## Try it locally (no engine, no LLM provider key required)
+
+Don't have a self-hosted Algenta Engine running yet? [`examples/try_it_locally.py`](./examples/try_it_locally.py)
+is the closest thing to a zero-setup demo. It starts a real `litellm` proxy in front of a real
+(but fake-data) stub Algenta MCP server -- the same fixtures this package's own test suite uses
+(`tests/stub_server.py`, `tests/proxy_fixture.py`) -- and drives both over real HTTP, so you can
+see the profile enforcement actually work before you have an engine or an LLM provider key:
+
+```bash
+cd python
+uv sync --all-packages --all-extras   # installs the dev extras: litellm[proxy], fastmcp, httpx
+uv run python litellm-algenta/examples/try_it_locally.py
+```
+
+Real output (trimmed):
+
+```
+Tools visible under the 'observe' profile: ['get_contract', 'query_data', 'recommend', 'simulate']
+query_data(dataset='demo') -> {"dataset": "demo", "rows": [{"value": 1}, {"value": 2}]}
+Calling execute_decision anyway (bypassing the filtered tool list) -> HTTP 403 (refused by the gateway itself, not this package)
+```
+
+It stops there -- there is no real engine or LLM in this loop, so it cannot run an actual chat
+completion. Point `ALGENTA_MCP_URL` at your own running engine (Quick start, above) to go further.
 
 ## Tool profiles
 
