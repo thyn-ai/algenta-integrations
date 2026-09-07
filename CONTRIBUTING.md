@@ -28,7 +28,7 @@ This repository is a scaffold. No framework integration is implemented yet
 | Area | Status | Notes |
 |------|--------|-------|
 | `python/pydantic-ai-algenta/` | 🚧 Scaffolded, implementation pending | |
-| `python/langchain-algenta/` | 🚧 Scaffolded, implementation pending | |
+| `python/langchain-algenta/` | ✅ Implemented | See [its README](./python/langchain-algenta/README.md) and the root [README's status table](./README.md#status--roadmap) (D3) |
 | `python/litellm-algenta/` | 🚧 Scaffolded, implementation pending | |
 | `typescript/algenta-tools/` | 🚧 Scaffolded, implementation pending | |
 | `contracts/integration-tool-contract.json` | ✅ Open | The shared tool-profile contract every package must conform to |
