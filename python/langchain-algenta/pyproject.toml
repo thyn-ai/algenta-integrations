@@ -49,6 +49,16 @@ Repository = "https://github.com/thyn-ai/algenta-integrations"
 # server, not a mock of `AlgentaToolCallInterceptor`'s internals. `httpx` is likewise already
 # transitive (via `mcp`) but is listed explicitly since a test constructs an `httpx.Auth` value.
 dev = ["pytest", "pytest-asyncio", "mcp>=1.29.0", "httpx>=0.27"]
+# The full `langchain` metapackage is deliberately NOT a runtime dependency of this package --
+# see the "Install" section of the README for why (`create_algenta_tools` only ever needs the
+# lightweight `langchain-core`, already declared above). The README's own Quick start builds its
+# agent with `langchain.agents.create_agent`, which does need the full package; `pip install
+# langchain-algenta[quickstart]` is a convenience for readers following that example, not a
+# requirement for using `create_algenta_tools` itself. Floor verified against this package's real
+# APIs while fixing this: `langchain` 1.4.0 (which pulls in `langgraph` 1.2.11 transitively --
+# via `langchain` itself, not via anything this package's own source imports; see "Why no
+# `langgraph` dependency" in the README).
+quickstart = ["langchain>=1.4.0"]
 
 [build-system]
 requires = ["setuptools>=68.0", "wheel"]
