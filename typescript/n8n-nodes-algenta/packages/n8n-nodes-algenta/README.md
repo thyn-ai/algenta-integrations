@@ -129,12 +129,17 @@ it — not a mock of the SDK's internals.
 
 ## License
 
-This package's `package.json` declares `"license": "MIT"`, while the rest of this repository
-(the root [LICENSE](../../../../LICENSE), [NOTICE](../../../../NOTICE), and the workspace root
-`package.json`) is Apache-2.0. That is not an oversight: n8n's own community-node verification
-lint (`n8n-nodes-base/community-package-json-license-not-default`, wired into this package's own
-`pnpm lint` and run on every CI build) hard-fails unless this field is exactly `MIT` on any
-package carrying the `n8n-community-node-package` keyword — setting it to `Apache-2.0` breaks
-`pnpm lint` immediately. Which license actually governs this package's published code is a
-real open question this README cannot answer on its own; it is called out explicitly here so the
-repository's maintainers resolve it deliberately rather than it being silently inconsistent.
+This package's `package.json` declares `"license": "Apache-2.0"`, matching the rest of this
+repository (the root [LICENSE](../../../../LICENSE), [NOTICE](../../../../NOTICE), and the
+workspace root `package.json`).
+
+n8n's own community-node verification lint
+(`n8n-nodes-base/community-package-json-license-not-default`) hard-requires this field to read
+exactly `MIT` on any package carrying the `n8n-community-node-package` keyword — this package
+deliberately does not comply, and that rule is turned off in `eslint.config.mjs` with a comment
+explaining why. This is a deliberate, informed choice: org-wide license consistency across every
+package in this repository was judged more important than eligibility for n8n's official
+community-node registry listing. The practical consequence is that this node likely cannot be
+submitted to or discovered through that registry, but it remains a fully real, tested, installable
+community node for self-hosted n8n via direct install (`npm install`, or building from source —
+see "Development" above).
