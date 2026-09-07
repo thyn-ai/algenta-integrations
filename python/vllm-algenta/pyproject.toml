@@ -1,6 +1,6 @@
 [project]
 name = "vllm-algenta"
-version = "0.1.0"
+version = "0.1.1"
 description = "Point vLLM (or any OpenAI-client-based consumer) at Algenta's own OpenAI-compatible /v1/chat/completions and /v1/responses surface -- a thin base-url/api-key helper plus a real, honest capability-fidelity conformance suite"
 readme = "README.md"
 requires-python = ">=3.10"
