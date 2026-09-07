@@ -13,6 +13,6 @@
     "resolveJsonModule": true,
     "types": ["node"]
   },
-  "include": ["credentials/**/*.ts", "nodes/**/*.ts", "src/**/*.ts"],
+  "include": ["index.ts", "credentials/**/*.ts", "nodes/**/*.ts", "src/**/*.ts"],
   "exclude": ["**/*.test.ts", "test/**/*"]
 }

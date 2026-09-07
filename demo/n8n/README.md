@@ -6,6 +6,21 @@ decision, attempts to execute it, and branches on whether the connected engine's
 that execution — the same success/denial shapes `n8n-nodes-algenta`'s own test suite exercises
 against a real MCP server, not an invented example.
 
+## What you need before importing this
+
+- **n8n**, running locally or wherever you already run it. Don't have it yet? The node package's
+  own [Quickstart](../../typescript/n8n-nodes-algenta/packages/n8n-nodes-algenta/README.md#quickstart)
+  gets you a local n8n editor with the Algenta node already installed, in one `pnpm` command.
+- **A running self-hosted Algenta Engine**, reachable over HTTP from wherever n8n runs (e.g.
+  `http://localhost:8000` for a local n8n talking to a local engine). This workflow calls that
+  engine directly — there is no hosted-by-Algenta alternative to point it at instead. See
+  [Self-host the engine](https://docs.algenta.ai/deploy-and-operate/self-hosting) if you don't have
+  one running yet.
+- An **API key** for that engine, only if it enforces authentication.
+
+Without a reachable engine, importing still works, but running the workflow fails at
+`Log Decision` with a plain connection error — expected, and not a sign anything here is broken.
+
 ## Import it
 
 1. In n8n: **Workflows → Import from File** (or **Import from URL** if hosting this file), and
