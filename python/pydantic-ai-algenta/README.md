@@ -46,22 +46,98 @@ never a hosted-by-Algenta cloud service. The endpoint resolves, in order, from:
 
 ## Quick start
 
+**Prerequisites:**
+
+- A running self-hosted Algenta Engine, reachable over MCP -- defaults to
+  `http://localhost:8000/mcp`; point elsewhere via `ALGENTA_BASE_URL` or the constructor's
+  `base_url=`. No Algenta account or Algenta-issued API key is ever needed: Algenta isn't a
+  hosted service you sign up for.
+- An API key for whichever model you pass to `Agent(...)` -- the example below uses
+  `"openai:gpt-5"`, which needs `OPENAI_API_KEY` set in your environment.
+
+Don't have a self-hosted engine running yet? [Try it locally](#try-it-locally-no-live-engine-required)
+below runs the same toolset end to end with neither an engine nor a model API key.
+
 ```python
+import asyncio
+
 from pydantic_ai import Agent
 from pydantic_ai_algenta import AlgentaToolset
 
-# Talks to your own self-hosted engine (ALGENTA_BASE_URL, or the constructor arg below).
-toolset = AlgentaToolset(base_url="http://localhost:8000/mcp", profile="observe")
 
-agent = Agent("openai:gpt-5", toolsets=[toolset])
+async def main() -> None:
+    # Talks to your own self-hosted engine (ALGENTA_BASE_URL, or the constructor arg below).
+    toolset = AlgentaToolset(base_url="http://localhost:8000/mcp", profile="observe")
+    agent = Agent("openai:gpt-5", toolsets=[toolset])
 
-result = await agent.run("What's the expected value of scenario X?")
-print(result.output)
+    result = await agent.run("What's the expected value of scenario X?")
+    print(result.output)
+
+
+asyncio.run(main())
 ```
+
+Already inside an async context (a notebook cell, an async web handler)? Drop
+`asyncio.run(main())` and `await main()` (or inline `main`'s body) instead --
+[`asyncio.run`](https://docs.python.org/3/library/asyncio-runner.html#asyncio.run) is only valid
+at the top level of a plain script.
 
 `profile="observe"` is also the default if you omit it -- the agent can call
 `get_contract` / `query_data` / `simulate` / `recommend`, and nothing that plans, logs, or
 executes anything. See [Tool profiles](#tool-profiles) to opt into more.
+
+## Try it locally (no live engine required)
+
+This repository's test suite includes a real stub Algenta MCP server
+([`tests/stub_server.py`](./tests/stub_server.py)) -- a genuine
+[`fastmcp.FastMCP`](https://gofastmcp.com) server over a real local HTTP socket, not a mock --
+plus [`TestModel`](https://ai.pydantic.dev/api/models/test/), a real pydantic-ai model that
+scripts an agent's tool-calling deterministically without calling any LLM provider. Together
+they let you run a full `AlgentaToolset` agent turn with **no self-hosted engine and no model
+API key**, straight from a checkout of this repository:
+
+```bash
+git clone https://github.com/thyn-ai/algenta-integrations
+cd algenta-integrations/python
+uv sync --package pydantic-ai-algenta --all-extras
+uv run --package pydantic-ai-algenta python pydantic-ai-algenta/local_demo.py
+```
+
+[`local_demo.py`](./local_demo.py) is a short, real script (not a snippet to paste) that starts
+the stub server, points an `AlgentaToolset` at it, and runs one scripted agent turn:
+
+```python
+import asyncio
+
+from pydantic_ai import Agent
+from pydantic_ai.models.test import TestModel
+from pydantic_ai_algenta import AlgentaToolset
+from tests.stub_server import StubServerFixture  # this repo's own test stub; not part of the published package
+
+
+async def main() -> None:
+    async with StubServerFixture() as server:
+        toolset = AlgentaToolset(base_url=server.base_url, profile="observe")
+        # TestModel scripts which tool gets called -- no OPENAI_API_KEY, no network call to
+        # any LLM provider. Swap in a real model (e.g. Agent("openai:gpt-5", ...)) once you
+        # have both a live engine and a model API key -- see Quick start above.
+        agent = Agent(TestModel(call_tools=["recommend"]), toolsets=[toolset])
+
+        result = await agent.run("What should we do about scenario X?")
+        print(result.output)
+
+
+asyncio.run(main())
+```
+
+Running it prints a real tool result from the stub server, e.g.
+`{"recommend":{"scenario":"a","recommended_action":"hold","confidence":0.87}}`. (You may also
+see a harmless `asyncio.exceptions.CancelledError` traceback logged during the stub server's
+shutdown, after the printed result -- that's the demo tearing down its local HTTP server, not a
+failure.)
+
+`local_demo.py` isn't part of the published `pydantic-ai-algenta` PyPI package -- it imports
+`tests.stub_server`, which only exists in a checkout of this repository.
 
 ## Tool profiles
 
