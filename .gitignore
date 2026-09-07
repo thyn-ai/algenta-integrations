@@ -17,6 +17,7 @@ node_modules/
 npm-debug.log*
 .turbo/
 .pnpm-store/
+*.tgz
 
 # Editors / OS
 .vscode/
