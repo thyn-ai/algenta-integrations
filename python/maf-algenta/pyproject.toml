@@ -19,19 +19,20 @@ classifiers = [
 ]
 # NOT `algenta-sdk`. This package never imports it: `create_algenta_tools` talks to the caller's
 # self-hosted Algenta MCP endpoint directly via `agent_framework.MCPStreamableHTTPTool`, the same
-# reason `typescript/algenta-tools` (D2) has no `algenta-sdk` dependency either (see the root
+# reason `typescript/algenta-tools` has no `algenta-sdk` dependency either (see the root
 # README's "Every package may depend on at most one Algenta-owned thing" paragraph) -- declaring
-# it anyway would be exactly the leftover-placeholder-dependency mistake an adversarial review
-# caught on this repository's other packages; see this package's own README for the full note.
+# it anyway would repeat a leftover-placeholder-dependency mistake already caught and fixed
+# elsewhere in this repository; see this package's own README for the full note.
 #
 # `agent-framework-core` (real PyPI package, 1.15.0 confirmed installed and exercised while
 # building this package), not the `agent-framework` umbrella package -- verified directly against
 # PyPI metadata that `agent-framework==1.15.0`'s *only* dependency is `agent-framework-core[all]`,
 # whose `[all]` extra unconditionally drags in the Foundry-hosting bridge
 # (`agent-framework-foundry-hosting`) and pre-release `azure-ai-agentserver-*` packages this
-# package has no use for and does not want on its dependency graph (Part A of this track is MAF
-# standalone -- no Azure/Foundry adapters; see `foundry/README.md` for the deliberately separate
-# Part B). `agent-framework-core` with no extras provides every symbol this package actually
+# package has no use for and does not want on its dependency graph -- this package covers MAF
+# running standalone, with no Azure or Foundry adapters involved; see `foundry/README.md` for the
+# separate, documentation-only Foundry integration notes. `agent-framework-core` with no extras
+# provides every symbol this package actually
 # imports (`MCPStreamableHTTPTool`, `FunctionTool`, `MiddlewareFailure`, `Agent`, ...) -- verified
 # directly: `pip install agent-framework-core` alone (no `mcp` extra either -- see below) resolves
 # cleanly with only ordinary, non-pre-release dependencies.
@@ -43,9 +44,30 @@ classifiers = [
 # primary code path always builds and connects one, this package must declare `mcp` itself or
 # risk an `ImportError` at the caller's runtime that this package's own `pyproject.toml` should
 # have prevented.
+#
+# Capped at `<2`: `mcp` 2.x renamed its `mcp.server.fastmcp.FastMCP` server class to
+# `mcp.server.mcpserver.MCPServer` (confirmed directly against the installed 2.2.0 package's own
+# `ModuleNotFoundError` message, which names the rename and its migration guide), which
+# `tests/stub_server.py`'s local, offline stand-in for a self-hosted Algenta MCP endpoint is built
+# on -- so `mcp` 2.x breaks this package's own test suite and its README's "Try it locally"
+# example on a fresh install today. This isn't an arbitrary choice: `agent-framework-core`'s own
+# `[all]` extra caps its own optional `mcp` dependency at exactly `mcp>=1.24.0,<2` for the same
+# reason (confirmed directly against its installed metadata) -- this package's ceiling matches the
+# one its own upstream MCP dependency has already verified.
+#
+# `httpx` is a real, non-optional runtime dependency for the same reason, verified live from a
+# from-scratch `pip install maf-algenta`: `agent_framework._mcp`'s `MCPStreamableHTTPTool.connect()`
+# -- the exact call `create_algenta_tools`'s primary code path always makes -- imports `httpx`
+# directly, and neither `agent-framework-core` nor `mcp` installs it as of their currently
+# published releases (`mcp`'s own dependency moved to `httpx2`, a separate, newer package from the
+# same author, not a version of `httpx` itself). Without this line, `pip install maf-algenta`
+# resolves cleanly and only fails once a caller actually tries to connect, with a confusing
+# `ModuleNotFoundError: No module named 'httpx'` this package's own `pyproject.toml` should have
+# prevented -- see the README's "Why `httpx`" section.
 dependencies = [
     "agent-framework-core>=1.15.0",
-    "mcp>=1.29.0",
+    "mcp>=1.29.0,<2",
+    "httpx>=0.27",
 ]
 
 [project.urls]
