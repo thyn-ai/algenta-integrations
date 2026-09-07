@@ -21,6 +21,8 @@ honest accounting of what LiteLLM's gateway does and doesn't enforce natively.
 
 from __future__ import annotations
 
+from importlib.metadata import PackageNotFoundError, version as _pkg_version
+
 from . import contract
 from .config import (
     AuthType,
@@ -35,12 +37,24 @@ from .config import (
     render_yaml,
 )
 
+try:
+    # Read from the installed distribution's metadata (populated from pyproject.toml's
+    # [project].version at build time) instead of a second hardcoded literal here -- the two
+    # already drifted apart in sibling packages in this repo (a hardcoded __version__ left
+    # unchanged while pyproject.toml moved on), which is exactly the class of bug this avoids.
+    __version__ = _pkg_version("litellm-algenta")
+except PackageNotFoundError:
+    # Not installed (e.g. running straight from a source checkout with no editable install) --
+    # fall back to a clearly-marked placeholder rather than a guessed version number.
+    __version__ = "0.0.0+unknown"
+
 __all__ = [
     "AuthType",
     "ConfigError",
     "DEFAULT_BASE_URL_ENV_VAR",
     "DEFAULT_SERVER_NAME",
     "DEFAULT_TOKEN_ENV_VAR",
+    "__version__",
     "assert_safe",
     "build_mcp_server_entry",
     "contract",
