@@ -15,6 +15,12 @@ export default [
 			// The one runtime dependency this package has is exactly the tradeoff described above,
 			// not an oversight -- see the README.
 			'@n8n/community-nodes/no-runtime-dependencies': 'off',
+			// n8n's own lint hard-requires this field to read exactly "MIT" -- this package
+			// deliberately declares Apache-2.0 instead, for org-wide license consistency with the
+			// rest of this repository (owner decision, made with the tradeoff understood: this
+			// likely blocks listing in n8n's official community-node registry). See the README's
+			// "License" section.
+			'n8n-nodes-base/community-package-json-license-not-default': 'off',
 		},
 	},
 	{
