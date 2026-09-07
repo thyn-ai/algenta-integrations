@@ -184,11 +184,12 @@ def create_algenta_tools(
     ```python
     from haystack.components.agents import Agent
     from haystack.components.generators.chat import OpenAIChatGenerator
+    from haystack.dataclasses import ChatMessage
     from haystack_algenta import create_algenta_tools
 
     toolset = create_algenta_tools(base_url="http://localhost:8000/mcp", profile="observe")
     agent = Agent(chat_generator=OpenAIChatGenerator(), tools=toolset)
-    result = agent.run(messages=[...])
+    result = agent.run(messages=[ChatMessage.from_user("What's the expected value of scenario X?")])
     toolset.close()
     ```
 
