@@ -1,6 +1,6 @@
 [project]
 name = "ray-serve-algenta"
-version = "0.1.0"
+version = "0.1.1"
 description = "Deploy Algenta's stateless /mcp surface behind Ray Serve: a byte-transparent reverse-proxy Deployment, a KubeRay RayService manifest, and a real multi-replica conformance test suite"
 readme = "README.md"
 requires-python = ">=3.10"

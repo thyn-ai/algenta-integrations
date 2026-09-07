@@ -1,6 +1,6 @@
 [project]
 name = "litellm-algenta"
-version = "0.1.1"
+version = "0.1.2"
 description = "LiteLLM MCP Gateway config generation for a self-hosted Algenta Engine: profile-aware allowed_tools/allowed_params templates, a config linter, and a real-proxy conformance test suite"
 readme = "README.md"
 requires-python = ">=3.10"

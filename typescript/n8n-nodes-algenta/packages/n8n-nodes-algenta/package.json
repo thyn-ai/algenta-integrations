@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-algenta",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "n8n community node for Algenta: a governed-execution-aware node exposing your own self-hosted Algenta Engine's MCP tool surface (get_contract, query_data, simulate, recommend, plan_decision, log_decision, execute_decision) as typed n8n operations, with a real ExecutionReceipt/ExecutionBlockedError contract on execute_decision.",
   "keywords": [
     "n8n-community-node-package",
@@ -11,13 +11,18 @@
   ],
   "license": "Apache-2.0",
   "homepage": "https://docs.algenta.ai",
-  "author": { "name": "Thyn AI", "email": "security@algenta.ai" },
+  "author": {
+    "name": "Thyn AI",
+    "email": "security@algenta.ai"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/thyn-ai/algenta-integrations.git",
     "directory": "typescript/n8n-nodes-algenta/packages/n8n-nodes-algenta"
   },
-  "bugs": { "url": "https://github.com/thyn-ai/algenta-integrations/issues" },
+  "bugs": {
+    "url": "https://github.com/thyn-ai/algenta-integrations/issues"
+  },
   "main": "dist/index.js",
   "scripts": {
     "build": "n8n-node build",
@@ -28,15 +33,26 @@
     "test": "vitest run",
     "prepublishOnly": "n8n-node prerelease"
   },
-  "files": ["dist", "README.md"],
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "n8n": {
     "n8nNodesApiVersion": 1,
     "strict": false,
-    "credentials": ["dist/credentials/AlgentaApi.credentials.js"],
-    "nodes": ["dist/nodes/Algenta/Algenta.node.js"]
+    "credentials": [
+      "dist/credentials/AlgentaApi.credentials.js"
+    ],
+    "nodes": [
+      "dist/nodes/Algenta/Algenta.node.js"
+    ]
   },
-  "dependencies": { "@modelcontextprotocol/sdk": "^1.30.0" },
-  "peerDependencies": { "n8n-workflow": "*" },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0"
+  },
+  "peerDependencies": {
+    "n8n-workflow": "*"
+  },
   "devDependencies": {
     "@n8n/node-cli": "*",
     "@types/node": "^22.0.0",
@@ -45,5 +61,7 @@
     "vitest": "^3.2.6",
     "zod": "^3.25.0"
   },
-  "engines": { "node": ">=18.10" }
+  "engines": {
+    "node": ">=18.10"
+  }
 }
