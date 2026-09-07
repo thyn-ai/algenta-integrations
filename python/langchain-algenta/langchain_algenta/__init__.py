@@ -12,6 +12,8 @@ See the package README for a runnable example and for the honest "why" behind th
 tool-profile contract this package conforms to.
 """
 
+import importlib.metadata
+
 from .contract import DEFAULT_PROFILE, NEVER_MODEL_FACING_FIELDS, TOOL_PROFILES, ToolProfile
 from .exceptions import AlgentaExecutionBlocked, AlgentaGovernedCallError, AlgentaToolDenied
 from .interceptor import AlgentaToolCallInterceptor
@@ -38,4 +40,10 @@ __all__ = [
     "parse_receipt",
 ]
 
-__version__ = "0.1.0"
+try:
+    __version__ = importlib.metadata.version("langchain-algenta")
+except importlib.metadata.PackageNotFoundError:
+    # Not installed (e.g. running from a source checkout without `pip install -e .`) -- fall
+    # back to a clearly-unresolved marker rather than a stale, hand-maintained number that would
+    # silently drift from `pyproject.toml`'s real `version =`, as it once did.
+    __version__ = "0.0.0+unknown"

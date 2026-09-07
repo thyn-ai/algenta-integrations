@@ -33,6 +33,21 @@ explicitly. The tools `create_algenta_tools` returns are ordinary LangChain `Bas
 usable inside a `langgraph` agent if that's how you build yours -- that's your own dependency to
 add, not this package's.
 
+**The Quick start below needs one more package.** `create_algenta_tools` itself only needs the
+lightweight `langchain-core` (the same reason this repository's `pydantic-ai-algenta` depends on
+`pydantic-ai-slim` rather than the full `pydantic-ai` metapackage) -- but building an agent with
+`langchain.agents.create_agent`, as the Quick start does, comes from the full `langchain`
+package, which `langchain-algenta` deliberately does not pull in for you:
+
+```bash
+pip install "langchain-algenta[quickstart]"
+```
+
+`[quickstart]` is a thin convenience extra pinning a verified `langchain` floor; it's equivalent
+to `pip install langchain-algenta langchain`. If you build your agent a different way -- directly
+on `langgraph`, or with another orchestration layer -- you don't need `langchain` at all; the
+tools `create_algenta_tools` returns are plain `BaseTool`s that work anywhere LangChain tools do.
+
 ## Self-hosted-first
 
 `create_algenta_tools` talks to **your own self-hosted Algenta Engine** over its MCP endpoint --
@@ -41,6 +56,19 @@ never a hosted-by-Algenta cloud service. The endpoint resolves, in order, from:
 1. `base_url=` passed to the function,
 2. the `ALGENTA_BASE_URL` environment variable,
 3. `http://localhost:8000/mcp` (the default for a local self-hosted engine).
+
+## Prerequisites
+
+Before running the Quick start below, you need:
+
+- **A running self-hosted Algenta Engine**, reachable over MCP -- see
+  [Self-hosted-first](#self-hosted-first) above for how the endpoint resolves. Don't have one
+  running yet? Skip to [Try it locally](#try-it-locally-no-live-engine-required), which needs
+  nothing but this package and its test dependencies.
+- **`langchain`**, in addition to `langchain-algenta` -- see [Install](#install) above.
+- **Credentials for whichever chat model you pass to `create_agent`.** The example below uses
+  `"openai:gpt-5"`, which needs `OPENAI_API_KEY` set in your environment; swap in any other
+  model string `langchain` supports instead.
 
 ## Quick start
 
@@ -66,6 +94,64 @@ except AlgentaExecutionBlocked as blocked:
 `profile="observe"` is the default if you omit it -- the agent can call
 `get_contract` / `query_data` / `simulate` / `recommend`, and nothing that writes, plans, or
 executes anything. See [Tool profiles](#tool-profiles) to opt into more.
+
+## Try it locally (no live engine required)
+
+The Quick start above needs a real self-hosted Algenta Engine. To see `create_algenta_tools`
+actually work without one, run it against this package's own stub Algenta MCP server --
+`tests/stub_server.py`, a real (not mocked) `mcp.server.fastmcp.FastMCP` server over a real HTTP
+socket, the same fixture this package's 55-test suite runs against:
+
+```bash
+git clone https://github.com/thyn-ai/algenta-integrations
+cd algenta-integrations/python
+uv sync --all-packages --all-extras
+```
+
+```python
+# local_quickstart.py -- run from algenta-integrations/python with the environment above active
+import asyncio
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path("langchain-algenta/tests").resolve()))
+from stub_server import StubServerFixture  # the same fixture langchain-algenta's own tests use
+
+from langchain_algenta import create_algenta_tools
+
+
+async def main() -> None:
+    async with StubServerFixture() as server:
+        print(f"Stub Algenta MCP server listening at {server.base_url}")
+
+        tools = await create_algenta_tools(base_url=server.base_url, profile="observe")
+        print("Tools exposed by the 'observe' profile:", [tool.name for tool in tools])
+
+        get_contract = next(tool for tool in tools if tool.name == "get_contract")
+        print("get_contract() ->", await get_contract.ainvoke({}))
+
+
+asyncio.run(main())
+```
+
+```bash
+uv run --package langchain-algenta python local_quickstart.py
+```
+
+Output (the port and the tool-call id are assigned fresh each run, so yours will differ):
+
+```
+Stub Algenta MCP server listening at http://127.0.0.1:49569/mcp
+Tools exposed by the 'observe' profile: ['get_contract', 'query_data', 'simulate', 'recommend']
+get_contract() -> [{'type': 'text', 'text': '{\n  "capabilities": [\n    "query",\n    "simulate",\n    "recommend"\n  ],\n  "engine_version": "1.4.0"\n}', 'id': 'lc_1fe6489b-d878-42c0-9c4d-33bb22c010c8'}]
+```
+
+No `langchain`, no LLM, no API key, no network access beyond `127.0.0.1` -- just the real
+`create_algenta_tools` -> `MultiServerMCPClient` -> MCP wire round trip this package's own tests
+exercise, against an in-process stand-in for your own engine instead of a live one. (You may also
+see a harmless shutdown traceback printed to stderr when the script exits -- an artifact of
+`asyncio.CancelledError` during the stub server's own teardown, not a real error; it's the same
+thing this package's test suite triggers on every run.)
 
 ## Tool profiles
 
