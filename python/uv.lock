@@ -2754,6 +2754,7 @@ version = "0.1.1"
 source = { editable = "maf-algenta" }
 dependencies = [
     { name = "agent-framework-core" },
+    { name = "httpx" },
     { name = "mcp" },
 ]
 
@@ -2767,7 +2768,8 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "agent-framework-core", specifier = ">=1.15.0" },
-    { name = "mcp", specifier = ">=1.29.0" },
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "mcp", specifier = ">=1.29.0,<2" },
     { name = "pytest", marker = "extra == 'dev'" },
     { name = "pytest-asyncio", marker = "extra == 'dev'" },
     { name = "uvicorn", marker = "extra == 'dev'", specifier = ">=0.34" },
