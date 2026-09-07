@@ -29,20 +29,33 @@ package ships:
   real stub Algenta MCP server, and proves two things over real HTTP -- see [Testing this
   package](#testing-this-package).
 
+## Prerequisites
+
+- **A running self-hosted Algenta engine**, reachable over HTTP, with its `/mcp` endpoint URL at
+  hand (for example `http://localhost:8000/mcp`). This package never talks to any Algenta-hosted
+  cloud service -- see [Self-hosted-first](#self-hosted-first) below. If you don't have an engine
+  running yet, skip to [Try it locally](#try-it-locally-no-live-engine-required): it stands up a
+  real stub engine for you, with nothing external to configure.
+- **Python 3.10 or newer.**
+- **No Algenta API key or credential is required by this package itself.** `AlgentaMCPProxy`
+  forwards whatever headers a caller sends it, unchanged, straight to your upstream URL -- if your
+  engine requires authentication, that's configured between the caller and the engine (or its
+  ingress), not here. See [`manifests/rayservice.yaml`](./manifests/rayservice.yaml)'s header
+  comment for the Kubernetes/KubeRay equivalent.
+
 ## Install
 
 ```bash
 pip install ray-serve-algenta
 ```
 
-Unlike `litellm-algenta` (D4), where the config-generation code works standalone without
-`litellm` itself installed, `ray[serve]` / `fastapi` / `httpx` are real, non-optional runtime
-dependencies here -- `ray_serve_algenta.deployment` cannot be imported, let alone deployed,
-without them. See [`pyproject.toml`](./pyproject.toml)'s dependency comment for a real,
-independently-reproduced gap in `ray[serve]`'s own published extra (`jinja2` is imported
-unconditionally by `ray.serve`'s internals but not declared as one of `ray[serve]`'s own
-dependencies as of `ray==2.58.0`) that this package pins around so you don't have to rediscover
-it yourself.
+Unlike `litellm-algenta`, where the config-generation code works standalone without `litellm`
+itself installed, `ray[serve]` / `fastapi` / `httpx` are real, non-optional runtime dependencies
+here -- `ray_serve_algenta.deployment` cannot be imported, let alone deployed, without them. See
+[`pyproject.toml`](./pyproject.toml)'s dependency comment for a real, independently-reproduced gap
+in `ray[serve]`'s own published extra (`jinja2` is imported unconditionally by `ray.serve`'s
+internals but not declared as one of `ray[serve]`'s own dependencies as of `ray==2.58.0`) that
+this package pins around so you don't have to rediscover it yourself.
 
 ## Why Algenta's `/mcp` transport makes this worth building at all
 
@@ -74,17 +87,60 @@ order, from:
 2. the `ALGENTA_BASE_URL` environment variable (what `manifests/rayservice.yaml` sets, from a
    `Secret`, on every head and worker pod),
 3. `http://localhost:8000/mcp` (the same self-hosted-first fallback every in-process package in
-   this repository uses -- see `pydantic_ai_algenta.toolset.DEFAULT_ALGENTA_BASE_URL` -- useful
-   for a quick local `serve run` against an engine on the same machine, meaningless inside a
-   container where nothing is listening on its own loopback).
+   this repository uses -- see `pydantic_ai_algenta.toolset.DEFAULT_ALGENTA_BASE_URL` -- kept for
+   consistency with every other package's documented default, not because it's safe to leave
+   unset here specifically: `serve run` binds Ray Serve's own HTTP proxy to `localhost:8000` by
+   default too, so running this package locally with `ALGENTA_BASE_URL` unset makes it forward
+   every request to itself instead of to an engine. Always set `ALGENTA_BASE_URL` explicitly to
+   your engine's real address before running this package -- see [Quick start
+   (local)](#quick-start-local) below. Meaningless inside a container regardless, where nothing is
+   listening on its own loopback).
 
 Never an Algenta-hosted default, at any layer.
+
+## Try it locally (no live engine required)
+
+Nothing above requires a real Algenta engine to see working -- this package's own test suite
+already includes a real stub one (`tests/stub_server.py`, a genuine `fastmcp.FastMCP` server
+running in `stateless_http=True` mode, the same setting the real engine's `/mcp` route uses).
+[`examples/try_it_locally.py`](./examples/try_it_locally.py) starts that stub, deploys the real
+`AlgentaMCPProxy` in front of it, and makes one real MCP tool call through the whole path --
+nothing mocked, no external network, nothing to configure:
+
+```bash
+cd python
+uv sync --package ray-serve-algenta --all-extras
+uv run python ray-serve-algenta/examples/try_it_locally.py
+```
+
+Expect a few seconds of genuine Ray/Serve startup logging, followed by:
+
+```
+Stub Algenta engine listening at http://127.0.0.1:54798/mcp (stands in for your real one)
+AlgentaMCPProxy is up at http://127.0.0.1:8000/mcp, forwarding to the stub above
+
+Real MCP response, round-tripped through the real proxy:
+{'dataset': 'try-it-locally', 'request_id': 'demo-1', 'rows': [{'value': 1}, {'value': 2}]}
+```
+
+(The stub's own port is assigned by your OS and will differ each run -- only the final response
+matters.)
+
+That response traveled through the real `AlgentaMCPProxy` code over real HTTP, exactly like it
+would against your own engine -- only the endpoint it forwarded to is a stub. Once you have a real
+self-hosted Algenta engine running, move to [Quick start (local)](#quick-start-local) below and
+point `ALGENTA_BASE_URL` at it instead.
 
 ## Quick start (local)
 
 ```bash
-export ALGENTA_BASE_URL="http://localhost:8000/mcp"   # your own self-hosted engine
-serve run ray_serve_algenta.deployment:app
+# Your own self-hosted Algenta engine's MCP endpoint -- must be a DIFFERENT host:port from the
+# one this proxy binds below. `serve run` starts Ray Serve's HTTP proxy on its own default,
+# localhost:8000; pointing ALGENTA_BASE_URL at that same address makes this proxy forward every
+# request to itself instead of to your engine. Substitute wherever your engine actually listens.
+export ALGENTA_BASE_URL="http://localhost:9000/mcp"
+
+serve run ray_serve_algenta.deployment:app   # binds Ray Serve's default HTTP port, 8000
 ```
 
 `ray_serve_algenta.deployment:app` is bound with the package's default `autoscaling_config`
@@ -123,7 +179,7 @@ traffic that never goes through Ray Serve at all.
 
 ## Why no `algenta-sdk` dependency
 
-Same reasoning as `litellm-algenta` (D4) and `llamaindex-algenta` (D6's other lane): every package
+Same reasoning as `litellm-algenta` and `llamaindex-algenta`: every package
 in this repository may depend on at most one Algenta-owned thing, the published `algenta-sdk`
 client -- but only if something in the package would actually use it. `AlgentaMCPProxy` forwards
 raw HTTP bytes with `httpx`; it never constructs an MCP client, never calls a tool, and has no use
