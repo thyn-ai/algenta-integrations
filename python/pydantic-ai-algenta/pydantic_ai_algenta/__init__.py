@@ -10,9 +10,19 @@ in the `algenta-integrations` repository root for the tool-profile contract this
 conforms to.
 """
 
+from importlib.metadata import PackageNotFoundError, version
+
 from .contract import DEFAULT_PROFILE, NEVER_MODEL_FACING_FIELDS, TOOL_PROFILES, ToolProfile
 from .receipts import EXECUTION_GATES, ExecutionDenial, ExecutionGate, ExecutionReceipt, parse_denial, parse_receipt
 from .toolset import ALGENTA_BASE_URL_ENV_VAR, DEFAULT_ALGENTA_BASE_URL, AlgentaToolset
+
+try:
+    __version__ = version("pydantic-ai-algenta")
+except PackageNotFoundError:
+    # Not installed (e.g. running from a source checkout without `pip install -e .` /
+    # `uv sync`) -- there's no installed distribution for importlib.metadata to read a version
+    # from. `pyproject.toml`'s `[project.version]` remains the single source of truth either way.
+    __version__ = "0+unknown"
 
 __all__ = [
     "AlgentaToolset",
@@ -26,8 +36,7 @@ __all__ = [
     "NEVER_MODEL_FACING_FIELDS",
     "TOOL_PROFILES",
     "ToolProfile",
+    "__version__",
     "parse_denial",
     "parse_receipt",
 ]
-
-__version__ = "0.2.0"
