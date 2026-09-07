@@ -39,8 +39,8 @@ explaining why it doesn't.
 
 Layers two things on top of each already-profile-allowed real MCP tool call:
 
-1. **Tool-profile filtering** (`profile=`): only the tool names
-   [`contracts/integration-tool-contract.json`](https://github.com/thyn-ai/algenta-integrations/blob/main/contracts/integration-tool-contract.json)
+1. **Tool-profile filtering** (`profile=`): only the tool names `contracts/integration-tool-contract.json`
+   (https://github.com/thyn-ai/algenta-integrations/blob/main/contracts/integration-tool-contract.json)
    assigns to the requested profile are ever turned into a `FunctionTool` at all. Unlike
    Haystack's `MCPToolset(tool_names=...)`, the raw MCP protocol's `list_tools()` has no
    server-side name filter to layer this on top of, so this is a single client-side filter over
@@ -205,8 +205,8 @@ async def create_algenta_tools(
             `"http://localhost:8000/mcp"` (self-hosted-first: never a hosted-by-Algenta cloud
             default). Ignored if `client` is given.
         profile: Which tool profile to expose to the model -- one of `"observe"` (default),
-            `"govern"`, `"execute"`, or `"full"`. See
-            [`contracts/integration-tool-contract.json`](https://github.com/thyn-ai/algenta-integrations/blob/main/contracts/integration-tool-contract.json).
+            `"govern"`, `"execute"`, or `"full"`. See `contracts/integration-tool-contract.json`:
+            https://github.com/thyn-ai/algenta-integrations/blob/main/contracts/integration-tool-contract.json
         client: Advanced escape hatch / test seam: an already-constructed MCP client to use
             instead of having this function build a `BasicMCPClient` from `base_url`. Must
             support the same duck-typed async surface `McpToolSpec` itself requires:

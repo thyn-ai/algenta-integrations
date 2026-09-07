@@ -22,6 +22,21 @@ real contract.
   and on each of its three real named denial gates -- there is no asynchronous "pending approval"
   state anywhere in the real tool, and this package does not pretend there is one.
 
+## Prerequisites
+
+Before running the example below, you need:
+
+- **Python 3.10+**.
+- **A running self-hosted Algenta Engine**, reachable over MCP. Algenta is self-hosted only --
+  there is no Algenta-operated cloud API to fall back to. Point this package at your engine with
+  the `ALGENTA_BASE_URL` environment variable, or pass `base_url=` directly; it defaults to
+  `http://localhost:8000/mcp`. Don't have an engine running yet? Skip to [Try it
+  locally](#try-it-locally-no-live-engine-required) below -- it runs a real local stub server, so
+  you can see this package work with nothing else to install or configure.
+- **An LLM configured for LlamaIndex**, if you want to run a full `FunctionAgent` (as opposed to
+  calling tools directly). Any provider LlamaIndex supports works; the example below uses
+  `pip install llama-index-llms-openai` plus an `OPENAI_API_KEY`.
+
 ## Install
 
 ```bash
@@ -46,24 +61,90 @@ never a hosted-by-Algenta cloud service. The endpoint resolves, in order, from:
 ## Quick start
 
 ```python
+import asyncio
+
 from llama_index.core.agent.workflow import FunctionAgent
+from llama_index.llms.openai import OpenAI  # pip install llama-index-llms-openai, or substitute your own llama-index LLM
 from llamaindex_algenta import create_algenta_tools
 
-tools = await create_algenta_tools(base_url="http://localhost:8000/mcp", profile="observe")
-agent = FunctionAgent(tools=tools, llm=your_llm)
-result = await agent.run(user_msg="what should we do?")
+
+async def main() -> None:
+    tools = await create_algenta_tools(base_url="http://localhost:8000/mcp", profile="observe")
+    llm = OpenAI(model="gpt-5")  # substitute your own llama-index LLM
+    agent = FunctionAgent(tools=tools, llm=llm)
+    result = await agent.run(user_msg="what should we do?")
+    print(result)
+
+
+asyncio.run(main())
 ```
+
+Save this as a plain `.py` file (e.g. `quickstart.py`) and run it with `python quickstart.py`.
 
 `profile="observe"` is also the default if you omit it -- the agent can call `get_contract` /
 `query_data` / `simulate` / `recommend`, and nothing that writes, plans, or executes anything.
 
 `create_algenta_tools` is `async def`, matching `McpToolSpec.to_tool_list_async()`'s own real
 primary interface (its `to_tool_list()` sync wrapper explicitly raises if called from inside a
-running event loop -- the same caveat applies if you ever need a sync variant of this call).
+running event loop -- the same caveat applies if you ever need a sync variant of this call). That's
+why the example above wraps everything in `async def main()` and drives it with
+`asyncio.run(main())`: a plain `.py` file has no event loop of its own to `await` into. Already
+inside one (a Jupyter/IPython cell, or your own `asyncio` application)? Call
+`await create_algenta_tools(...)` directly instead -- don't wrap it in `asyncio.run`.
 
 There is no connection to close afterward: `BasicMCPClient`'s own real methods each open and tear
 down their own MCP session per call (verified from its installed source), so this package has no
 lifecycle of its own to manage either.
+
+## Try it locally (no live engine required)
+
+No Algenta Engine handy yet? `tests/stub_server.py` in this package's own checkout is a real,
+local `fastmcp.FastMCP` server -- not a mock -- that speaks the same MCP wire protocol a real
+Algenta Engine does, backed by small, deterministic fake data. It's part of this repository's own
+test suite, not the published `pip install llamaindex-algenta` wheel, so this section assumes a
+checkout of [`algenta-integrations`](https://github.com/thyn-ai/algenta-integrations):
+
+```bash
+git clone https://github.com/thyn-ai/algenta-integrations
+cd algenta-integrations/python
+pip install -e "llamaindex-algenta[dev]"
+cd llamaindex-algenta
+```
+
+Then run this script from inside `python/llamaindex-algenta`:
+
+```python
+import asyncio
+
+from tests.stub_server import StubServerFixture
+
+from llamaindex_algenta import create_algenta_tools
+
+
+async def main() -> None:
+    async with StubServerFixture() as stub:
+        tools = await create_algenta_tools(base_url=stub.base_url, profile="observe")
+        print([tool.metadata.name for tool in tools])
+
+        recommend = next(tool for tool in tools if tool.metadata.name == "recommend")
+        output = await recommend.acall(scenario="restock-widget-a")
+        print(output.raw_output)
+
+
+asyncio.run(main())
+```
+
+This starts the stub server on a free local port, connects to it exactly the way this package
+connects to a real engine, and calls a real tool end to end -- no LLM, no API key, and no network
+access beyond `127.0.0.1`. Real output, verbatim:
+
+```
+['get_contract', 'query_data', 'simulate', 'recommend']
+{'scenario': 'restock-widget-a', 'recommended_action': 'hold', 'confidence': 0.87}
+```
+
+You'll also see a handful of routine `INFO: 127.0.0.1:... "POST /mcp HTTP/1.1" 200 OK` lines --
+the real HTTP traffic between this package and the stub server, not an error.
 
 ## Tool profiles
 
