@@ -225,6 +225,11 @@ inventing a different one:
 - **Security:** see [`SECURITY.md`](./SECURITY.md) for scope and reporting.
 - **Contributing:** see [`CONTRIBUTING.md`](./CONTRIBUTING.md).
 
+## Community
+
+- [Discord](https://discord.gg/w8NDsph9an)
+- community@algenta.ai
+
 ## License
 
 Apache-2.0 — see [LICENSE](./LICENSE) and [NOTICE](./NOTICE). The Algenta
