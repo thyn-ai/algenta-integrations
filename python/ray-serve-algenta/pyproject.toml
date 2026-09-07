@@ -22,7 +22,7 @@ classifiers = [
 # parses MCP JSON-RPC content, never names a tool, and never needs an SDK client of any kind --
 # only an HTTP client (`httpx`) forwarding bytes to whatever `ALGENTA_BASE_URL` is configured to.
 #
-# Unlike litellm-algenta (D4), where `litellm[proxy]` is a *test-only* dependency because
+# Unlike litellm-algenta, where `litellm[proxy]` is a *test-only* dependency because
 # `litellm_algenta.config`'s own code works standalone without litellm installed, `ray[serve]` /
 # `fastapi` / `httpx` are real, non-optional runtime dependencies here: `ray_serve_algenta
 # .deployment` cannot be imported, let alone deployed, without them -- there is no "config
