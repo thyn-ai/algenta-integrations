@@ -5,25 +5,26 @@
 # npm, because no publish step existed anywhere in the repo. A GitHub Release is not a release: a
 # user runs `pip install langchain-algenta`, not `gh release download`.
 #
-# TRUSTED PUBLISHING, NO LONG-LIVED TOKENS. Both registries accept a short-lived OIDC token minted
-# per run, so there is no API token to store, rotate, or leak. That is also why `id-token: write`
-# is scoped to the individual publish jobs and nowhere else in the file.
+# TOKEN-BASED AUTH, matching the exact pattern thyn-ai/algenta-sdk's own release.yml already
+# publishes with in production (PYPI_TOKEN via twine, NPM_TOKEN via npm's classic auth) -- not
+# OIDC/Trusted Publishing. Trusted Publishing needs a one-time per-package registration on each
+# registry's own web UI before anything can publish; plain API tokens need no such
+# pre-registration and can create a brand-new project/package on first upload, which is exactly
+# the situation every one of this repo's packages is in. Consistency with the proven, already-
+# working sibling pipeline also means one less auth model to reason about across the org.
 #
 # THE BUILD-AND-VERIFY STEPS RUN UNCONDITIONALLY, even before publishing is switched on. A job that
 # does nothing until someone flips a variable rots quietly; this way every release proves right now
 # that its artifacts build, carry the right version, and pass the registry's own metadata check --
 # so the first real publish is not also the first real test of this pipeline.
 #
-# TURNING IT ON is two owner actions, once per package, and then this is automatic forever:
+# TURNING IT ON is two owner actions, once ever, and then this is automatic forever:
 #
-#   1. Register a Trusted Publisher on each registry, pointing at THIS repository and THIS
-#      workflow FILENAME (publish.yml) -- the filename is part of what the registry verifies, so
-#      renaming this file breaks publishing until the registry config is updated to match.
-#        - PyPI: https://pypi.org/manage/account/publishing/ -- add a "pending publisher" per
-#          package name (owner `thyn-ai`, repo `algenta-integrations`, workflow `publish.yml`,
-#          environment `pypi`). Pending publishers exist precisely so a project that does not
-#          exist yet can be claimed by its first publish, so the names do not need reserving first.
-#        - npm: package settings -> Trusted Publisher -> GitHub Actions, same repo + workflow.
+#   1. Set repo secrets `PYPI_TOKEN` (a PyPI API token with scope to publish, account-scoped
+#      tokens can create new projects on first upload -- project-scoped tokens cannot, since the
+#      project doesn't exist yet) and `NPM_TOKEN` (an npm automation/publish token for an account
+#      with rights to publish new, unscoped package names) on this repository -- or on the `pypi`
+#      / `npm` GitHub Environments specifically, if narrower secret scoping is preferred.
 #   2. Set the repository variable `PUBLISH_TO_REGISTRIES` to `true`.
 #
 # Until step 2, each publish job explains what is missing in the run summary and exits cleanly:
@@ -121,7 +122,6 @@ jobs:
     environment: pypi
     permissions:
       contents: read
-      id-token: write # mint the OIDC token PyPI Trusted Publishing verifies
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -169,11 +169,8 @@ jobs:
             echo
             echo "The distribution built and passed \`twine check --strict\`, but publishing is off."
             echo
-            echo "To switch it on (once per package, then permanently automatic):"
-            echo "1. Add a PyPI **pending publisher** at <https://pypi.org/manage/account/publishing/>:"
-            echo "   - PyPI project: \`${{ needs.resolve.outputs.name }}\`"
-            echo "   - Owner: \`thyn-ai\` · Repository: \`algenta-integrations\`"
-            echo "   - Workflow: \`publish.yml\` · Environment: \`pypi\`"
+            echo "To switch it on (once ever, then permanently automatic):"
+            echo "1. Set the \`PYPI_TOKEN\` secret on this repository (or on the \`pypi\` environment)."
             echo "2. Set the repository variable \`PUBLISH_TO_REGISTRIES\` to \`true\`."
             echo
             echo "Then re-run this workflow with tag \`${{ github.event.release.tag_name || inputs.tag }}\`."
@@ -181,12 +178,11 @@ jobs:
 
       - name: Publish to PyPI
         if: needs.resolve.outputs.publishing_enabled == 'true'
-        uses: pypa/gh-action-pypi-publish@a892a5a61159132606e93a2fa6f4358831b04d26 # v1.14.2
-        with:
-          packages-dir: ${{ needs.resolve.outputs.directory }}/dist
-          # PEP 740 attestations, signed with the same OIDC identity. Free provenance on the
-          # artifact itself, which Track B4's supply-chain work wants anyway.
-          attestations: true
+        working-directory: ${{ needs.resolve.outputs.directory }}
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
+        run: uvx twine upload --non-interactive --skip-existing dist/*
 
   npm:
     name: npm
@@ -196,7 +192,6 @@ jobs:
     environment: npm
     permissions:
       contents: read
-      id-token: write # npm Trusted Publishing + `--provenance`
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -214,13 +209,6 @@ jobs:
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
         with:
           version: 9
-
-      - name: Upgrade npm for OIDC trusted publishing
-        # Node 20 ships npm 10, which has no OIDC support -- it would fall back to looking for an
-        # auth token and fail with a confusing 401 rather than an honest "unsupported".
-        run: |
-          npm install -g npm@latest
-          npm --version
 
       - name: Build the package
         working-directory: typescript/algenta-tools
@@ -247,10 +235,10 @@ jobs:
             echo
             echo "The package built and packed cleanly, but publishing is off."
             echo
-            echo "To switch it on (once, then permanently automatic):"
-            echo "1. On npmjs.com, open the \`${{ needs.resolve.outputs.name }}\` package settings and add a"
-            echo "   **Trusted Publisher**: GitHub Actions · \`thyn-ai/algenta-integrations\` · workflow \`publish.yml\` · environment \`npm\`."
-            echo "   (A package that does not exist yet must be created by a first manual publish or claimed by the org.)"
+            echo "To switch it on (once ever, then permanently automatic):"
+            echo "1. Set the \`NPM_TOKEN\` secret on this repository (or on the \`npm\` environment) --"
+            echo "   an automation/publish token for an npm account with rights to publish new,"
+            echo "   unscoped package names."
             echo "2. Set the repository variable \`PUBLISH_TO_REGISTRIES\` to \`true\`."
             echo
             echo "Then re-run this workflow with tag \`${{ github.event.release.tag_name || inputs.tag }}\`."
@@ -259,4 +247,6 @@ jobs:
       - name: Publish to npm
         if: needs.resolve.outputs.publishing_enabled == 'true'
         working-directory: ${{ needs.resolve.outputs.directory }}
-        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public

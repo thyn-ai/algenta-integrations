@@ -189,14 +189,14 @@ anything yet — check the table above and each package's own README.
   and runs `twine check --strict` / `npm pack` — **on every release, right now**,
   so the pipeline is exercised before it is ever trusted with a real upload.
 
-  Two owner-only actions gate an actual registry upload:
+  Two owner-only actions gate an actual registry upload, matching the same
+  token-based auth `thyn-ai/algenta-sdk`'s own `release.yml` already
+  publishes with in production:
 
-  1. Register a Trusted Publisher per package — PyPI
-     [pending publishers](https://pypi.org/manage/account/publishing/) (owner
-     `thyn-ai`, repo `algenta-integrations`, workflow `publish.yml`, environment
-     `pypi`); npm package settings → Trusted Publisher → GitHub Actions. This
-     step lives entirely in the PyPI/npm account settings, so its status can't
-     be verified from inside this repository or its CI.
+  1. Set the `PYPI_TOKEN` and `NPM_TOKEN` repo secrets (or scope them to the
+     `pypi` / `npm` GitHub Environments instead, if narrower secret scoping
+     is preferred). No registry-side pre-registration is required — plain
+     API tokens can create a brand-new project/package on first upload.
   2. Set the repository variable `PUBLISH_TO_REGISTRIES` to `true`. **Done**
      as of this writing — but no `publish.yml` run has executed against a
      live registry since the flag flipped, so this alone has not yet put
@@ -204,9 +204,7 @@ anything yet — check the table above and each package's own README.
      exercises it end-to-end.
 
   Until a publish run against a live registry actually succeeds, treat every
-  package as unpublished regardless of what either flag says. There are
-  deliberately **no** `PYPI_TOKEN`/`NPM_TOKEN` secrets: publishing uses
-  short-lived OIDC tokens, so there is nothing to rotate or leak.
+  package as unpublished regardless of what either flag says.
 - **No repository visibility change.** This repository stays private until
   its owner decides otherwise.
 
