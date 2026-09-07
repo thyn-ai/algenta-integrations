@@ -6,7 +6,7 @@
 
 [![CI](https://github.com/thyn-ai/algenta-integrations/actions/workflows/ci.yml/badge.svg)](https://github.com/thyn-ai/algenta-integrations/actions/workflows/ci.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
-[![Status: bootstrap](https://img.shields.io/badge/status-bootstrap%20(D0)-orange.svg)](#status--roadmap)
+[![Status: implemented, unpublished](https://img.shields.io/badge/status-implemented%2C%20unpublished-yellow.svg)](#status--roadmap)
 
 [Docs](https://docs.algenta.ai) · [Contributing](./CONTRIBUTING.md) · [Security](./SECURITY.md) · [Tool-profile contract](./contracts/integration-tool-contract.json)
 
@@ -32,8 +32,20 @@ tool surface onto the conventions of popular agent frameworks:
 | [`python/ray-serve-algenta`](./python/ray-serve-algenta) | Ray Serve (byte-transparent `/mcp` reverse proxy, KubeRay `RayService`) | Implemented -- Ray Serve slice of D6 only, see below |
 | [`python/vllm-algenta`](./python/vllm-algenta) | vLLM / any OpenAI-client-based consumer, pointed at Algenta's own `/v1` surface | Implemented -- vLLM slice of D6 only, see below |
 
+"Implemented" above means real code, wired to each framework's own
+primitives, with a passing unit/integration test suite of its own -- see
+[Status & roadmap](#status--roadmap) below for exactly what that does and
+does not cover. It does **not** yet mean cross-framework
+conformance-verified (that gate, D9, has never run against any package in
+this repository -- only directly against the Algenta engine) or published
+to a registry (none of these ten packages is on PyPI or npm yet). One
+consistent claim, stated once here and not contradicted anywhere else in
+this document: **real, independently-tested code; not yet cross-framework
+verified; not yet published.**
+
 `python/maf-algenta` is deliberately about **Microsoft Agent Framework only** -- a real,
-pip-installable, standalone SDK that needs no Azure account. It does not cover **Microsoft
+standalone SDK, packaged for `pip install` once published (not yet — see
+[Status & roadmap](#status--roadmap)), that needs no Azure account. It does not cover **Microsoft
 Foundry** (the hosted Azure platform); see [`python/maf-algenta/foundry/`](./python/maf-algenta/foundry)
 for that separate, documentation-only, explicitly-not-independently-verified deliverable, and this
 track's own row in the table below for the honest split.
@@ -108,9 +120,27 @@ allowed.
 
 ## Status & roadmap
 
-This repository started as a **bootstrap scaffold (D0)**. Beyond the tracks
-marked ✅ below, nothing else here has real tool-calling logic yet, and none
-of those should be assumed to work end-to-end.
+This repository started as a bootstrap scaffold (D0) and has since shipped
+real, independently-tested implementations for all ten framework-integration
+packages listed above (D1–D6, all marked ✅ below). Beyond those tracks,
+nothing else here has real tool-calling logic yet, and none of it should be
+assumed to work end-to-end.
+
+Two things are still genuinely pending, on purpose, and neither is done yet:
+
+- **Cross-framework conformance (D9).** The 12-scenario conformance suite in
+  [`demo/`](./demo) has only ever run directly against the Algenta engine —
+  never through any of these packages' own framework adapters. Until
+  per-framework adapters exist and pass it, **no package in this repository
+  should be called a "validated integration"** — see
+  [`demo/README.md`](./demo/README.md) for the full, falsifiable accounting
+  of what does and doesn't run today.
+- **Publication.** None of these ten packages is on PyPI or npm yet; every
+  one 404s on both registries today. See
+  [Explicitly deferred](#explicitly-deferred-not-gaps--deliberate-scope-boundaries)
+  below for the two owner actions that unblock it.
+
+D7–D8 remain planned; nothing exists for them yet.
 
 | Track | Scope | Status |
 |---|---|---|
@@ -147,9 +177,9 @@ anything yet — check the table above and each package's own README.
   Haystack, LlamaIndex, n8n, Ray Serve, and vLLM (D1-D6, all five D6 lanes now
   done) have real implementations -- see the Status & Roadmap table above for
   exactly what each one is. Whatever D7-D8 turn out to cover remains planned.
-- **Not on PyPI or npm yet — two owner actions away.** Every package here 404s
-  on both registries today. `pip install langchain-algenta` does not work, and
-  no claim in this repository should imply otherwise.
+- **Not on PyPI or npm yet.** Every package here 404s on both registries
+  today. `pip install langchain-algenta` does not work, and no claim in this
+  repository should imply otherwise.
 
   What exists: `.github/workflows/auto-release.yml` computes per-package
   semantic-version bumps from Conventional Commits, pushes them to main, and
@@ -159,19 +189,24 @@ anything yet — check the table above and each package's own README.
   and runs `twine check --strict` / `npm pack` — **on every release, right now**,
   so the pipeline is exercised before it is ever trusted with a real upload.
 
-  What is missing is registry-side configuration, which only the account owner
-  can do:
+  Two owner-only actions gate an actual registry upload:
 
   1. Register a Trusted Publisher per package — PyPI
      [pending publishers](https://pypi.org/manage/account/publishing/) (owner
      `thyn-ai`, repo `algenta-integrations`, workflow `publish.yml`, environment
-     `pypi`); npm package settings → Trusted Publisher → GitHub Actions.
-  2. Set the repository variable `PUBLISH_TO_REGISTRIES` to `true`.
+     `pypi`); npm package settings → Trusted Publisher → GitHub Actions. This
+     step lives entirely in the PyPI/npm account settings, so its status can't
+     be verified from inside this repository or its CI.
+  2. Set the repository variable `PUBLISH_TO_REGISTRIES` to `true`. **Done**
+     as of this writing — but no `publish.yml` run has executed against a
+     live registry since the flag flipped, so this alone has not yet put
+     anything on PyPI or npm. The next tagged release is what actually
+     exercises it end-to-end.
 
-  Until then each publish job explains exactly this in its run summary and exits
-  cleanly rather than reddening every release. There are deliberately **no**
-  `PYPI_TOKEN`/`NPM_TOKEN` secrets: publishing uses short-lived OIDC tokens, so
-  there is nothing to rotate or leak.
+  Until a publish run against a live registry actually succeeds, treat every
+  package as unpublished regardless of what either flag says. There are
+  deliberately **no** `PYPI_TOKEN`/`NPM_TOKEN` secrets: publishing uses
+  short-lived OIDC tokens, so there is nothing to rotate or leak.
 - **No repository visibility change.** This repository stays private until
   its owner decides otherwise.
 
