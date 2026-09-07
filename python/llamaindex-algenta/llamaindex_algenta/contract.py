@@ -1,8 +1,9 @@
 """The tool-profile contract, embedded for runtime use.
 
 This module is a *runtime-embedded copy* of the profile/tool-name boundaries defined in
-[`contracts/integration-tool-contract.json`](../../../contracts/integration-tool-contract.json)
-at the root of the `algenta-integrations` repository. It has to be embedded rather than read from
+`contracts/integration-tool-contract.json` at the root of the `algenta-integrations` repository:
+https://github.com/thyn-ai/algenta-integrations/blob/main/contracts/integration-tool-contract.json
+It has to be embedded rather than read from
 that file at import time: once this package is installed from PyPI, the JSON contract file living
 in its source monorepo is not on disk anymore, so the constants below are this package's copy of
 record.

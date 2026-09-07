@@ -11,6 +11,8 @@ mapping design decisions, and `contracts/integration-tool-contract.json` in the
 `algenta-integrations` repository root for the tool-profile contract this package conforms to.
 """
 
+from importlib import metadata as _metadata
+
 from .contract import DEFAULT_PROFILE, GOVERNED_TOOL_NAMES, NEVER_MODEL_FACING_FIELDS, TOOL_PROFILES, ToolProfile
 from .exceptions import AlgentaGovernedCallFailure, AlgentaToolDenied, AlgentaToolExecutionFailed
 from .receipts import (
@@ -49,4 +51,13 @@ __all__ = [
     "unwrap_call_tool_result",
 ]
 
-__version__ = "0.2.0"
+try:
+    # Single source of truth: the version installed metadata reports for this distribution,
+    # which setuptools always derives from this package's own `pyproject.toml` `[project].version`
+    # at build time. This avoids a second, hand-maintained copy of the version string that can
+    # silently drift out of sync with the one `pip`/`uv` actually installed.
+    __version__ = _metadata.version("llamaindex-algenta")
+except _metadata.PackageNotFoundError:
+    # Only reachable when this package is used straight from a source checkout without having
+    # been installed (editable or otherwise) -- e.g. running its modules directly off `sys.path`.
+    __version__ = "0.0.0+unknown"
