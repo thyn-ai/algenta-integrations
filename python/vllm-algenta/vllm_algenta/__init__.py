@@ -2,9 +2,10 @@
 OpenAI-compatible `/v1/chat/completions` / `/v1/responses` surface.
 
 See `vllm_algenta.client` for the one real thing this package provides, and this package's
-README for an explicit, honest accounting of what that surface supports today (a plain chat
-completion, a hardcoded `finish_reason`, synthetic rechunked streaming) versus what it does not
-(tool-calling, native per-token backend streaming) -- verified directly against
+README for an explicit, honest, model-dependent accounting of what that surface supports today --
+tool calling and a widened `finish_reason` are real capabilities of a configured provider-backed
+or bundled `algenta_local` model, while this package's own zero-config default model
+(`text.tokenizer`) remains a deterministic utility model with neither -- verified directly against
 `apps/api_server/schemas/llm.py` / `apps/api_server/routers/llm.py` in `thyn-ai/algenta`, not
 assumed.
 """

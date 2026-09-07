@@ -1,16 +1,19 @@
-"""Real conformance tests for Algenta's `/v1/responses` surface.
+"""Real conformance tests for this stub's own, currently-narrower `/v1/responses` surface.
 
-`ResponsesRequest` (`apps/api_server/schemas/llm.py` in `thyn-ai/algenta`) has no `tools`,
-`previous_response_id`, or approval-related field, and its `input` is `str | list[str]` -- plain
-strings, not the structured `[{role, content}]` message-array shape OpenAI's real Responses API
-accepts. The streaming SSE event sequence (`apps/api_server/routers/llm.py::_responses_stream`)
-emits exactly three event `type`s -- `response.created`, `response.output_item.done`,
-`response.completed` -- and nothing else: no `response.output_text.delta` (no incremental text
-events at all), no tool-call event, no approval-required event. This file asserts that event
-sequence directly over raw SSE, independent of how leniently any particular version of the
-`openai` Python client happens to parse it (verified separately, informally, that the SDK's own
-`.responses.create()` does not raise against this shape either -- but this test suite does not
-depend on that leniency holding across SDK versions to make its actual claim).
+This file's assertions describe what THIS STUB implements: `input` as `str | list[str]` (plain
+strings, each an independent single-turn request), and a streaming SSE event sequence that emits
+exactly three event `type`s -- `response.created`, `response.output_item.done`,
+`response.completed` -- and nothing else.
+
+IMPORTANT, re-verified against `thyn-ai/algenta` commit `a4233c335609d5828ddba874fc30f08c43cfcbb9`:
+the REAL engine's `/v1/responses` surface has since grown its own `tools` / `tool_choice` /
+`parallel_tool_calls` / `previous_response_id` support and a typed OpenResponses-style input-array
+shape for `input` (`apps/api_server/schemas/llm.py`'s `ResponsesRequest`) -- a separate, later
+change from the Chat Completions tool-calling fix this package's own README and
+`tests/test_chat_completions_matrix.py` were just updated for. This stub and this test file have
+NOT been updated to match that yet (tracked as a follow-up); do not read the assertions below as a
+claim about what the real `/v1/responses` endpoint can do today -- see this package's README's
+capability table for the accurate, currently-caveated framing of this specific gap.
 """
 
 from __future__ import annotations
@@ -44,10 +47,11 @@ def test_responses_basic_non_streaming() -> None:
 
 
 def test_responses_accepts_a_list_of_strings_not_structured_messages() -> None:
-    """`input` is `str | list[str]` on the real schema -- a caller migrating from OpenAI's real
-    Responses API and sending `input=[{"role": "user", "content": "hi"}]` (a structured message
-    array) is sending something this endpoint's schema does not model as such at all; a plain
-    `list[str]` is the only array shape the real request schema accepts."""
+    """`input` as `str | list[str]` is the shape THIS STUB implements. The real schema also now
+    accepts a third, typed OpenResponses-style input-array shape (`list[dict]` items carrying
+    their own `"type"`) that this stub does not yet reproduce -- see this file's module docstring
+    for the honest caveat; do not read this test as a claim that a plain `list[str]` is the only
+    array shape the real engine accepts today."""
     with StubServerFixture() as stub:
         resp = httpx.post(
             f"{stub.base_url}/v1/responses",
