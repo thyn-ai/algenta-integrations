@@ -22,7 +22,22 @@ plus `build_algenta_governance_hooks`, an `Agent` `after_tool` hook that raises 
   named-gate denials).
 - **An honest denial mapping** -- see [Denial mapping](#denial-mapping) below for the full
   accounting of what Haystack's real primitives do and don't guarantee, verified live against
-  installed `haystack-ai` 3.0.0 / `mcp-haystack` 1.4.1, not assumed from documentation.
+  every `haystack-ai` / `mcp-haystack` version this package's `pyproject.toml` permits, not
+  assumed from documentation.
+
+## Prerequisites
+
+Before you install anything, you need:
+
+- **A running self-hosted Algenta Engine**, reachable over MCP. There is no Algenta-hosted cloud
+  service to point at instead -- see [Self-hosted-first](#self-hosted-first) below. No engine
+  running yet? Skip to [Try it locally](#try-it-locally-no-live-engine-required) below, which
+  needs nothing but this package's own test dependencies.
+- **Python 3.10 or newer.**
+- **An API key for whatever chat-completion model you drive your agent with** (e.g.
+  `OPENAI_API_KEY` for the `OpenAIChatGenerator` used in [Quick start](#quick-start) below). This
+  is a key for your model provider, not for Algenta -- this package and the engine it talks to
+  never require an API key of their own.
 
 ## Install
 
@@ -45,16 +60,25 @@ never a hosted-by-Algenta cloud service. The endpoint resolves, in order, from:
 
 ## Quick start
 
+Requires `OPENAI_API_KEY` in your environment (see [Prerequisites](#prerequisites)) and a running
+self-hosted Algenta Engine at the `base_url` below:
+
 ```python
 from haystack.components.agents import Agent
 from haystack.components.generators.chat import OpenAIChatGenerator
+from haystack.dataclasses import ChatMessage
 from haystack_algenta import create_algenta_tools
 
 toolset = create_algenta_tools(base_url="http://localhost:8000/mcp", profile="observe")
 agent = Agent(chat_generator=OpenAIChatGenerator(), tools=toolset)
-result = agent.run(messages=[...])
+result = agent.run(messages=[ChatMessage.from_user("What's the expected value of scenario X?")])
+print(result["messages"][-1].text)
 toolset.close()  # tears down the MCP connection this call built
 ```
+
+If no engine is listening at `base_url`, this raises `MCPConnectionError` with a message naming
+the URL it tried and the three things to check (is the URL right, is the server running, is the
+auth token correct) -- there's nothing else to configure to get past it.
 
 `profile="observe"` is also the default if you omit it -- the agent can call `get_contract` /
 `query_data` / `simulate` / `recommend`, and nothing that plans, logs, or executes a decision.
@@ -65,6 +89,67 @@ synchronous -- it bridges the real async MCP client through its own internal `As
 so `create_algenta_tools` is a plain function, not an `async def`, and there is no `pytest-asyncio`
 anywhere in this package's own test suite. A genuine framework-level difference from
 `pydantic-ai-algenta`/`langchain-algenta`/`litellm-algenta`/`maf-algenta`, not an oversight.
+
+## Try it locally (no live engine required)
+
+Want to see `create_algenta_tools` and `build_algenta_governance_hooks` run end to end before
+you've stood up an engine or an LLM API key? This package's own test suite carries two small,
+real, non-mocked pieces you can drive yourself:
+
+- `tests/stub_server.py` -- a real `mcp.server.fastmcp.FastMCP` server, on a real local HTTP
+  socket, implementing the same MCP tool surface a real Algenta Engine exposes.
+- `tests/fake_chat_generator.py` -- a real Haystack `ChatGenerator` component whose replies come
+  from a scripted queue instead of a network call, so no model API key is needed either.
+
+From a checkout of this repository:
+
+```bash
+cd python
+uv sync --all-packages --all-extras
+```
+
+Then run this script (it imports the two test modules above, so it has to run from inside
+`python/haystack-algenta`, the same way `pytest` does):
+
+```python
+# python/haystack-algenta/try_it_locally.py
+from haystack.components.agents import Agent
+from haystack.dataclasses import ChatMessage
+
+from haystack_algenta import create_algenta_tools
+from tests.fake_chat_generator import ScriptedChatGenerator, text_reply, tool_call_reply
+from tests.stub_server import StubServerFixture
+
+with StubServerFixture() as stub:
+    toolset = create_algenta_tools(base_url=stub.base_url, profile="observe")
+    chat_generator = ScriptedChatGenerator(
+        scripted_replies=[
+            tool_call_reply("query_data", {"dataset": "orders"}),
+            text_reply("Found 2 rows in the orders dataset."),
+        ]
+    )
+    agent = Agent(chat_generator=chat_generator, tools=toolset)
+    result = agent.run(messages=[ChatMessage.from_user("Look up the orders dataset.")])
+    toolset.close()
+
+print(result["messages"][-1].text)
+```
+
+```bash
+uv run python haystack-algenta/try_it_locally.py
+```
+
+This really does open a local HTTP socket, run a real `MCPToolset` client against it, and drive a
+real `Agent` step loop -- the only things scripted are the two ends a live demo can't have without
+an account: the model's replies and the engine itself. Prints:
+
+```
+Found 2 rows in the orders dataset.
+```
+
+Swap the scripted `tool_call_reply`/`text_reply` calls for your own scenario, or point
+`create_algenta_tools` at `stub.base_url` from your own script, to explore the rest of this
+package (including `profile="execute"` and the denial gates below) without touching a real engine.
 
 ## Tool profiles
 
@@ -116,8 +201,9 @@ and this package makes no claim otherwise.
 
 ## Denial mapping
 
-Verified live against installed `haystack-ai` 3.0.0 (a real `mcp.server.fastmcp.FastMCP` stub
-server, real HTTP wire, real `Agent` run loop -- see `tests/test_toolset_scenarios.py`), not
+Verified live against both ends of the version range this package's `pyproject.toml` permits --
+`haystack-ai` 3.0.0 and 3.1.1, `mcp-haystack` 1.4.1 and 1.5.1 (a real `mcp.server.fastmcp.FastMCP`
+stub server, real HTTP wire, real `Agent` run loop -- see `tests/test_toolset_scenarios.py`), not
 assumed from documentation.
 
 **`GovernedReceiptHook` -- this package's own `after_tool` hook.** Parses the real outcome out of
@@ -226,12 +312,12 @@ value.
 ## Why `mcp-haystack`, not just `haystack-ai`
 
 `MCPToolset` is **not part of `haystack-ai`** -- confirmed by grepping an installed `haystack-ai`
-3.0.0 tree for any `mcp` module: none exists there. It ships in a separate PyPI package,
-**`mcp-haystack`**, under the `haystack_integrations.tools.mcp` import namespace. `haystack-ai`
-core only has the generic `Tool`/`Toolset`/`ComponentTool`/`Agent`/hooks primitives this package
-also uses. Any consumer of this package gets both transitively (they're both real, non-optional
-dependencies here), but it's worth knowing they're two separate packages if you're pinning
-versions yourself.
+tree (checked on both 3.0.0 and 3.1.1) for any `mcp` module: none exists there. It ships in a
+separate PyPI package, **`mcp-haystack`**, under the `haystack_integrations.tools.mcp` import
+namespace. `haystack-ai` core only has the generic `Tool`/`Toolset`/`ComponentTool`/`Agent`/hooks
+primitives this package also uses. Any consumer of this package gets both transitively (they're
+both real, non-optional dependencies here), but it's worth knowing they're two separate packages
+if you're pinning versions yourself.
 
 ## Why no `algenta-sdk` dependency
 
