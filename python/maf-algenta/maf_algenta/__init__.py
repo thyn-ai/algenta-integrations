@@ -16,6 +16,8 @@ endpoint, no Azure account or Foundry project required. It is not about **Micros
 that separate, documentation-only, explicitly-not-independently-verified deliverable.
 """
 
+from importlib import metadata as _metadata
+
 from .contract import DEFAULT_PROFILE, NEVER_MODEL_FACING_FIELDS, TOOL_PROFILES, ToolProfile
 from .exceptions import AlgentaGovernedCallFailure, AlgentaToolDenied, AlgentaToolExecutionFailed
 from .receipts import (
@@ -45,4 +47,9 @@ __all__ = [
     "parse_execution_receipt",
 ]
 
-__version__ = "0.1.0"
+try:
+    __version__ = _metadata.version("maf-algenta")
+except _metadata.PackageNotFoundError:
+    # Running from a source checkout without an installed distribution (e.g. `python -c` against
+    # a plain `git clone`, with no `pip install -e .`) -- there is no installed metadata to read.
+    __version__ = "0.0.0+unknown"

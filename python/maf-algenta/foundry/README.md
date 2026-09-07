@@ -222,9 +222,9 @@ None of the following was exercised, in any form, in this environment:
 - RBAC role assignment of any kind, `appRoleAssignedTo` grants, or a token actually being issued
   and validated against this app's audience.
 - Private-endpoint/VNet deployment of Algenta's MCP server for Foundry's private-MCP path.
-- Azure API Center registration of this MCP server (mentioned in the approved plan's research
-  notes as real and current, but out of scope for this template -- a follow-up if the owner wants
-  org-wide catalog registration rather than a per-project connection).
+- Azure API Center registration of this MCP server -- a real, current Microsoft capability, but
+  out of scope for this template; a follow-up if the owner wants org-wide catalog registration
+  rather than a per-project connection.
 
 Everything above is transcribed accurately from currently-published Microsoft documentation and
 schema-checked with the real Bicep compiler. None of it is a substitute for actually running it

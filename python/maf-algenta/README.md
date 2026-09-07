@@ -32,11 +32,11 @@ Foundry project, because it wasn't.
 pip install maf-algenta
 ```
 
-This package depends on **`agent-framework-core`** (not the `agent-framework` umbrella package)
-and `mcp`, both real, non-optional runtime dependencies -- and deliberately **not** on
-`algenta-sdk`. See [Why `agent-framework-core`, not `agent-framework`](#why-agent-framework-core-not-agent-framework)
-and [Why no `algenta-sdk` dependency](#why-no-algenta-sdk-dependency) below for both, rather than
-assuming either is an oversight.
+This package depends on **`agent-framework-core`** (not the `agent-framework` umbrella package),
+`mcp`, and `httpx` -- all three real, non-optional runtime dependencies -- and deliberately
+**not** on `algenta-sdk`. See [Why `agent-framework-core`, not `agent-framework`](#why-agent-framework-core-not-agent-framework),
+[Why `httpx`](#why-httpx), and [Why no `algenta-sdk` dependency](#why-no-algenta-sdk-dependency)
+below, rather than assuming any of the three is an oversight.
 
 ## Self-hosted-first
 
@@ -47,15 +47,33 @@ never a hosted-by-Algenta cloud service. The endpoint resolves, in order, from:
 2. the `ALGENTA_BASE_URL` environment variable,
 3. `http://localhost:8000/mcp` (the default for a local self-hosted engine).
 
+## Prerequisites
+
+Before running the Quick start below, you need:
+
+- **A running self-hosted Algenta Engine**, reachable at the URL you'll pass as `base_url=` (or
+  set via `ALGENTA_BASE_URL`) -- see [Self-hosted-first](#self-hosted-first) above. This package
+  is an MCP *client* only: it never starts, bundles, or proxies to an engine of its own, and it
+  never talks to any Algenta-hosted cloud service.
+- **A real `agent_framework` chat client, plus that provider's own credentials.**
+  `create_algenta_tools` supplies tools, not a model. The Quick start below uses
+  [`agent-framework-openai`](https://pypi.org/project/agent-framework-openai/)'s
+  `OpenAIChatClient` as one concrete example -- a separate package from this one, installed with
+  `pip install agent-framework-openai`, plus an `OPENAI_API_KEY` -- but any other
+  `agent_framework`-compatible chat client works the same way.
+
+No self-hosted engine running yet? [Try it locally](#try-it-locally-no-live-engine-required)
+below runs this package's own real, local MCP stub instead -- no engine and no API key required.
+
 ## Quick start
 
 ```python
 from agent_framework import Agent
-from agent_framework.openai import OpenAIChatClient  # or any other real chat client
+from agent_framework.openai import OpenAIChatClient  # pip install agent-framework-openai
 from maf_algenta import create_algenta_tools
 
 # create_algenta_tools is an async context manager -- it owns the MCP connection for the
-# lifetime of the `with` block (see "Why an async context manager" below).
+# lifetime of the `with` block (see "Why an async context manager", directly below).
 async with create_algenta_tools(base_url="http://localhost:8000/mcp", profile="observe") as tools:
     agent = Agent(OpenAIChatClient(), tools=tools)
     result = await agent.run("What's the expected value of scenario X?")
@@ -65,6 +83,16 @@ async with create_algenta_tools(base_url="http://localhost:8000/mcp", profile="o
 `profile="observe"` is also the default if you omit it -- the agent can call `get_contract` /
 `query_data` / `simulate` / `recommend`, and nothing that writes, plans, or executes anything.
 See [Tool profiles](#tool-profiles) to opt into more.
+
+## Why an async context manager
+
+`agent_framework.MCPStreamableHTTPTool` is itself used as `async with MCPStreamableHTTPTool(...) as
+mcp_tool:` in MAF's own examples and documentation -- one instance *is* a live, connected client
+session; there is no separate "client" object this package could build once and reuse across
+calls the way `langchain-mcp-adapters`' `MultiServerMCPClient` works. `create_algenta_tools`
+mirrors that lifecycle exactly rather than inventing a different shape: it owns a fresh connection
+for the duration of the `async with` block (unless you supply `mcp_tool=`, in which case you own
+it) and tears it down on exit.
 
 ## Tool profiles
 
@@ -188,50 +216,62 @@ schema-scrubbing logic without a network round trip. **You own that value's conn
 -- this function only ever reads `.functions` off it and never calls `.connect()`/`.close()`.
 Mutually exclusive with `base_url` and any MCP-connection keyword argument.
 
-## Why an async context manager
-
-`agent_framework.MCPStreamableHTTPTool` is itself used as `async with MCPStreamableHTTPTool(...) as
-mcp_tool:` in MAF's own examples and documentation -- one instance *is* a live, connected client
-session; there is no separate "client" object this package could build once and reuse across
-calls the way `langchain-mcp-adapters`' `MultiServerMCPClient` works. `create_algenta_tools`
-mirrors that lifecycle exactly rather than inventing a different shape: it owns a fresh connection
-for the duration of the `async with` block (unless you supply `mcp_tool=`, in which case you own
-it) and tears it down on exit.
-
 ## Why `agent-framework-core`, not `agent-framework`
 
 Verified directly against PyPI metadata: `agent-framework==1.15.0`'s *only* dependency is
 `agent-framework-core[all]==1.15.0`. That `[all]` extra unconditionally pulls in
 `agent-framework-foundry-hosting` and pre-release `azure-ai-agentserver-*` packages -- the current
-(non-retired) Foundry hosted-agent backend this package has no use for at all: Part A of this
-track is MAF running standalone against a self-hosted MCP endpoint, no Azure or Foundry adapters
-involved (see [`foundry/README.md`](./foundry/README.md) for the deliberately separate,
-documentation-only Part B). `agent-framework-core` with no extras provides every symbol this
+(non-retired) Foundry hosted-agent backend this package has no use for at all: this package covers
+MAF running standalone against a self-hosted MCP endpoint, with no Azure or Foundry adapters
+involved (see [`foundry/README.md`](./foundry/README.md) for the separate, documentation-only
+Foundry integration notes). `agent-framework-core` with no extras provides every symbol this
 package actually imports (`MCPStreamableHTTPTool`, `FunctionTool`, `MiddlewareFailure`, and so on)
 and resolves cleanly with ordinary, non-pre-release dependencies -- confirmed by installing it
 alone in an isolated environment while building this package.
+
+## Why `httpx`
+
+Verified live, from a completely from-scratch `pip install maf-algenta`: `agent_framework._mcp`'s
+`MCPStreamableHTTPTool.connect()` -- the exact call `create_algenta_tools`'s primary code path
+always makes -- imports `httpx` directly (`from httpx import URL, AsyncClient, Request, Timeout`),
+and raises a plain `ModuleNotFoundError: No module named 'httpx'` the moment a caller actually
+tries to connect, if it isn't installed. Neither of this package's other two dependencies
+provides it: `agent-framework-core` doesn't declare `httpx` at all, and `mcp`'s own currently
+published releases depend on [`httpx2`](https://pypi.org/project/httpx2/) -- a separate, newer
+package from the same author -- not `httpx` itself. `httpx` is declared here directly for the
+same reason `mcp` is (see [Why `agent-framework-core`, not `agent-framework`](#why-agent-framework-core-not-agent-framework)
+above): a dependency this package's own primary code path always needs belongs in this package's
+own `pyproject.toml`, not left to chance on what else happens to already be installed.
+
+For a related reason, `mcp` itself is capped at `mcp>=1.29.0,<2`: `mcp` 2.x renamed its
+`mcp.server.fastmcp.FastMCP` server class to `mcp.server.mcpserver.MCPServer` (confirmed directly
+against the installed 2.x package's own error message, which names the rename and its migration
+guide), and `tests/stub_server.py` -- the local, offline stand-in for a self-hosted Algenta MCP
+endpoint used by this package's own test suite and by [Try it locally](#try-it-locally-no-live-engine-required)
+above -- is built on the pre-rename class. `agent-framework-core`'s own `[all]` extra caps its
+optional `mcp` dependency at the same `<2` ceiling, for the same reason.
 
 ## Why no `algenta-sdk` dependency
 
 Every package in this repository may depend on at most one Algenta-owned thing, the published
 `algenta-sdk` client -- but only if it's genuinely used. This package never imports it:
 `create_algenta_tools` talks to the caller's self-hosted Algenta MCP endpoint directly via
-`agent_framework.MCPStreamableHTTPTool`, the same reason `typescript/algenta-tools` (D2) declares
+`agent_framework.MCPStreamableHTTPTool`, the same reason `typescript/algenta-tools` declares
 no `algenta-sdk` dependency either. Declaring it anyway -- the way `pydantic-ai-algenta` and
 `langchain-algenta` currently do, without importing it anywhere in their own source, only in
-README prose describing what a caller's *own* approval callback might call -- would repeat
-exactly the leftover-placeholder-dependency pattern an adversarial review is on record catching
-elsewhere in this repository's D2/D4 history. If this package ever needs a real, direct
+README prose describing what a caller's *own* approval callback might call -- would repeat a
+leftover-placeholder-dependency mistake already caught and fixed elsewhere in this repository. If
+this package ever needs a real, direct
 `algenta-sdk` call (for example, a convenience helper that records an out-of-band approval the
 way `pydantic_ai_algenta.resume.approve_and_resume` documents doing by hand), that's the point to
 add the dependency, not before.
 
 ## What was and wasn't verified about .NET compatibility
 
-The plan this track was scoped against says MAF's cross-language surface should be "verified via
-MAF's cross-language API." That phrase doesn't survive contact with a Python-only research pass:
-a `pip install agent-framework-core` cannot exercise a `dotnet/` tree at all. What *is* honestly
-confirmed: `agent-framework-core`'s own PyPI metadata points `source` at
+Microsoft Agent Framework also ships a .NET surface, and a natural question is whether this
+package's behavior has been cross-checked against it. It hasn't: a Python-only install cannot
+exercise a `dotnet/` tree at all, and a `pip install agent-framework-core` doesn't pull one in.
+What *is* honestly confirmed: `agent-framework-core`'s own PyPI metadata points `source` at
 `https://github.com/microsoft/agent-framework/tree/main/python`, and an unauthenticated GitHub API
 call against that repository's root shows real top-level `python/`, `dotnet/`, and `go/`
 directories -- a genuine multi-language monorepo, not a Python-only project dressed up with a
@@ -283,6 +323,61 @@ except AlgentaToolDenied as exc:
     exc.blocked.message
     exc.blocked.override_hint
 ```
+
+## Try it locally (no live engine required)
+
+Everything in [Quick start](#quick-start) above needs a running self-hosted Algenta Engine and a
+real chat-client API key. To see the whole thing work end to end without either, this package's
+own test suite already includes a real, deterministic, local stand-in for a self-hosted Algenta
+MCP endpoint -- `tests/stub_server.py`'s `StubServerFixture`, a real
+[`mcp.server.fastmcp.FastMCP`](https://modelcontextprotocol.io/) server on a real local HTTP
+socket, not a mock of anything in `maf_algenta` or `agent_framework`.
+
+From a clone of this repository:
+
+```bash
+cd python
+uv sync --all-packages --all-extras
+```
+
+Then save the following as `try_it_locally.py` inside `python/maf-algenta/` and run
+`uv run python try_it_locally.py` from that directory:
+
+```python
+import asyncio
+import logging
+
+from maf_algenta import create_algenta_tools
+from maf_algenta.toolset import _extract_function_result_payload
+from tests.stub_server import StubServerFixture
+
+
+async def main() -> None:
+    async with StubServerFixture() as stub:  # a real MCP server, listening on 127.0.0.1
+        logging.getLogger().setLevel(logging.WARNING)  # quiet the stub server's own wire logging
+        async with create_algenta_tools(base_url=stub.base_url, profile="observe") as tools:
+            print("tools exposed under 'observe':", sorted(t.name for t in tools))
+            simulate = next(tool for tool in tools if tool.name == "simulate")
+            raw_result = await simulate.invoke(arguments={"scenario": "expand-to-eu"}, skip_parsing=True)
+            print("simulate(scenario='expand-to-eu') ->", _extract_function_result_payload(raw_result))
+
+
+asyncio.run(main())
+```
+
+Real output, no engine and no model in the loop:
+
+```
+tools exposed under 'observe': ['get_contract', 'query_data', 'recommend', 'simulate']
+simulate(scenario='expand-to-eu') -> {'scenario': 'expand-to-eu', 'expected_value': 42.0}
+```
+
+This exercises the real path -- `create_algenta_tools` -> real `agent_framework.MCPStreamableHTTPTool`
+-> real `mcp` client -> a real wire round trip -- against the local stub server above, with no
+`agent_framework` chat client, no API key, and no network egress outside `127.0.0.1`. It calls a
+tool directly rather than through `agent_framework.Agent`'s own function-invocation loop; see
+[Testing this package's own test suite](#testing-this-packages-own-test-suite-not-your-agent)
+below for the version that does.
 
 ## Testing this package's own test suite (not your agent)
 
