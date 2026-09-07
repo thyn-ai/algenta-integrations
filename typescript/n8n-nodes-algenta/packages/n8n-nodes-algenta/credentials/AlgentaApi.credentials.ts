@@ -13,7 +13,7 @@ export class AlgentaApi implements ICredentialType {
 
 	icon: Icon = { light: 'file:../nodes/Algenta/algenta.svg', dark: 'file:../nodes/Algenta/algenta.dark.svg' };
 
-	documentationUrl = 'https://docs.algenta.ai/sdk/mcp';
+	documentationUrl = 'https://docs.algenta.ai/sdks/mcp';
 
 	properties: INodeProperties[] = [
 		{
