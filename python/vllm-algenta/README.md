@@ -12,6 +12,20 @@ mean depending on or reimplementing engine-side model-serving/routing logic, whi
 `scripts/check-no-engine-dependency.py` forbids, and it doesn't match this repository's own
 established shape ("a framework talks to Algenta") that every other package here follows.
 
+## Prerequisites
+
+- **A running, self-hosted Algenta engine.** This package never talks to any Algenta-operated
+  cloud service -- it always calls the engine's HTTP API at your own `ALGENTA_BASE_URL`
+  (`http://localhost:8000` by default). If you don't have an engine running yet, see
+  [Algenta's Quickstart guide](https://docs.algenta.ai/quickstart) -- it installs the engine and
+  mints your first API key in about two minutes.
+- **An Algenta API key**, from that same install step, exported as `ALGENTA_API_KEY`.
+- **The `openai` Python package** (`>=1.50`) -- installed automatically as this package's one
+  dependency.
+
+Don't have an engine handy right now? Skip to [Try it locally](#try-it-locally-no-live-engine-required)
+-- it runs this package's own real test stub instead, no engine or API key required.
+
 ## Install
 
 ```bash
@@ -22,12 +36,17 @@ This package depends on exactly one thing: the real, published
 [`openai`](https://pypi.org/project/openai/) Python client (`>=1.50`). No `algenta-sdk`
 dependency -- see [Why no `algenta-sdk` dependency](#why-no-algenta-sdk-dependency).
 
-## Self-hosted-first
+## Quickstart
 
 ```python
+import os
+
 from vllm_algenta.client import build_client
 
-client = build_client(base_url="http://localhost:8000", api_key="...")  # your own self-hosted engine
+client = build_client(
+    base_url="http://localhost:8000",        # your own self-hosted engine
+    api_key=os.environ["ALGENTA_API_KEY"],    # required -- raises immediately if unset, not "..."
+)
 resp = client.chat.completions.create(
     model="text.tokenizer",
     messages=[{"role": "user", "content": "Summarize this quarter's decision log."}],
@@ -39,8 +58,11 @@ print(resp.choices[0].message.content)
 variable, then `http://localhost:8000` -- never an Algenta-hosted default. `api_key` resolves from
 `api_key=` or `ALGENTA_API_KEY`; unlike `base_url`, there is **no** fallback default for this one
 -- `build_client`/`build_async_client` raise a clear `RuntimeError` instead of silently sending a
-placeholder credential that would only fail later with a confusing 401. See [Auth is required, not
-optional](#auth-is-required-not-optional) below for why.
+placeholder credential that would only fail later with a confusing 401. The snippet above makes
+that requirement visible at the call site too: `os.environ["ALGENTA_API_KEY"]` raises a `KeyError`
+immediately, in your own code, the moment the variable is unset -- never a valid-looking string
+like `"..."` that quietly succeeds here and only fails much later, deep inside an HTTP call, with a
+confusing 401. See [Auth is required, not optional](#auth-is-required-not-optional) below for why.
 
 Note the exact value `ALGENTA_BASE_URL` means here: **the engine's bare HTTP origin**
 (`http://localhost:8000`, no path suffix) -- this package appends `/v1` itself. Some MCP-based
@@ -49,27 +71,61 @@ into their own `ALGENTA_BASE_URL` fallback constant, because that whole string g
 straight to an MCP client. Don't copy one package's `ALGENTA_BASE_URL` value verbatim into
 another's environment -- see `vllm_algenta/client.py`'s module docstring for the full explanation.
 
+## Try it locally (no live engine required)
+
+This package's own conformance suite runs against a real stub Algenta HTTP server
+(`tests/stub_server.py`) -- a real FastAPI app on a real `uvicorn` socket, never a mock. It's also
+a genuine way to try this package's client without a running Algenta engine at all. From a
+checkout of this repository:
+
+```bash
+cd python
+uv sync --all-packages --all-extras
+cd vllm-algenta
+uv run --project .. python -c "
+from tests.stub_server import StubServerFixture
+from vllm_algenta.client import build_client
+
+with StubServerFixture() as stub:
+    # stub.base_url is a real local HTTP server -- no live Algenta engine involved.
+    client = build_client(base_url=stub.base_url, api_key='local-stub-does-not-check-this')
+    resp = client.chat.completions.create(
+        model='text.tokenizer',
+        messages=[{'role': 'user', 'content': \"Summarize this quarter's decision log.\"}],
+    )
+    print(resp.choices[0].message.content)
+    print('finish_reason:', resp.choices[0].finish_reason)
+"
+```
+
+This prints a real (synthetic, clearly-labeled) reply and `finish_reason: stop` -- run directly,
+with nothing mocked out, confirming the client and the stub's request/response shape actually
+work together end to end. See [Testing this package](#testing-this-package) for how the same stub
+backs the full conformance suite, including the tool-calling round trip.
+
 ## Capability status -- what works today, what does not, read this before you build on it
 
-Verified directly against `apps/api_server/schemas/llm.py` and `apps/api_server/routers/llm.py` in
-`thyn-ai/algenta` (the engine's own source repository), not assumed from documentation or an
-internal planning note -- an earlier internal memory claimed materially more capability than the
-real schema/router code has. Corrected here, plainly:
+Verified directly against `apps/api_server/schemas/llm.py` and
+`apps/api_server/routers/llm.py` in `thyn-ai/algenta` (the engine's own source repository, commit
+`a4233c335609d5828ddba874fc30f08c43cfcbb9` of `main`), not assumed from documentation or an
+internal planning note -- an earlier version of this table claimed materially *less* capability
+than the real schema/router code now has (tool calling and a widened `finish_reason` shipped after
+this table was last checked). Corrected here, plainly, model-dependence included:
 
 | Capability | Status | Evidence |
 |---|---|---|
 | Basic chat completion (`/v1/chat/completions`, non-streaming) | **Works** | `tests/test_chat_completions_matrix.py::test_basic_completion_round_trips_through_the_real_openai_client` |
-| `finish_reason` reflecting how generation actually ended | **Does not exist** -- hardcoded `"stop"` | `ChatCompletionChoice.finish_reason: Literal["stop"] = "stop"`, `apps/api_server/schemas/llm.py`. Never `"length"`, `"content_filter"`, or `"tool_calls"` -- the last of those can't occur because tool-calling doesn't exist on this route at all (below). |
-| Tool calling / function calling (`tools=`, `tool_choice=`) | **Does not exist** | `ChatCompletionsRequest` has no `tools` or `tool_choice` field, and neither it nor this package's stub sets `extra="forbid"` -- pydantic's default (`extra="ignore"`) means a `tools=` argument sent through the standard `openai` client is **silently dropped, not rejected**. The call still returns 200 with a plain text reply. See `test_tools_argument_is_silently_ignored_not_rejected` -- reproduced directly, not asserted from the schema alone. **Do not build tool-calling logic against this endpoint; it will appear to work (no error) and never actually call anything.** |
-| Streaming (`stream=true`) | **Works, but is synthetic** | `apps/api_server/routers/llm.py::_chat_completion_stream` computes the full reply first, then slices it into fixed-size (24-character) chunks (`_stream_text_chunks`) and re-emits them as SSE `chat.completion.chunk` events. This is post-hoc rechunking of an already-complete string, **not the backend generating and emitting tokens incrementally as they're produced**. A caller cannot use `stream=true` here to reduce time-to-first-useful-content the way real incremental backend streaming would -- the full completion already existed before the first chunk was sent. |
-| `/v1/responses` unified envelope | **Works for its own, narrower shape** | `ResponsesRequest.input` is `str \| list[str]` -- plain strings, not the structured `[{role, content}]` message-array shape OpenAI's real Responses API accepts. Streaming emits exactly three event types -- `response.created`, `response.output_item.done`, `response.completed` -- and nothing else: no `response.output_text.delta` (no incremental text events at all), no tool-call event, no approval-required event. See `tests/test_responses_endpoint.py::test_responses_streaming_emits_exactly_three_event_types_and_nothing_else`. |
-| `previous_response_id` / multi-turn Responses continuation | **Does not exist** | No such field anywhere on `ResponsesRequest`. |
+| `finish_reason` reflecting how generation actually ended | **Works, model-dependent** | Widened from a permanent `"stop"` to `Literal["stop", "tool_calls", "length", "content_filter"]` (`ChatCompletionChoice.finish_reason`, `apps/api_server/schemas/llm.py`). This package's own zero-config default model (`text.tokenizer`) is a deterministic utility model with nothing to truncate or interrupt, so it still only ever produces `"stop"` -- see `test_finish_reason_is_stop_for_the_deterministic_default_model`. A configured provider-backed model, or the bundled `algenta_local` backend, can genuinely produce `"tool_calls"` -- see the next row -- and provider-reported `"length"`/`"content_filter"` values pass through uninterpreted. |
+| Tool calling / function calling (`tools=`, `tool_choice=`) | **Works, model-dependent** | `ChatCompletionsRequest.tools` / `.tool_choice` / `.parallel_tool_calls` are real fields, forwarded to configured provider-backed models and to the bundled `algenta_local` backend (`apps/api_server/services/llm_api_service/_creation.py::create_chat_completion`) -- see `test_tool_calling_produces_real_tool_calls_and_finish_reason_on_a_tool_capable_model`, a genuine round trip through the real `openai` client, not an assertion from the schema alone. **This package's own zero-config default model (`text.tokenizer`) still has no tool-calling mechanism at all** -- sending `tools=` against it is now REJECTED with a loud `422 model_capability_unsupported`, a real improvement over silently dropping the argument (see `test_tools_argument_against_the_default_model_is_rejected_not_silently_ignored`). Pick a tool-capable model deliberately; don't assume the default one is it. |
+| Streaming (`stream=true`) | **Works; synthetic by default, model-dependent otherwise** | For this package's own zero-config default model, `apps/api_server/routers/llm.py::_chat_completion_stream` computes the full reply first, then slices it into fixed-size (24-character) chunks and re-emits them as SSE `chat.completion.chunk` events -- post-hoc rechunking, not the backend generating and emitting tokens incrementally as they're produced. Since then, the engine also has a real, incremental "passthrough" streaming mode for models that opt into one (`LLMModelResponse.streaming_mode`) -- this package's own test suite exercises only the synthetic default-model path (see `test_streaming_is_synthetic_post_hoc_rechunking_not_incremental_generation`), since faithfully exercising passthrough mode needs a real streaming backend. Separately: a completion that actually calls a tool cannot yet be streamed at all -- `stream=true` combined with an actual tool call is refused with `422 model_capability_unsupported` rather than silently dropping the tool call (see `test_streaming_is_refused_when_a_tool_call_would_actually_fire`). |
+| `/v1/responses` unified envelope | **Works for a narrower shape than the real engine now supports -- see the caveat below** | This package's own stub/tests currently model `ResponsesRequest.input` as `str \| list[str]` and a three-event streaming sequence (`response.created` / `response.output_item.done` / `response.completed`, nothing else). **The real engine has since added its own `tools`/`tool_choice`/`parallel_tool_calls`/`previous_response_id` support and a typed OpenResponses-style input-array shape for `input`** -- a separate, later change from the Chat Completions fix this table's other rows describe. This package's `/v1/responses` coverage has not been updated to match yet; treat the rows above (Chat Completions) as the current, re-verified ones, and this row as a known, tracked gap rather than an accurate description of `/v1/responses` today. |
+| `previous_response_id` / multi-turn Responses continuation | **Now exists on the real engine; not yet covered by this package** | See the `/v1/responses` row above. |
 
 None of this is a defect this package is responsible for or can work around from the client side
--- it's an honest description of the connected engine's real, current LLM API surface, so a reader
-building against it doesn't have to rediscover the gap the hard way. Track C in this repository's
-broader roadmap is where native tool-calling and real incremental streaming, if they land, would
-need to be added engine-side; this package makes no claim about when or whether that happens.
+-- it's an honest, current description of the connected engine's real LLM API surface, so a reader
+building against it doesn't have to rediscover the gap the hard way. This package's own stub and
+test suite are re-verified against the engine's source on each update; if it's been a while since
+the commit cited above, re-verify before trusting this table blindly.
 
 ## Auth is required, not optional
 
@@ -111,9 +167,12 @@ uv run pytest vllm-algenta -v
 ```
 
 `tests/test_chat_completions_matrix.py` covers the `/v1/chat/completions` matrix named in this
-package's own scope: a basic completion, the hardcoded `finish_reason`, synthetic rechunked
-streaming, and -- deliberately -- proof that a `tools=` argument is silently ignored rather than a
-test that pretends tool-calling works. `tests/test_responses_endpoint.py` covers the
-`/v1/responses` envelope, including the exact three-event-type streaming sequence.
+package's own scope: a basic completion, the deterministic default model's always-`"stop"`
+`finish_reason`, synthetic rechunked streaming, a real tool-calling round trip (`tool_calls`
+returned, `finish_reason="tool_calls"`) on a tool-capable model, the default model's loud rejection
+of a `tools=` argument it can't honor, and the current streaming+tool-calling combination refusal.
+`tests/test_responses_endpoint.py` covers the `/v1/responses` envelope this package's stub
+currently implements -- see the capability table above for the honest gap between that and what
+the real engine's `/v1/responses` surface supports today.
 `tests/test_client_config.py` is fast, no-network unit coverage of `vllm_algenta.client`'s own
 `base_url`/`api_key` resolution logic.
