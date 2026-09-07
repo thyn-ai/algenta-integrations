@@ -9,7 +9,7 @@
     "decision",
     "governed-execution"
   ],
-  "license": "MIT",
+  "license": "Apache-2.0",
   "homepage": "https://docs.algenta.ai",
   "author": { "name": "Thyn AI", "email": "security@algenta.ai" },
   "repository": {
