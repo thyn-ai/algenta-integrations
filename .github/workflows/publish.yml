@@ -182,7 +182,7 @@ jobs:
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
-        run: uvx twine upload --non-interactive --skip-existing dist/*
+        run: uvx twine upload --non-interactive --skip-existing --verbose dist/*
 
   npm:
     name: npm
