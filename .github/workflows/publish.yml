@@ -258,4 +258,12 @@ jobs:
         working-directory: ${{ needs.resolve.outputs.directory }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          # n8n-nodes-algenta's package.json runs `n8n-node prerelease` as prepublishOnly --
+          # @n8n/node-cli's own prerelease command (dist/commands/prerelease.js) exits 1 with
+          # "Run `npm run release` to publish the package" unless RELEASE_MODE is set. This is
+          # the tool's own documented guard against an accidental bare `npm publish`, not
+          # something to route around -- our own resolve/version-check steps upstream already
+          # own the "is this a legitimate release" decision, so satisfying this flag here is
+          # correct, not a bypass. A no-op for algenta-tools (no such script).
+          RELEASE_MODE: "true"
         run: npm publish --access public
