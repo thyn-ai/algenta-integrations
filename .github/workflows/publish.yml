@@ -211,8 +211,17 @@ jobs:
           version: 9
 
       - name: Build the package
-        working-directory: typescript/algenta-tools
+        # needs.resolve.outputs.directory is the nested package dir (typescript/<workspace>/
+        # packages/<name>), but pnpm install/build must run at the WORKSPACE ROOT two levels up
+        # (typescript/<workspace>) -- hardcoded to typescript/algenta-tools before this fix, which
+        # silently skipped n8n-nodes-algenta's own install/build on every release, leaving its
+        # devDependency-only `n8n-node` CLI missing and `npm publish`'s prerelease lifecycle hook
+        # failing with "command not found" (exit 127). Confirmed live: PR run
+        # https://github.com/thyn-ai/algenta-integrations/actions/runs/34162436762.
         run: |
+          set -euo pipefail
+          workspace_root="$(echo '${{ needs.resolve.outputs.directory }}' | sed 's#/packages/.*##')"
+          cd "$workspace_root"
           pnpm install --frozen-lockfile
           pnpm turbo run build
 
