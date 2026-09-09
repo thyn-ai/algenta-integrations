@@ -5,7 +5,7 @@ description = "Haystack tool integration for Algenta: a governed-execution-aware
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
-license-files = ["../../LICENSE"]
+license-files = ["LICENSE"]
 keywords = ["algenta", "haystack", "deepset", "agent", "tools", "decision", "mcp"]
 classifiers = [
     "Development Status :: 4 - Beta",
