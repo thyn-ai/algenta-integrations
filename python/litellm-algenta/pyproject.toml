@@ -5,7 +5,7 @@ description = "LiteLLM MCP Gateway config generation for a self-hosted Algenta E
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
-license-files = ["../../LICENSE"]
+license-files = ["LICENSE"]
 keywords = ["algenta", "litellm", "mcp", "gateway", "agent", "tools", "decision"]
 classifiers = [
     "Development Status :: 4 - Beta",

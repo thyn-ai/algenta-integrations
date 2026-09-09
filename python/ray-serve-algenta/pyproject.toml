@@ -5,7 +5,7 @@ description = "Deploy Algenta's stateless /mcp surface behind Ray Serve: a byte-
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
-license-files = ["../../LICENSE"]
+license-files = ["LICENSE"]
 keywords = ["algenta", "ray", "ray-serve", "kuberay", "mcp", "agent", "decision"]
 classifiers = [
     "Development Status :: 4 - Beta",
