@@ -5,7 +5,7 @@ description = "Point vLLM (or any OpenAI-client-based consumer) at Algenta's own
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
-license-files = ["../../LICENSE"]
+license-files = ["LICENSE"]
 keywords = ["algenta", "vllm", "openai", "openai-compatible", "agent", "decision"]
 classifiers = [
     "Development Status :: 4 - Beta",

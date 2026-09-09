@@ -5,7 +5,7 @@ description = "Microsoft Agent Framework (MAF) tool integration for Algenta: a g
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
-license-files = ["../../LICENSE"]
+license-files = ["LICENSE"]
 keywords = ["algenta", "agent-framework", "maf", "agent", "tools", "decision", "mcp"]
 classifiers = [
     "Development Status :: 4 - Beta",

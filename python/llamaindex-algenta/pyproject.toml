@@ -5,7 +5,7 @@ description = "LlamaIndex tool integration for Algenta: a governed-execution-awa
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
-license-files = ["../../LICENSE"]
+license-files = ["LICENSE"]
 keywords = ["algenta", "llama-index", "llamaindex", "agent", "tools", "decision", "mcp"]
 classifiers = [
     "Development Status :: 4 - Beta",
