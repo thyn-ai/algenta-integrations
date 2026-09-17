@@ -51,4 +51,4 @@ jobs:
           # token), never need to sign a CLA. angelatgithub is the org/repo
           # owner authoring commits on Algenta's own behalf, not an external
           # contributor -- owner-authorized 2026-08-23.
-          allowlist: dependabot[bot],github-actions[bot],angelatgithub
+          allowlist: dependabot[bot],github-actions[bot],codna-ai[bot],angelatgithub
