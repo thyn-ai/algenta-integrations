@@ -37,4 +37,3 @@ repos:
       - id: trivy-config
       - id: security-fix-deps
   # thyn-security-toolchain:end
-
