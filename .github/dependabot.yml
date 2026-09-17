@@ -1,127 +1,159 @@
+# Dependabot configuration. `ignore` rules mark upgrades that are deliberate migrations, not bumps:
+# mcp 2.x renames FastMCP (breaks tests/stub_server.py); fastmcp 4 requires mcp>=2; for the n8n node,
+# typescript 7 breaks the @typescript-eslint peer range, @types/node must track engines>=18.10, and
+# zod 3->4 is an incomplete migration (Codna review findings on #66/#68/#74, 2026-09-17).
 version: 2
 updates:
-  # Per the coordinator's explicit ask: daily (not weekly) checks specifically
-  # for the algenta-sdk PyPI package, since staying current with the
-  # published SDK is the whole point of this repo existing. `allow` scopes
-  # each entry to that one dependency name so other, ordinary transitive
-  # deps in these placeholder packages don't also get bumped daily.
-  - package-ecosystem: "pip"
-    directory: "/python/pydantic-ai-algenta"
-    schedule:
-      interval: "daily"
-    allow:
-      - dependency-name: "algenta-sdk"
-    commit-message:
-      prefix: "chore(pydantic-ai-algenta)"
-  - package-ecosystem: "pip"
-    directory: "/python/langchain-algenta"
-    schedule:
-      interval: "daily"
-    allow:
-      - dependency-name: "algenta-sdk"
-    commit-message:
-      prefix: "chore(langchain-algenta)"
-  - package-ecosystem: "pip"
-    directory: "/python/litellm-algenta"
-    schedule:
-      interval: "daily"
-    allow:
-      - dependency-name: "algenta-sdk"
-    commit-message:
-      prefix: "chore(litellm-algenta)"
-
-  # The remaining Python packages do not depend on algenta-sdk (their pyproject files
-  # say so); they get ordinary weekly updates, one grouped PR per package.
-  - package-ecosystem: "pip"
-    directory: "/python/haystack-algenta"
-    schedule:
-      interval: "weekly"
-    groups:
-      deps:
-        patterns: ["*"]
-    commit-message:
-      prefix: "chore(haystack-algenta)"
-  - package-ecosystem: "pip"
-    directory: "/python/llamaindex-algenta"
-    schedule:
-      interval: "weekly"
-    groups:
-      deps:
-        patterns: ["*"]
-    commit-message:
-      prefix: "chore(llamaindex-algenta)"
-  - package-ecosystem: "pip"
-    directory: "/python/maf-algenta"
-    schedule:
-      interval: "weekly"
-    groups:
-      deps:
-        patterns: ["*"]
-    commit-message:
-      prefix: "chore(maf-algenta)"
-  - package-ecosystem: "pip"
-    directory: "/python/ray-serve-algenta"
-    schedule:
-      interval: "weekly"
-    groups:
-      deps:
-        patterns: ["*"]
-    commit-message:
-      prefix: "chore(ray-serve-algenta)"
-  - package-ecosystem: "pip"
-    directory: "/python/vllm-algenta"
-    schedule:
-      interval: "weekly"
-    groups:
-      deps:
-        patterns: ["*"]
-    commit-message:
-      prefix: "chore(vllm-algenta)"
-
-  # Same ask, for the published TS-SDK equivalent -- also named "algenta-sdk"
-  # on npm (verified: https://www.npmjs.com/package/algenta-sdk), not a
-  # @thyn-ai/-scoped name.
-  - package-ecosystem: "npm"
-    directory: "/typescript/algenta-tools/packages/algenta-tools"
-    schedule:
-      interval: "daily"
-    allow:
-      - dependency-name: "algenta-sdk"
-    commit-message:
-      prefix: "chore(algenta-tools)"
-
-  # Everything else (dev tooling, GitHub Actions) stays on a normal weekly
-  # cadence -- no reason to check turbo/typescript/tsx daily.
-  - package-ecosystem: "npm"
-    directory: "/typescript/algenta-tools"
-    schedule:
-      interval: "weekly"
-    ignore:
-      - dependency-name: "algenta-sdk" # covered daily by the entry above
-    commit-message:
-      prefix: "chore(deps)"
-  - package-ecosystem: "npm"
-    directory: "/typescript/n8n-nodes-algenta"
-    schedule:
-      interval: "weekly"
-    commit-message:
-      prefix: "chore(deps)"
-  - package-ecosystem: "github-actions"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-    ignore:
-      # Pinned by thyn-ai/security-toolchain's propagate.py together with the
-      # pre-commit rev, so hooks and CI never drift apart. Dependabot names a
-      # reusable workflow by its full path, hence the wildcard.
-      - dependency-name: "thyn-ai/security-toolchain*"
-    groups:
-      # codeql.yml pins github/codeql-action/{init,analyze} to the SAME version at two
-      # call sites; Dependabot bumps each occurrence independently by default, and CI
-      # fails if only one lands (init writes a config file the analyze step's CLI version
-      # must match exactly) -- group them so every bump is one PR, never two half-bumps.
-      codeql-action:
-        patterns:
-          - "github/codeql-action/*"
-    commit-message:
-      prefix: "chore(ci)"
+- package-ecosystem: pip
+  directory: /python/pydantic-ai-algenta
+  schedule:
+    interval: daily
+  allow:
+  - dependency-name: algenta-sdk
+  ignore:
+  - dependency-name: mcp
+    update-types:
+    - version-update:semver-major
+  commit-message:
+    prefix: chore(pydantic-ai-algenta)
+- package-ecosystem: pip
+  directory: /python/langchain-algenta
+  schedule:
+    interval: daily
+  allow:
+  - dependency-name: algenta-sdk
+  ignore:
+  - dependency-name: mcp
+    update-types:
+    - version-update:semver-major
+  commit-message:
+    prefix: chore(langchain-algenta)
+- package-ecosystem: pip
+  directory: /python/litellm-algenta
+  schedule:
+    interval: daily
+  allow:
+  - dependency-name: algenta-sdk
+  ignore:
+  - dependency-name: mcp
+    update-types:
+    - version-update:semver-major
+  commit-message:
+    prefix: chore(litellm-algenta)
+- package-ecosystem: pip
+  directory: /python/haystack-algenta
+  schedule:
+    interval: weekly
+  groups:
+    deps:
+      patterns:
+      - '*'
+  ignore:
+  - dependency-name: mcp
+    update-types:
+    - version-update:semver-major
+  commit-message:
+    prefix: chore(haystack-algenta)
+- package-ecosystem: pip
+  directory: /python/llamaindex-algenta
+  schedule:
+    interval: weekly
+  groups:
+    deps:
+      patterns:
+      - '*'
+  ignore:
+  - dependency-name: mcp
+    update-types:
+    - version-update:semver-major
+  - dependency-name: fastmcp
+    update-types:
+    - version-update:semver-major
+  commit-message:
+    prefix: chore(llamaindex-algenta)
+- package-ecosystem: pip
+  directory: /python/maf-algenta
+  schedule:
+    interval: weekly
+  groups:
+    deps:
+      patterns:
+      - '*'
+  ignore:
+  - dependency-name: mcp
+    update-types:
+    - version-update:semver-major
+  commit-message:
+    prefix: chore(maf-algenta)
+- package-ecosystem: pip
+  directory: /python/ray-serve-algenta
+  schedule:
+    interval: weekly
+  groups:
+    deps:
+      patterns:
+      - '*'
+  ignore:
+  - dependency-name: mcp
+    update-types:
+    - version-update:semver-major
+  commit-message:
+    prefix: chore(ray-serve-algenta)
+- package-ecosystem: pip
+  directory: /python/vllm-algenta
+  schedule:
+    interval: weekly
+  groups:
+    deps:
+      patterns:
+      - '*'
+  ignore:
+  - dependency-name: mcp
+    update-types:
+    - version-update:semver-major
+  commit-message:
+    prefix: chore(vllm-algenta)
+- package-ecosystem: npm
+  directory: /typescript/algenta-tools/packages/algenta-tools
+  schedule:
+    interval: daily
+  allow:
+  - dependency-name: algenta-sdk
+  commit-message:
+    prefix: chore(algenta-tools)
+- package-ecosystem: npm
+  directory: /typescript/algenta-tools
+  schedule:
+    interval: weekly
+  ignore:
+  - dependency-name: algenta-sdk
+  commit-message:
+    prefix: chore(deps)
+- package-ecosystem: npm
+  directory: /typescript/n8n-nodes-algenta
+  schedule:
+    interval: weekly
+  commit-message:
+    prefix: chore(deps)
+  ignore:
+  - dependency-name: typescript
+    update-types:
+    - version-update:semver-major
+  - dependency-name: '@types/node'
+    update-types:
+    - version-update:semver-major
+  - dependency-name: zod
+    update-types:
+    - version-update:semver-major
+- package-ecosystem: github-actions
+  directory: /
+  schedule:
+    interval: weekly
+  ignore:
+  - dependency-name: thyn-ai/security-toolchain*
+  groups:
+    codeql-action:
+      patterns:
+      - github/codeql-action/*
+  commit-message:
+    prefix: chore(ci)
