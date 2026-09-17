@@ -2,15 +2,10 @@
 # repo is public — see the visibility note below). No secrets are referenced
 # anywhere in this file, on purpose.
 #
-# NOTE for whoever flips this repo's visibility to public: self-hosted fleet
-# runners (used below via vars.RUNNER_LABELS, since GitHub-hosted runners are
-# billing-blocked for this org) do not run jobs triggered by fork PRs on
-# PUBLIC repositories — the org's runner group has allows_public_repositories
-# set to false. That is a deliberate org-wide security posture, not a bug in
-# this file, and the established fix elsewhere in the org is to move
-# fork-triggered logic into a webhook-driven check rather than Actions. Do
-# not "fix" this by changing runner-group visibility as a side effect of an
-# unrelated PR.
+# Every job runs on standard GitHub-hosted runners: free for public repositories
+# and inside the org's included minutes while private, and -- unlike the org's
+# self-hosted fleet, whose runner group does not serve public repositories --
+# they run fork-triggered jobs the day this repository flips to public.
 name: ci
 
 on:
@@ -27,7 +22,7 @@ jobs:
   # scripts/test_check_no_engine_dependency.py for the proof it actually
   # catches a violation (not just a script nobody exercised).
   no-engine-dependency:
-    runs-on: ${{ fromJSON(vars.RUNNER_LABELS) }}
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -46,7 +41,7 @@ jobs:
   # and scripts/compute_release_bumps.py). Only exercises the script directly against throwaway
   # temp git repos -- never touches this repository's own history or main.
   release-automation:
-    runs-on: ${{ fromJSON(vars.RUNNER_LABELS) }}
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -64,7 +59,7 @@ jobs:
         run: python scripts/test_resolve_release_target.py
 
   python:
-    runs-on: ${{ fromJSON(vars.RUNNER_LABELS) }}
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -148,7 +143,7 @@ jobs:
           exit "$overall"
 
   typescript:
-    runs-on: ${{ fromJSON(vars.RUNNER_LABELS) }}
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -157,10 +152,8 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "20"
-          # setup-node's cache:npm tars up the runner's entire global npm cache
-          # dir every run. On a persistent self-hosted runner that cache never
-          # resets across jobs/repos, so it balloons unbounded -- same fix as
-          # sibling repos' ci.yml.
+          # No global npm cache: the workspaces are small and a cold install is
+          # cheaper than saving/restoring the cache tarball on every run.
           package-manager-cache: false
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
         with:
