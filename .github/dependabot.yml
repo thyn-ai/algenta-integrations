@@ -11,6 +11,17 @@ updates:
       interval: "daily"
     allow:
       - dependency-name: "algenta-sdk"
+    ignore:
+      # Never propose `mcp` 2.x (or any later major) for ANY of the Python packages. Their
+      # pyproject files cap `mcp<2` deliberately and say why in their own comment blocks:
+      # `mcp` 2.0 renamed `mcp.server.fastmcp.FastMCP` to `mcp.server.mcpserver.MCPServer`,
+      # which every package's `tests/stub_server.py` is built on (and `llamaindex-algenta`
+      # additionally hits a 2-tuple/3-tuple transport break in `llama-index-tools-mcp`). The
+      # widen-the-range PRs Dependabot opened for #63/#64/#65 were each flagged HIGH by Codna
+      # and reverted; this rule stops them from being re-proposed every week. Minor/patch
+      # updates inside the pinned 1.x range are still allowed.
+      - dependency-name: "mcp"
+        update-types: ["version-update:semver-major"]
     commit-message:
       prefix: "chore(pydantic-ai-algenta)"
   - package-ecosystem: "pip"
@@ -19,6 +30,9 @@ updates:
       interval: "daily"
     allow:
       - dependency-name: "algenta-sdk"
+    ignore:
+      - dependency-name: "mcp" # semver-major only; see the mcp note on the first pip entry
+        update-types: ["version-update:semver-major"]
     commit-message:
       prefix: "chore(langchain-algenta)"
   - package-ecosystem: "pip"
@@ -27,6 +41,9 @@ updates:
       interval: "daily"
     allow:
       - dependency-name: "algenta-sdk"
+    ignore:
+      - dependency-name: "mcp" # semver-major only; see the mcp note on the first pip entry
+        update-types: ["version-update:semver-major"]
     commit-message:
       prefix: "chore(litellm-algenta)"
 
@@ -39,6 +56,9 @@ updates:
     groups:
       deps:
         patterns: ["*"]
+    ignore:
+      - dependency-name: "mcp" # semver-major only; see the mcp note on the first pip entry
+        update-types: ["version-update:semver-major"]
     commit-message:
       prefix: "chore(haystack-algenta)"
   - package-ecosystem: "pip"
@@ -48,6 +68,9 @@ updates:
     groups:
       deps:
         patterns: ["*"]
+    ignore:
+      - dependency-name: "mcp" # semver-major only; see the mcp note on the first pip entry
+        update-types: ["version-update:semver-major"]
     commit-message:
       prefix: "chore(llamaindex-algenta)"
   - package-ecosystem: "pip"
@@ -57,6 +80,9 @@ updates:
     groups:
       deps:
         patterns: ["*"]
+    ignore:
+      - dependency-name: "mcp" # semver-major only; see the mcp note on the first pip entry
+        update-types: ["version-update:semver-major"]
     commit-message:
       prefix: "chore(maf-algenta)"
   - package-ecosystem: "pip"
@@ -66,6 +92,9 @@ updates:
     groups:
       deps:
         patterns: ["*"]
+    ignore:
+      - dependency-name: "mcp" # semver-major only; see the mcp note on the first pip entry
+        update-types: ["version-update:semver-major"]
     commit-message:
       prefix: "chore(ray-serve-algenta)"
   - package-ecosystem: "pip"
@@ -75,6 +104,9 @@ updates:
     groups:
       deps:
         patterns: ["*"]
+    ignore:
+      - dependency-name: "mcp" # semver-major only; see the mcp note on the first pip entry
+        update-types: ["version-update:semver-major"]
     commit-message:
       prefix: "chore(vllm-algenta)"
 
