@@ -57,7 +57,7 @@
     "@n8n/node-cli": "*",
     "@types/node": "^22.0.0",
     "n8n-workflow": "^2.0.0",
-    "typescript": "^5.6.0",
+    "typescript": "^7.0.2",
     "vitest": "^5.0.0",
     "zod": "^3.25.0"
   },
