@@ -30,6 +30,54 @@ updates:
     commit-message:
       prefix: "chore(litellm-algenta)"
 
+  # The remaining Python packages do not depend on algenta-sdk (their pyproject files
+  # say so); they get ordinary weekly updates, one grouped PR per package.
+  - package-ecosystem: "pip"
+    directory: "/python/haystack-algenta"
+    schedule:
+      interval: "weekly"
+    groups:
+      deps:
+        patterns: ["*"]
+    commit-message:
+      prefix: "chore(haystack-algenta)"
+  - package-ecosystem: "pip"
+    directory: "/python/llamaindex-algenta"
+    schedule:
+      interval: "weekly"
+    groups:
+      deps:
+        patterns: ["*"]
+    commit-message:
+      prefix: "chore(llamaindex-algenta)"
+  - package-ecosystem: "pip"
+    directory: "/python/maf-algenta"
+    schedule:
+      interval: "weekly"
+    groups:
+      deps:
+        patterns: ["*"]
+    commit-message:
+      prefix: "chore(maf-algenta)"
+  - package-ecosystem: "pip"
+    directory: "/python/ray-serve-algenta"
+    schedule:
+      interval: "weekly"
+    groups:
+      deps:
+        patterns: ["*"]
+    commit-message:
+      prefix: "chore(ray-serve-algenta)"
+  - package-ecosystem: "pip"
+    directory: "/python/vllm-algenta"
+    schedule:
+      interval: "weekly"
+    groups:
+      deps:
+        patterns: ["*"]
+    commit-message:
+      prefix: "chore(vllm-algenta)"
+
   # Same ask, for the published TS-SDK equivalent -- also named "algenta-sdk"
   # on npm (verified: https://www.npmjs.com/package/algenta-sdk), not a
   # @thyn-ai/-scoped name.
@@ -52,10 +100,21 @@ updates:
       - dependency-name: "algenta-sdk" # covered daily by the entry above
     commit-message:
       prefix: "chore(deps)"
+  - package-ecosystem: "npm"
+    directory: "/typescript/n8n-nodes-algenta"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "chore(deps)"
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+    ignore:
+      # Pinned by thyn-ai/security-toolchain's propagate.py together with the
+      # pre-commit rev, so hooks and CI never drift apart. Dependabot names a
+      # reusable workflow by its full path, hence the wildcard.
+      - dependency-name: "thyn-ai/security-toolchain*"
     groups:
       # codeql.yml pins github/codeql-action/{init,analyze} to the SAME version at two
       # call sites; Dependabot bumps each occurrence independently by default, and CI

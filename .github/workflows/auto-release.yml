@@ -35,7 +35,7 @@ permissions:
 
 jobs:
   auto-release:
-    runs-on: ${{ fromJSON(vars.RUNNER_LABELS) }}
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -96,13 +96,6 @@ jobs:
       - name: Mint a scoped App installation token
         id: app-token
         if: steps.bumps.outputs.bumped == 'true' && steps.creds.outputs.configured == 'true'
-        # NODE_USE_ENV_PROXY: this fleet's runners have an HTTP(S) proxy env var set, and this
-        # action's Node runtime refuses to use it silently -- it errors "A proxy environment
-        # variable is set, but Node.js native proxy support is not enabled" until this is set.
-        # Same fix already proven in thyn-ai/algenta's sync-public-sdk.yml for this exact action;
-        # not something guessed here.
-        env:
-          NODE_USE_ENV_PROXY: "1"
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           app-id: ${{ secrets.ALGENTA_SDK_SYNC_APP_ID }}
@@ -155,11 +148,7 @@ jobs:
               subprocess.run(['git', 'push', 'origin', b['tag']], check=True)
           "
 
-      # The shared fleet image doesn't ship the gh CLI (same "not every tool is pre-installed"
-      # story as fleet-python's own README above), and this runner has no passwordless sudo, so
-      # apt-get is not an option -- install a static binary into a per-job dir instead. Discover
-      # os/arch from `uname` rather than hardcoding "linux_amd64", matching fleet-python's own
-      # "discover, never hardcode" precedent in this same repo.
+      # Defensive fallback: ubuntu-latest preinstalls gh, but a bare runner image would not.
       - name: Ensure the GitHub CLI is available
         if: steps.bumps.outputs.bumped == 'true' && steps.creds.outputs.configured == 'true'
         run: |

@@ -66,7 +66,7 @@ permissions:
 
 jobs:
   sync:
-    runs-on: ${{ fromJSON(vars.RUNNER_LABELS) }}
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -166,10 +166,7 @@ jobs:
       # entirely-scaffolded repo. Leaving this as a normal PR for a human
       # (or a separate, explicitly-approved auto-merge rule added later)
       # rather than assuming the convention transfers here by default.
-      # The shared fleet image doesn't ship the gh CLI and this runner has no passwordless sudo,
-      # so apt-get is not an option here -- install a static binary into a per-job dir instead.
-      # Discover os/arch from `uname` rather than hardcoding "linux_amd64", matching fleet-python's
-      # own "discover, never hardcode" precedent in this same repo.
+      # Defensive fallback: ubuntu-latest preinstalls gh, but a bare runner image would not.
       - name: Ensure the GitHub CLI is available
         if: steps.diff.outputs.changed == 'true'
         run: |
