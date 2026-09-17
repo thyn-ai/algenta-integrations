@@ -66,7 +66,7 @@ classifiers = [
 # prevented -- see the README's "Why `httpx`" section.
 dependencies = [
     "agent-framework-core>=1.15.0",
-    "mcp>=1.29.0,<3",
+    "mcp>=1.29.0,<2",
     "httpx>=0.27",
 ]
 
