@@ -1,0 +1,11 @@
+# Repository-wide Ruff configuration (python/, scripts/, demo/). pre-commit runs it;
+# CI does not enforce it yet.
+line-length = 100
+target-version = "py310"
+extend-exclude = ["**/.venv", "**/build", "**/dist", "**/node_modules"]
+
+[lint]
+select = ["E", "W", "F", "I", "B", "UP"]
+# Long lines are the formatter's job where it can wrap them; the remaining ones
+# (URLs, long strings) are not worth blocking a commit over.
+ignore = ["E501"]

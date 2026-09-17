@@ -79,7 +79,7 @@ concurrency:
 jobs:
   resolve:
     name: Resolve the release tag
-    runs-on: ${{ fromJSON(vars.RUNNER_LABELS) }}
+    runs-on: ubuntu-latest
     outputs:
       name: ${{ steps.target.outputs.name }}
       version: ${{ steps.target.outputs.version }}
@@ -118,7 +118,7 @@ jobs:
     name: PyPI
     needs: resolve
     if: needs.resolve.outputs.registry == 'pypi'
-    runs-on: ${{ fromJSON(vars.RUNNER_LABELS) }}
+    runs-on: ubuntu-latest
     environment: pypi
     permissions:
       contents: read
@@ -188,7 +188,7 @@ jobs:
     name: npm
     needs: resolve
     if: needs.resolve.outputs.registry == 'npm'
-    runs-on: ${{ fromJSON(vars.RUNNER_LABELS) }}
+    runs-on: ubuntu-latest
     environment: npm
     permissions:
       contents: read
@@ -202,8 +202,7 @@ jobs:
         with:
           node-version: "20"
           registry-url: https://registry.npmjs.org
-          # See ci.yml: on a persistent self-hosted runner setup-node's npm cache never resets
-          # across jobs and grows unbounded.
+          # See ci.yml: no global npm cache, the install is small.
           package-manager-cache: false
 
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
