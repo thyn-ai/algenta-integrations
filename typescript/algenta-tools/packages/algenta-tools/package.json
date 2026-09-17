@@ -52,7 +52,7 @@
   },
   "devDependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
-    "@types/node": "^26.4.1",
+    "@types/node": "^26.5.1",
     "ai": "^7.0.99",
     "tsup": "^8.5.1",
     "tsx": "^4.23.13",
