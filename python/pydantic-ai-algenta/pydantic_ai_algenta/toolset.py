@@ -23,7 +23,12 @@ from pydantic_ai.tools import AgentDepsT, RunContext, ToolDenied
 from pydantic_ai.toolsets.abstract import AbstractToolset, ToolsetTool
 from pydantic_ai.toolsets.wrapper import WrapperToolset
 
-from .contract import NEVER_MODEL_FACING_FIELDS, DEFAULT_PROFILE, ToolProfile, resolve_profile_tool_names
+from .contract import (
+    DEFAULT_PROFILE,
+    NEVER_MODEL_FACING_FIELDS,
+    ToolProfile,
+    resolve_profile_tool_names,
+)
 from .receipts import ExecutionReceipt, parse_denial, parse_receipt
 
 if TYPE_CHECKING:

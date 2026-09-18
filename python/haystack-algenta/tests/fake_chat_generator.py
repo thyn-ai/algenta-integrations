@@ -40,7 +40,7 @@ class ScriptedChatGenerator:
         return {"type": "tests.fake_chat_generator.ScriptedChatGenerator", "init_parameters": {}}
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "ScriptedChatGenerator":
+    def from_dict(cls, data: dict[str, Any]) -> ScriptedChatGenerator:
         return cls(scripted_replies=[])
 
 

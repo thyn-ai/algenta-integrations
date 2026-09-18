@@ -68,7 +68,7 @@ import socket
 import threading
 import time
 import uuid
-from typing import Any, Literal, Optional, Union
+from typing import Any, Literal
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request
@@ -111,17 +111,17 @@ class ChatCompletionToolCall(BaseModel):
 
 class ChatCompletionInputMessage(BaseModel):
     role: Literal["system", "user", "assistant", "developer", "tool"]
-    content: Optional[str] = None
-    tool_calls: Optional[list[ChatCompletionToolCall]] = None
-    tool_call_id: Optional[str] = None
-    name: Optional[str] = None
+    content: str | None = None
+    tool_calls: list[ChatCompletionToolCall] | None = None
+    tool_call_id: str | None = None
+    name: str | None = None
 
 
 class ChatCompletionToolFunctionDef(BaseModel):
     name: str
-    description: Optional[str] = None
-    parameters: Optional[dict[str, Any]] = None
-    strict: Optional[bool] = None
+    description: str | None = None
+    parameters: dict[str, Any] | None = None
+    strict: bool | None = None
 
 
 class ChatCompletionToolDef(BaseModel):
@@ -142,19 +142,19 @@ class ChatCompletionsRequest(BaseModel):
     model: str = DEFAULT_MODEL
     messages: list[ChatCompletionInputMessage] = Field(..., min_length=1)
     stream: bool = False
-    tools: Optional[list[ChatCompletionToolDef]] = None
-    tool_choice: Union[Literal["auto", "none", "required"], ChatCompletionNamedToolChoice, None] = None
-    parallel_tool_calls: Optional[bool] = None
-    max_tokens: Optional[int] = Field(default=None, ge=1)
-    temperature: Optional[float] = Field(default=None, ge=0.0)
-    top_p: Optional[float] = Field(default=None, gt=0.0, le=1.0)
-    seed: Optional[int] = None
+    tools: list[ChatCompletionToolDef] | None = None
+    tool_choice: Literal["auto", "none", "required"] | ChatCompletionNamedToolChoice | None = None
+    parallel_tool_calls: bool | None = None
+    max_tokens: int | None = Field(default=None, ge=1)
+    temperature: float | None = Field(default=None, ge=0.0)
+    top_p: float | None = Field(default=None, gt=0.0, le=1.0)
+    seed: int | None = None
 
 
 class ChatCompletionOutputMessage(BaseModel):
     role: Literal["assistant"] = "assistant"
-    content: Optional[str] = None
-    tool_calls: Optional[list[ChatCompletionToolCall]] = None
+    content: str | None = None
+    tool_calls: list[ChatCompletionToolCall] | None = None
 
 
 class ChatCompletionChoice(BaseModel):
@@ -173,15 +173,15 @@ class ProviderAttemptResponse(BaseModel):
     provider_backend: str
     provider_model_id: str
     outcome: Literal["selected", "failed"]
-    error_code: Optional[str] = None
+    error_code: str | None = None
 
 
 class ChatCompletionsResponse(BaseModel):
     id: str
     object: Literal["chat.completion"] = "chat.completion"
     model: str
-    provider_backend: Optional[str] = None
-    provider_model_id: Optional[str] = None
+    provider_backend: str | None = None
+    provider_model_id: str | None = None
     provider_attempts: list[ProviderAttemptResponse] = Field(default_factory=list)
     choices: list[ChatCompletionChoice]
     usage: ChatCompletionUsage
@@ -192,7 +192,7 @@ class ChatCompletionsResponse(BaseModel):
 
 class ResponsesRequest(BaseModel):
     model: str = DEFAULT_MODEL
-    input: Union[str, list[str]]
+    input: str | list[str]
     dimensions: int = Field(default=64, gt=0, le=4096)
     stream: bool = False
     # NOTE: the real ResponsesRequest has since grown `tools`, `tool_choice`,
@@ -205,17 +205,17 @@ class ResponsesRequest(BaseModel):
 class ResponseOutputContent(BaseModel):
     type: Literal["tokenization", "embedding", "text"]
     text: str
-    tokens: Optional[list[str]] = None
+    tokens: list[str] | None = None
     token_count: int
-    embedding: Optional[list[float]] = None
+    embedding: list[float] | None = None
 
 
 class ResponseOutputItem(BaseModel):
     id: str
     object: Literal["response.output"] = "response.output"
     index: int
-    provider_backend: Optional[str] = None
-    provider_model_id: Optional[str] = None
+    provider_backend: str | None = None
+    provider_model_id: str | None = None
     provider_attempts: list[ProviderAttemptResponse] = Field(default_factory=list)
     content: list[ResponseOutputContent]
 
@@ -230,8 +230,8 @@ class ResponsesResponse(BaseModel):
     object: Literal["response"] = "response"
     status: Literal["completed"] = "completed"
     model: str
-    provider_backend: Optional[str] = None
-    provider_model_id: Optional[str] = None
+    provider_backend: str | None = None
+    provider_model_id: str | None = None
     provider_attempts: list[ProviderAttemptResponse] = Field(default_factory=list)
     output: list[ResponseOutputItem]
     usage: EmbeddingUsageResponse
@@ -265,8 +265,8 @@ def _deterministic_reply(messages: list[ChatCompletionInputMessage]) -> str:
 
 
 def _named_tool_choice_function_name(
-    tool_choice: Union[Literal["auto", "none", "required"], ChatCompletionNamedToolChoice, None],
-) -> Optional[str]:
+    tool_choice: Literal["auto", "none", "required"] | ChatCompletionNamedToolChoice | None,
+) -> str | None:
     if isinstance(tool_choice, ChatCompletionNamedToolChoice):
         return tool_choice.function.name
     return None
@@ -365,9 +365,9 @@ def build_stub_app() -> FastAPI:
 
         if calls_a_tool:
             tool_call = _tool_call_response(payload)
-            content: Optional[str] = None
+            content: str | None = None
             finish_reason: Literal["stop", "tool_calls", "length", "content_filter"] = "tool_calls"
-            tool_calls: Optional[list[ChatCompletionToolCall]] = [tool_call]
+            tool_calls: list[ChatCompletionToolCall] | None = [tool_call]
             completion_tokens = len(tool_call.function.name.split())
         else:
             content = _deterministic_reply(payload.messages)
@@ -544,7 +544,7 @@ class StubServerFixture:
         self._server: uvicorn.Server | None = None
         self._thread: threading.Thread | None = None
 
-    def __enter__(self) -> "StubServerFixture":
+    def __enter__(self) -> StubServerFixture:
         self.port = _free_port()
         config = uvicorn.Config(build_stub_app(), host="127.0.0.1", port=self.port, log_level="warning")
         self._server = uvicorn.Server(config)

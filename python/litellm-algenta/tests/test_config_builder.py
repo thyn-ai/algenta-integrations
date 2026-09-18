@@ -13,7 +13,6 @@ from pathlib import Path
 
 import pytest
 import yaml
-
 from litellm_algenta.config import (
     ConfigError,
     build_mcp_server_entry,

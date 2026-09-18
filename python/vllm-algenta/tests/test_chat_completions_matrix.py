@@ -22,7 +22,6 @@ from __future__ import annotations
 
 import pytest
 from openai import OpenAI, UnprocessableEntityError
-
 from vllm_algenta.client import resolve_v1_base_url
 
 from .stub_server import DEFAULT_MODEL, TOOL_CALLING_MODEL, StubServerFixture

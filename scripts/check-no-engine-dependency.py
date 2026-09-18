@@ -47,7 +47,6 @@ from __future__ import annotations
 import argparse
 import json
 import re
-import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -224,12 +223,12 @@ def check_pyproject(path: Path) -> list[Violation]:
         pkg_name = re.split(r"[\s<>=!\[;]", dep, maxsplit=1)[0]
         violations.extend(check_dependency_pair(pkg_name, dep, path, None))
 
-    for group, deps in (project.get("optional-dependencies") or {}).items():
+    for _group, deps in (project.get("optional-dependencies") or {}).items():
         for dep in dep_strings(deps):
             pkg_name = re.split(r"[\s<>=!\[;]", dep, maxsplit=1)[0]
             violations.extend(check_dependency_pair(pkg_name, dep, path, None))
 
-    for group, deps in (data.get("dependency-groups") or {}).items():
+    for _group, deps in (data.get("dependency-groups") or {}).items():
         for dep in dep_strings(deps):
             pkg_name = re.split(r"[\s<>=!\[;]", dep, maxsplit=1)[0]
             violations.extend(check_dependency_pair(pkg_name, dep, path, None))

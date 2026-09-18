@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
-from langchain_algenta.receipts import NAMED_EXECUTION_GATES, ExecutionDenial, ExecutionReceipt, parse_denial, parse_receipt
+from langchain_algenta.receipts import (
+    NAMED_EXECUTION_GATES,
+    ExecutionDenial,
+    ExecutionReceipt,
+    parse_denial,
+    parse_receipt,
+)
 
 FULL_RECEIPT = {
     "decision_id": "decision-1",
