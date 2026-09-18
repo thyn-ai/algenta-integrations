@@ -26,7 +26,7 @@ exists to prevent this repository from doing.
 
 import logging
 import os
-from typing import AsyncIterator, Optional
+from collections.abc import AsyncIterator
 
 import httpx
 from fastapi import FastAPI, Request
@@ -133,7 +133,7 @@ class AlgentaMCPProxy:
 
     def __init__(
         self,
-        upstream_base_url: Optional[str] = None,
+        upstream_base_url: str | None = None,
         request_timeout_seconds: float = _DEFAULT_TIMEOUT_SECONDS,
     ) -> None:
         self._upstream_base_url = (
@@ -215,8 +215,8 @@ class AlgentaMCPProxy:
 
 def build_app(
     *,
-    upstream_base_url: Optional[str] = None,
-    num_replicas: Optional[int] = None,
+    upstream_base_url: str | None = None,
+    num_replicas: int | None = None,
     request_timeout_seconds: float = _DEFAULT_TIMEOUT_SECONDS,
 ) -> serve.Application:
     """Bind a fresh `AlgentaMCPProxy` application.

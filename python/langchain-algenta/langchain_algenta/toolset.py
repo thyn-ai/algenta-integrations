@@ -31,7 +31,13 @@ from typing import Any
 import httpx
 from langchain_core.tools import BaseTool, StructuredTool
 
-from .contract import DEFAULT_PROFILE, NEVER_MODEL_FACING_FIELDS, TOOL_PROFILES, ToolProfile, resolve_profile_tool_names
+from .contract import (
+    DEFAULT_PROFILE,
+    NEVER_MODEL_FACING_FIELDS,
+    TOOL_PROFILES,
+    ToolProfile,
+    resolve_profile_tool_names,
+)
 from .exceptions import AlgentaExecutionBlocked
 from .governance import resolve_governed_call
 from .interceptor import AlgentaToolCallInterceptor

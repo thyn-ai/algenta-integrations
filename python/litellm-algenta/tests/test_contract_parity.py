@@ -13,7 +13,6 @@ import json
 from pathlib import Path
 
 import pytest
-
 from litellm_algenta.contract import (
     EXECUTE_DECISION_MODEL_FACING_PARAMS,
     FULL_PROFILE_SENTINEL,

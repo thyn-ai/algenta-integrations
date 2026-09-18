@@ -10,7 +10,6 @@ filters natively via `MCPToolset(tool_names=...)`).
 from __future__ import annotations
 
 import pytest
-
 from haystack_algenta import create_algenta_tools
 
 from .helpers import build_full_fake_registry

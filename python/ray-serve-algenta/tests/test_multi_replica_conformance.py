@@ -24,7 +24,6 @@ import httpx
 import ray
 from fastmcp import Client
 from ray import serve
-
 from ray_serve_algenta.deployment import REPLICA_HEADER, AlgentaMCPProxy, build_app
 
 from .stub_server import StubServerFixture

@@ -41,7 +41,7 @@ class AlgentaGovernedCallFailure(MiddlewareFailure):
     -- can still inspect `error.blocked.gate`, `error.blocked.override_hint`, etc.
     """
 
-    def __init__(self, message: str, *, blocked: "ExecutionBlocked | None" = None) -> None:
+    def __init__(self, message: str, *, blocked: ExecutionBlocked | None = None) -> None:
         super().__init__(message)
         self.blocked = blocked
 

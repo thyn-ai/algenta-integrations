@@ -61,7 +61,13 @@ from typing import Any
 from haystack.tools import Tool, Toolset
 from haystack_integrations.tools.mcp import MCPServerInfo, MCPToolset, StreamableHttpServerInfo
 
-from .contract import DEFAULT_PROFILE, NEVER_MODEL_FACING_FIELDS, TOOL_PROFILES, ToolProfile, resolve_profile_tool_names
+from .contract import (
+    DEFAULT_PROFILE,
+    NEVER_MODEL_FACING_FIELDS,
+    TOOL_PROFILES,
+    ToolProfile,
+    resolve_profile_tool_names,
+)
 
 #: Default self-hosted Algenta MCP endpoint. Matches this whole program's standing rule: every
 #: default in this repository points at the caller's own self-hosted deployment, never a
@@ -163,7 +169,7 @@ class AlgentaToolset(Toolset):
         )
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "AlgentaToolset":
+    def from_dict(cls, data: dict[str, Any]) -> AlgentaToolset:
         raise NotImplementedError(
             "AlgentaToolset cannot be deserialized -- rebuild it with create_algenta_tools(...) instead."
         )

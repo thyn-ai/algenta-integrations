@@ -47,12 +47,12 @@ class AlgentaGovernedCallFailure(Exception):
     `error.blocked.override_hint`, etc.
     """
 
-    def __init__(self, message: str, *, blocked: "ExecutionBlocked | None" = None) -> None:
+    def __init__(self, message: str, *, blocked: ExecutionBlocked | None = None) -> None:
         super().__init__(message)
         self.blocked = blocked
 
     @property
-    def gate(self) -> "ExecutionGate | None":
+    def gate(self) -> ExecutionGate | None:
         """The real named gate (`"idempotency"` / `"confidence"` / `"risk_floor"`) that blocked
         this call, or `None` if this failure wasn't constructed with a parsed `blocked` payload."""
         return self.blocked.gate if self.blocked is not None else None

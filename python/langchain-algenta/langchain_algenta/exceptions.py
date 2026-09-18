@@ -33,7 +33,7 @@ class AlgentaGovernedCallError(Exception):
     still inspect `error.denial.gate`, `error.denial.code`, `error.denial.override_hint`, etc.
     """
 
-    def __init__(self, message: str, *, denial: "ExecutionDenial | None" = None) -> None:
+    def __init__(self, message: str, *, denial: ExecutionDenial | None = None) -> None:
         super().__init__(message)
         self.denial = denial
 

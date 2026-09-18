@@ -39,6 +39,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+
 def _find_repo_root() -> Path:
     """The git repository root of the CURRENT WORKING DIRECTORY, not wherever this
     script file happens to live. Deliberately NOT `Path(__file__).resolve().parent.parent`

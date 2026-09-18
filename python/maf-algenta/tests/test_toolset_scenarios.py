@@ -17,18 +17,23 @@ from typing import Any
 import pytest
 from agent_framework import Content, MCPStreamableHTTPTool, Message, MiddlewareFailure
 from agent_framework.exceptions import ToolExecutionException
-
 from maf_algenta import (
     AlgentaGovernedCallFailure,
     AlgentaToolDenied,
     AlgentaToolExecutionFailed,
     create_algenta_tools,
 )
-
-from maf_algenta.toolset import _extract_function_result_payload, _parse_execution_blocked_from_exception
+from maf_algenta.toolset import (
+    _extract_function_result_payload,
+    _parse_execution_blocked_from_exception,
+)
 
 from .fake_chat_client import FakeChatClient, function_call
-from .stub_server import LOW_CONFIDENCE_DECISION_ID, LOW_RISK_FLOOR_DECISION_ID, MALFORMED_RECEIPT_DECISION_ID
+from .stub_server import (
+    LOW_CONFIDENCE_DECISION_ID,
+    LOW_RISK_FLOOR_DECISION_ID,
+    MALFORMED_RECEIPT_DECISION_ID,
+)
 
 
 def _chat_response_with_call(name: str, arguments: str, call_id: str) -> Content:
