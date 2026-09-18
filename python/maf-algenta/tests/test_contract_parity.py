@@ -15,7 +15,6 @@ import json
 from pathlib import Path
 
 import pytest
-
 from maf_algenta.contract import FULL_PROFILE_SENTINEL, NEVER_MODEL_FACING_FIELDS, TOOL_PROFILES
 
 

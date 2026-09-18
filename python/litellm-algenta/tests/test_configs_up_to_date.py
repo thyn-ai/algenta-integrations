@@ -13,7 +13,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
 from litellm_algenta.config import build_mcp_server_entry, render_yaml
 
 _CONFIGS_DIR = Path(__file__).resolve().parents[1] / "configs"

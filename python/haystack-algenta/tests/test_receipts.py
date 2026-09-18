@@ -12,8 +12,6 @@ from __future__ import annotations
 import json
 
 import pytest
-from pydantic import ValidationError
-
 from haystack_algenta.receipts import (
     ExecutionBlocked,
     ExecutionReceipt,
@@ -21,6 +19,7 @@ from haystack_algenta.receipts import (
     parse_execution_outcome,
     unwrap_mcp_tool_result,
 )
+from pydantic import ValidationError
 
 FULL_RECEIPT = {
     "decision_id": "decision-1",

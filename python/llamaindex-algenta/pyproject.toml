@@ -68,7 +68,7 @@ Repository = "https://github.com/thyn-ai/algenta-integrations"
 # versions to find 3.x; a stricter resolver, or a private index that doesn't mirror older
 # releases, has nothing to backtrack to and fails outright. Pinning `<4` makes that resolution
 # explicit instead of relying on invisible backtracking.
-dev = ["pytest", "pytest-asyncio", "fastmcp>=3,<4"]
+dev = ["pytest", "pytest-asyncio", "pytest-cov", "fastmcp>=3,<4"]
 
 [build-system]
 requires = ["setuptools>=68.0", "wheel"]
@@ -79,3 +79,14 @@ include = ["llamaindex_algenta*"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+
+[tool.coverage.run]
+# The workspace runs one pytest process per package (see .github/workflows/ci.yml), so each
+# run measures this package's own module only -- never the tests or sibling packages.
+source = ["llamaindex_algenta"]
+
+[tool.coverage.report]
+# Gate for the CI python job (enforced via pytest-cov): measured at 90% on Python 3.12
+# (2026-09-18), floored 2 points lower for headroom. Raise the floor as coverage grows.
+fail_under = 88
+show_missing = true

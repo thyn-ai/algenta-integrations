@@ -5,7 +5,6 @@ wire, just the mapping logic keyed on `is_error` and the parsed denial shape.
 from __future__ import annotations
 
 import pytest
-
 from langchain_algenta.exceptions import AlgentaExecutionBlocked
 from langchain_algenta.governance import resolve_governed_call
 

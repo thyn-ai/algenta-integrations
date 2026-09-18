@@ -83,7 +83,7 @@ def _resolve_api_key(api_key: str | None) -> str:
     return resolved
 
 
-def build_client(*, base_url: str | None = None, api_key: str | None = None, **client_kwargs: Any) -> "OpenAI":
+def build_client(*, base_url: str | None = None, api_key: str | None = None, **client_kwargs: Any) -> OpenAI:
     """Build a real `openai.OpenAI` client pointed at your own self-hosted Algenta engine.
 
     Args:
@@ -118,7 +118,7 @@ def build_client(*, base_url: str | None = None, api_key: str | None = None, **c
 
 def build_async_client(
     *, base_url: str | None = None, api_key: str | None = None, **client_kwargs: Any
-) -> "AsyncOpenAI":
+) -> AsyncOpenAI:
     """Async counterpart of `build_client`, returning a real `openai.AsyncOpenAI` client. See
     `build_client` for argument documentation -- identical in every respect but sync vs async."""
     try:

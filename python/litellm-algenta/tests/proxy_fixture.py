@@ -83,7 +83,7 @@ class LiteLLMProxyFixture:
     def captured_output(self) -> str:
         return "".join(self._stdout_lines)
 
-    async def __aenter__(self) -> "LiteLLMProxyFixture":
+    async def __aenter__(self) -> LiteLLMProxyFixture:
         config = dict(self._config)
         config.setdefault("general_settings", {})
         config["general_settings"] = {**config["general_settings"], "master_key": self.master_key}

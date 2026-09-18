@@ -24,12 +24,19 @@ from typing import Any
 
 import httpx
 import pytest
-
 from litellm_algenta.config import build_mcp_server_entry
-from litellm_algenta.contract import EXECUTE_DECISION, EXECUTE_DECISION_GATES, EXECUTE_DECISION_MODEL_FACING_PARAMS
+from litellm_algenta.contract import (
+    EXECUTE_DECISION,
+    EXECUTE_DECISION_GATES,
+    EXECUTE_DECISION_MODEL_FACING_PARAMS,
+)
 
 from .proxy_fixture import LiteLLMProxyFixture
-from .stub_server import DECISION_ID_LOW_CONFIDENCE, DECISION_ID_RISK_FLOOR_BREACH, StubServerFixture
+from .stub_server import (
+    DECISION_ID_LOW_CONFIDENCE,
+    DECISION_ID_RISK_FLOOR_BREACH,
+    StubServerFixture,
+)
 
 _UPSTREAM_TOKEN = "algenta-upstream-bearer-token-for-tests"
 _UPSTREAM_TOKEN_ENV_VAR = "ALGENTA_TEST_MCP_TOKEN"

@@ -15,9 +15,16 @@ permits -- see the README's "Denial mapping" section), and
 tool-profile contract this package conforms to.
 """
 
-from importlib.metadata import PackageNotFoundError, version as _version
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _version
 
-from .contract import DEFAULT_PROFILE, GOVERNED_TOOL_NAMES, NEVER_MODEL_FACING_FIELDS, TOOL_PROFILES, ToolProfile
+from .contract import (
+    DEFAULT_PROFILE,
+    GOVERNED_TOOL_NAMES,
+    NEVER_MODEL_FACING_FIELDS,
+    TOOL_PROFILES,
+    ToolProfile,
+)
 from .exceptions import AlgentaGovernedCallFailure, AlgentaToolDenied
 from .hooks import GovernedReceiptHook, build_algenta_governance_hooks
 from .receipts import (
@@ -28,7 +35,12 @@ from .receipts import (
     parse_execution_outcome,
     unwrap_mcp_tool_result,
 )
-from .toolset import ALGENTA_BASE_URL_ENV_VAR, DEFAULT_ALGENTA_BASE_URL, AlgentaToolset, create_algenta_tools
+from .toolset import (
+    ALGENTA_BASE_URL_ENV_VAR,
+    DEFAULT_ALGENTA_BASE_URL,
+    AlgentaToolset,
+    create_algenta_tools,
+)
 
 __all__ = [
     "ALGENTA_BASE_URL_ENV_VAR",

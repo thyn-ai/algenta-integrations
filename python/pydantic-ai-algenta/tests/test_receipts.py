@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
-from pydantic_ai_algenta.receipts import EXECUTION_GATES, ExecutionDenial, ExecutionReceipt, parse_denial, parse_receipt
+from pydantic_ai_algenta.receipts import (
+    EXECUTION_GATES,
+    ExecutionDenial,
+    ExecutionReceipt,
+    parse_denial,
+    parse_receipt,
+)
 
 FULL_RECEIPT = {
     "decision_id": "dec-1",

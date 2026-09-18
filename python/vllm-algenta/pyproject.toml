@@ -39,6 +39,7 @@ Repository = "https://github.com/thyn-ai/algenta-integrations"
 # docstring for why). Never imported by any non-test module in this package.
 dev = [
     "pytest",
+    "pytest-cov",
     "fastapi>=0.100",
     "uvicorn>=0.30",
     "httpx>=0.27",
@@ -53,3 +54,14 @@ include = ["vllm_algenta*"]
 
 [tool.setuptools.package-data]
 vllm_algenta = ["py.typed"]
+
+[tool.coverage.run]
+# The workspace runs one pytest process per package (see .github/workflows/ci.yml), so each
+# run measures this package's own module only -- never the tests or sibling packages.
+source = ["vllm_algenta"]
+
+[tool.coverage.report]
+# Gate for the CI python job (enforced via pytest-cov): measured at 89% on Python 3.12
+# (2026-09-18), floored 2 points lower for headroom. Raise the floor as coverage grows.
+fail_under = 87
+show_missing = true

@@ -21,7 +21,12 @@ from typing import Any
 from langchain_mcp_adapters.interceptors import MCPToolCallRequest, MCPToolCallResult
 from mcp.types import CallToolResult
 
-from .contract import DEFAULT_PROFILE, NEVER_MODEL_FACING_FIELDS, ToolProfile, is_tool_allowed_for_profile
+from .contract import (
+    DEFAULT_PROFILE,
+    NEVER_MODEL_FACING_FIELDS,
+    ToolProfile,
+    is_tool_allowed_for_profile,
+)
 from .exceptions import AlgentaToolDenied
 from .governance import resolve_governed_call
 from .receipts import ExecutionDenial

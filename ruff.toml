@@ -1,5 +1,6 @@
-# Repository-wide Ruff configuration (python/, scripts/, demo/). pre-commit runs it;
-# CI does not enforce it yet.
+# Repository-wide Ruff configuration (python/, scripts/, demo/). Enforced by pre-commit
+# locally and by the `ruff` job in .github/workflows/ci.yml on every PR -- both run the
+# same ruff release (see the job's install pin), so local and CI verdicts agree.
 line-length = 100
 target-version = "py310"
 extend-exclude = ["**/.venv", "**/build", "**/dist", "**/node_modules"]

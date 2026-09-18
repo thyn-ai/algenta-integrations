@@ -1,0 +1,26 @@
+# Codecov configuration for this repository's coverage dashboard.
+#
+# Architecture: coverage is ENFORCED in CI itself -- per-package pytest-cov `fail_under`
+# floors in each python/*/pyproject.toml, and vitest coverage thresholds in each
+# typescript package's vitest.config.ts. Codecov is the DASHBOARD for trends and per-file
+# drill-down, so every status check below is informational and can never block a merge.
+# The two flags mirror the two upload steps in .github/workflows/ci.yml.
+coverage:
+  status:
+    project:
+      default:
+        informational: true
+    patch:
+      default:
+        informational: true
+
+flags:
+  python:
+    paths:
+      - python/
+  typescript:
+    paths:
+      - typescript/
+
+comment:
+  layout: "diff, flags, files"

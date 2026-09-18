@@ -24,5 +24,10 @@ npm-debug.log*
 .idea/
 .DS_Store
 
+# Coverage reports (pytest-cov / vitest --coverage)
+.coverage
+coverage.xml
+coverage/
+
 # release-please working state
 .release-please-manifest.json.tmp

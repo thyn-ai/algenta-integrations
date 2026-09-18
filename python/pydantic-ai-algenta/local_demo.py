@@ -24,7 +24,6 @@ import asyncio
 
 from pydantic_ai import Agent
 from pydantic_ai.models.test import TestModel
-
 from pydantic_ai_algenta import AlgentaToolset
 from tests.stub_server import StubServerFixture
 

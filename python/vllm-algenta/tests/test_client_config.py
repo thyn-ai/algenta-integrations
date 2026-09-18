@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-import os
-
 import pytest
-
 from vllm_algenta.client import (
     API_KEY_ENV_VAR,
     BASE_URL_ENV_VAR,

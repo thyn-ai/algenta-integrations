@@ -13,7 +13,6 @@ import json
 import pytest
 from haystack.components.agents.state.state import State
 from haystack.dataclasses import ChatMessage, ToolCall
-
 from haystack_algenta import AlgentaToolDenied, build_algenta_governance_hooks
 from haystack_algenta.hooks import GovernedReceiptHook
 
