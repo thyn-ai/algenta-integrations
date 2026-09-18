@@ -1,5 +1,10 @@
 # haystack-algenta
 
+[![PyPI](https://img.shields.io/pypi/v/haystack-algenta.svg)](https://pypi.org/project/haystack-algenta/)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](../../LICENSE)
+
+> **Docs:** [docs.algenta.ai](https://docs.algenta.ai) · [All integrations](../../README.md)
+
 Haystack tool integration for [Algenta](https://algenta.ai): `create_algenta_tools`, a
 governed-execution-aware `haystack.tools.toolset.Toolset` wrapping your own self-hosted Algenta
 Engine's MCP tool surface via Haystack's own real
@@ -194,9 +199,8 @@ override_safety=None, metadata=None)` either:
 There is no third outcome. `decision_id` comes from a prior real `log_decision` call, never from a
 model-facing `plan_hash` -- there is no `plan_hash` field anywhere on this tool, and no
 asynchronous "pending approval" state to poll or resume. A genuinely separate, real
-plan/nonce-based human-approval system does exist in the engine (decision-cases/analysis-runs/
-decision-plans HTTP routes), but the engine's own source is explicit that it "is intentionally not
-exposed as an MCP/LLM tool" -- it is out of reach for this package, or any MCP-based integration,
+plan/nonce-based human-approval system does exist in the engine, but it is intentionally not
+exposed as an MCP/LLM tool -- it is out of reach for this package, or any MCP-based integration,
 and this package makes no claim otherwise.
 
 ## Denial mapping
@@ -324,11 +328,11 @@ if you're pinning versions yourself.
 Every package in this repository may depend on at most one Algenta-owned thing, the published
 `algenta-sdk` client -- but only if it's genuinely used. This package never imports it:
 `create_algenta_tools` talks to the caller's self-hosted Algenta MCP endpoint directly via
-`haystack_integrations.tools.mcp.MCPToolset`, the same reason `maf-algenta` (D5) and
-`typescript/algenta-tools` (D2) declare no `algenta-sdk` dependency either. Declaring it anyway,
+`haystack_integrations.tools.mcp.MCPToolset`, the same reason `maf-algenta` and
+`typescript/algenta-tools` declare no `algenta-sdk` dependency either. Declaring it anyway,
 without importing it anywhere in this package's own source, would repeat exactly the
 leftover-placeholder-dependency pattern an adversarial review is on record catching elsewhere in
-this repository's D2/D4 history.
+this repository's history.
 
 ## Not a `WrapperToolset`/interceptor
 

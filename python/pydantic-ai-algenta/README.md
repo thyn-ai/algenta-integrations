@@ -1,5 +1,10 @@
 # pydantic-ai-algenta
 
+[![PyPI](https://img.shields.io/pypi/v/pydantic-ai-algenta.svg)](https://pypi.org/project/pydantic-ai-algenta/)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](../../LICENSE)
+
+> **Docs:** [docs.algenta.ai](https://docs.algenta.ai) · [All integrations](../../README.md)
+
 pydantic-ai tool integration for [Algenta](https://algenta.ai): `AlgentaToolset`, a
 [`WrapperToolset`](https://ai.pydantic.dev/toolsets/#wrapping-a-toolset) that wraps a
 [`pydantic_ai.mcp.MCPToolset`](https://ai.pydantic.dev/mcp/client/) pointed at your own

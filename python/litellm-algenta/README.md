@@ -1,5 +1,10 @@
 # litellm-algenta
 
+[![PyPI](https://img.shields.io/pypi/v/litellm-algenta.svg)](https://pypi.org/project/litellm-algenta/)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](../../LICENSE)
+
+> **Docs:** [docs.algenta.ai](https://docs.algenta.ai) · [All integrations](../../README.md)
+
 LiteLLM MCP Gateway integration for [Algenta](https://algenta.ai): config templates, a config
 generator/linter, and a real-proxy conformance test suite that map
 [`contracts/integration-tool-contract.json`](../../contracts/integration-tool-contract.json)'s

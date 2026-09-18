@@ -1,5 +1,10 @@
 # n8n-nodes-algenta
 
+[![npm](https://img.shields.io/npm/v/n8n-nodes-algenta.svg)](https://www.npmjs.com/package/n8n-nodes-algenta)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](../../../../LICENSE)
+
+> **Docs:** [docs.algenta.ai](https://docs.algenta.ai) · [All integrations](../../../../README.md)
+
 An [n8n](https://n8n.io) community node for [Algenta](https://algenta.ai): a governed-execution-aware
 node exposing your own self-hosted Algenta Engine's MCP tool surface as typed n8n operations —
 `Get Contract`, `Query Data`, `Simulate`, `Recommend`, `Plan Decision`, `Log Decision`, and
@@ -17,9 +22,8 @@ network call, including when this node is wrapped as a tool inside an n8n AI Age
 
 Before doing anything below, have these ready:
 
-- **Node.js 18.10+** and **pnpm 9+** — this package is not on npm yet (see the
-  [repository root README](../../../../README.md#explicitly-deferred-not-gaps--deliberate-scope-boundaries)),
-  so "installing" it today means building it from source in this repository.
+- **Node.js 18.10+** — and **pnpm 9+** as well, only if you build or develop this package from
+  source instead of installing the published npm package.
 - **A running self-hosted Algenta Engine**, reachable over HTTP — for example `http://localhost:8000`.
   This node never talks to an Algenta-hosted cloud endpoint; there isn't one to point it at. If you
   don't have an engine running yet, see [Self-host the engine](https://docs.algenta.ai/deploy-and-operate/self-hosting).
@@ -28,6 +32,18 @@ Before doing anything below, have these ready:
 - **n8n itself**, if you want to see the node running inside the n8n editor rather than just
   building and testing it. The [Quickstart](#quickstart) below covers getting n8n running with
   zero prior n8n experience.
+
+## Install
+
+Inside your own n8n instance:
+
+```bash
+npm install n8n-nodes-algenta
+```
+
+or install `n8n-nodes-algenta` from n8n's *Community Nodes* settings page, then restart n8n. To
+build from source instead — for development, or to try the node in a throwaway local n8n before
+connecting it to an engine — see the [Quickstart](#quickstart) below.
 
 ## Quickstart
 
@@ -101,9 +117,8 @@ runtime dependencies (community nodes share one n8n instance's `node_modules`, s
 anything that could conflict), and this node genuinely needs `@modelcontextprotocol/sdk` to speak
 MCP correctly rather than hand-rolling the protocol's session/handshake/SSE framing. It is a fully
 real, tested community node for **self-hosted n8n** — this program's actual target audience —
-meant to be installed the normal way once published (`npm install n8n-nodes-algenta` inside your
-n8n instance, or via the *Community Nodes* settings page; see [Prerequisites](#prerequisites) for
-how to try it today, before that publish happens). `n8n-node lint` accordingly runs against
+installed the normal way (`npm install n8n-nodes-algenta` inside your n8n instance, or via the
+*Community Nodes* settings page). `n8n-node lint` accordingly runs against
 `configWithoutCloudSupport`, not the default strict/cloud config; see `eslint.config.mjs`.
 
 Two lint findings are deliberately left as documented exceptions rather than "fixed" into

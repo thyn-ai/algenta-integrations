@@ -1,5 +1,10 @@
 # llamaindex-algenta
 
+[![PyPI](https://img.shields.io/pypi/v/llamaindex-algenta.svg)](https://pypi.org/project/llamaindex-algenta/)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](../../LICENSE)
+
+> **Docs:** [docs.algenta.ai](https://docs.algenta.ai) · [All integrations](../../README.md)
+
 LlamaIndex tool integration for [Algenta](https://algenta.ai): `create_algenta_tools`, an
 outcome-aware `list[llama_index.core.tools.FunctionTool]` wrapping your own self-hosted Algenta
 Engine's MCP tool surface via `llama-index-tools-mcp`'s own real
@@ -235,9 +240,8 @@ ordinary, non-raising response data) -- raises `AlgentaToolExecutionFailed`. `fo
 retry past it; only a human operator calling outside the model-facing tool surface can.
 
 A genuinely separate, real, `plan_hash`+nonce human-approval system does exist in the real engine
-(decision-cases/analysis-runs/decision-plans HTTP routes) -- but it is intentionally not exposed as
-an MCP/LLM tool at all, so no integration package (this one included) can reach it, and this
-package does not pretend otherwise.
+-- but it is intentionally not exposed as an MCP/LLM tool at all, so no integration package (this
+one included) can reach it, and this package does not pretend otherwise.
 
 ### Exception propagation once it leaves this package
 
@@ -321,7 +325,7 @@ Verified directly from `llama-index-tools-mcp`'s installed `.dist-info/METADATA`
 `Requires-Dist` is only `llama-index-core`, `mcp`, and `pydantic`. `pip install llama-index-core
 llama-index-tools-mcp` never pulls in the full `llama-index` metapackage or any model-provider SDK
 it depends on -- the same "only the surface this package actually needs" reasoning
-`pydantic-ai-slim[mcp]` (D1) and `agent-framework-core` (D5) already document for their own
+`pydantic-ai-slim[mcp]` and `agent-framework-core` already document for their own
 frameworks.
 
 ## Why no `algenta-sdk` dependency
@@ -329,8 +333,8 @@ frameworks.
 Every package in this repository may depend on at most one Algenta-owned thing, the published
 `algenta-sdk` client -- but only if it's genuinely used. This package never imports it:
 `create_algenta_tools` talks to the caller's self-hosted Algenta MCP endpoint directly via
-`llama_index.tools.mcp.BasicMCPClient`, the same reason `maf-algenta` (D5) and
-`typescript/algenta-tools` (D2) declare no `algenta-sdk` dependency either. Declaring it anyway,
+`llama_index.tools.mcp.BasicMCPClient`, the same reason `maf-algenta` and
+`typescript/algenta-tools` declare no `algenta-sdk` dependency either. Declaring it anyway,
 without importing it anywhere in this package's own source, would repeat exactly the
 leftover-placeholder-dependency pattern an adversarial review is on record catching elsewhere in
 this repository's history.

@@ -1,5 +1,10 @@
 # algenta-tools
 
+[![npm](https://img.shields.io/npm/v/algenta-tools.svg)](https://www.npmjs.com/package/algenta-tools)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](../../../../LICENSE)
+
+> **Docs:** [docs.algenta.ai](https://docs.algenta.ai) · [All integrations](../../../../README.md)
+
 Vercel AI SDK (`ai` v7) tool integration for [Algenta](https://algenta.ai): `createAlgentaTools`,
 a factory that connects to your own self-hosted Algenta Engine's MCP endpoint (via
 [`@ai-sdk/mcp`](https://www.npmjs.com/package/@ai-sdk/mcp)'s real MCP client) and returns an
@@ -33,39 +38,14 @@ ready to pass to `generateText` / `streamText` / an `Agent`. It layers on:
 
 ## Install
 
-`algenta-tools` is not yet published to npm — install it from source until it is.
-
-### Install from source
-
-```bash
-git clone https://github.com/thyn-ai/algenta-integrations.git
-cd algenta-integrations/typescript/algenta-tools
-pnpm install
-pnpm --filter algenta-tools build
-cd packages/algenta-tools
-pnpm pack   # writes algenta-tools-<version>.tgz in this directory
-```
-
-Then, from your own project:
-
-```bash
-npm install /path/to/algenta-integrations/typescript/algenta-tools/packages/algenta-tools/algenta-tools-<version>.tgz ai zod
-```
-
-(swap in whichever package manager your project already uses — `pnpm add`/`yarn add` accept a
-local tarball path the same way).
-
-### Once published to npm
-
 ```bash
 npm install algenta-tools ai zod
 ```
 
-This will replace the source install above once the first release goes out — track it via the
-[Status](https://github.com/thyn-ai/algenta-integrations/blob/main/README.md#status--roadmap)
-section of the repository root README.
+(swap in whichever package manager your project already uses — `pnpm add`/`yarn add` take the
+same package names).
 
-Either way, `ai` (`^7.0.0`) and `zod` (`^4.0.0`) are peer dependencies — you already have them in
+`ai` (`^7.0.0`) and `zod` (`^4.0.0`) are peer dependencies — you already have them in
 any project using the AI SDK. This package's only real dependency is
 [`@ai-sdk/mcp`](https://www.npmjs.com/package/@ai-sdk/mcp), the AI SDK's own current MCP client
 package (see [Why `@ai-sdk/mcp` and not `ai`](#why-ai-sdkmcp-and-not-ai-itself) below). It does
@@ -76,6 +56,20 @@ so it has nothing this package's MCP-protocol tool-calling path would use (see [
 constants](#why-not-reuse-algenta-sdks-mcp_endpointdefault_base_url-constants) below for the one
 overlap that was considered and rejected). This package never depends on, imports, or bundles any
 part of the Algenta Engine itself.
+
+### Building from source
+
+To develop this package itself rather than consume the published one, work from a clone:
+
+```bash
+git clone https://github.com/thyn-ai/algenta-integrations.git
+cd algenta-integrations/typescript/algenta-tools
+pnpm install
+pnpm --filter algenta-tools build
+```
+
+See [Testing this package's own test suite](#testing-this-packages-own-test-suite-not-your-agent)
+below for how to run its tests from there.
 
 ## Self-hosted-only
 
@@ -119,8 +113,8 @@ decision](#executing-a-decision) below.
 
 Everything in this package except an actual model turn can be exercised without a live Algenta
 Engine, using the same stub MCP server this package's own test suite runs against
-(`src/test-support/stub-server.ts`). This needs a clone of this repository (see [Install from
-source](#install-from-source) above) — the stub server isn't part of the published package.
+(`src/test-support/stub-server.ts`). This needs a clone of this repository (see [Building from
+source](#building-from-source) above) — the stub server isn't part of the published package.
 
 ```bash
 cd algenta-integrations/typescript/algenta-tools
@@ -253,10 +247,10 @@ the wrong default — so this package does not declare `algenta-sdk` as a depend
 The sibling Python package exposes `AlgentaToolset`, a `pydantic_ai.toolsets.wrapper.WrapperToolset`
 subclass, because pydantic-ai's own tool-calling surface is built around a `Toolset` abstraction
 that frameworks are expected to subclass. AI SDK has no equivalent abstraction — a `ToolSet` is
-just `Record<string, Tool>`, and the idiomatic way every real MCP integration in this ecosystem
-(including this org's own `@thyn-ai/sqai` `ai-sdk` package) exposes its tools is a plain factory
-function returning that record, not a class wrapping one. `createAlgentaTools` follows that
-convention rather than inventing a parallel "toolset" concept AI SDK doesn't have.
+just `Record<string, Tool>`, and the idiomatic way real MCP integrations in this ecosystem expose
+their tools is a plain factory function returning that record, not a class wrapping one.
+`createAlgentaTools` follows that convention rather than inventing a parallel "toolset" concept AI
+SDK doesn't have.
 
 ## Advanced: bringing your own MCP client or tool set
 
