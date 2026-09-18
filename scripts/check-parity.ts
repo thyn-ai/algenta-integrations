@@ -1,83 +1,61 @@
 /**
- * check-parity.ts — verify every TypeScript integration package exposes the
- * tool-profile contract in contracts/integration-tool-contract.json.
+ * check-parity.ts — thin wrapper that delegates to scripts/check-parity.py.
  *
  * Run via `npx --yes tsx@4 scripts/check-parity.ts` (that's what
  * .github/workflows/ci.yml does) — this file is plain TypeScript with no
  * build step of its own, and `tsx` is what strips/transpiles it on the fly
  * without requiring a Node version new enough for native type-stripping.
  *
- * STATUS: stub. There is nothing to check yet — typescript/algenta-tools is
- * a placeholder package with no tool-exposing code (see its README.md).
- * This script exists now so:
+ * Why a wrapper instead of a second implementation: the parity rules (the
+ * contract's four profiles, exact per-profile tool sets, default profile,
+ * never-model-facing fields) were originally meant to be checked by two
+ * hand-mirrored scripts, one per language. Two implementations of one rule
+ * is how the checks themselves drift. scripts/check-parity.py is the single
+ * implementation — it already checks both the Python AND the TypeScript
+ * packages' embedded contract modules statically — and this file exists only
+ * so the TypeScript CI job keeps a stable, tsx-runnable entry point. Both CI
+ * invocations therefore run exactly the same checks and can never disagree.
  *
- *   1. CI has a stable command to run from day one, rather than a new
- *      workflow step being added later alongside the first real package.
- *   2. The shape of what D1+ needs to implement is written down here, not
- *      just described in prose (see check-parity.py for the Python-side
- *      twin of this same TODO).
+ * The repository root is resolved inside the Python script from its own
+ * location, so this wrapper works from any cwd (ci.yml runs it from the repo
+ * root; sync-on-sdk-release.yml runs it from typescript/algenta-tools). Any
+ * arguments (e.g. --root) are forwarded verbatim.
  *
- * TODO(D1+): once typescript/algenta-tools (or a later package) actually
- * registers tools with a framework (Vercel AI SDK, LangChain.js, etc.), this
- * script should:
- *   - import each package's tool-registration entrypoint
- *   - ask it, for each profile in the contract ("observe", "govern",
- *     "execute", "full"), which tool names it would expose
- *   - diff that set against contracts/integration-tool-contract.json's
- *     "tools"/"adds_tools" for that profile (inherited via "extends")
- *   - fail if there's any addition, omission, or mismatched default profile
- *   - fail if 'execute' is reachable without the package demonstrating that
- *     every entry in "execute".requires_all_of is enforced before the call
- *     reaches the engine
- *   - fail if 'force' / 'overrideSafety' (or any equivalent) appear anywhere
- *     in a model-facing tool schema, for any profile
- *   - cross-check its findings against check-parity.py's findings so the two
- *     languages can never silently drift apart
- *
- * Until then, this script only validates that the contract file itself is
- * present and well-formed JSON, so a syntax error in the contract still
- * fails CI rather than being silently ignored by a script nobody wired up
- * yet.
+ * Exit codes are passed through from the Python script:
+ *   0  clean · 1  parity violations found · 2  usage/internal error
+ * (this wrapper itself returns 2 when no Python interpreter can be found).
  */
 
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { spawnSync } from "node:child_process";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-const contractPath = path.join(here, "..", "contracts", "integration-tool-contract.json");
+const checker = path.join(path.dirname(fileURLToPath(import.meta.url)), "check-parity.py");
+const forwardedArgs = process.argv.slice(2);
 
 function main(): number {
-  let raw: string;
-  try {
-    raw = readFileSync(contractPath, "utf-8");
-  } catch (err) {
-    console.error(`check-parity.ts: contract file missing at ${contractPath}`);
-    return 1;
+  // GitHub-hosted runners and macOS both ship `python3`; `python` is the
+  // fallback for environments that only provide the unversioned name.
+  for (const interpreter of ["python3", "python"]) {
+    const result = spawnSync(interpreter, [checker, ...forwardedArgs], { stdio: "inherit" });
+    if (result.error) {
+      if ((result.error as { code?: string }).code === "ENOENT") {
+        continue;
+      }
+      console.error(`check-parity.ts: failed to launch ${interpreter}: ${result.error.message}`);
+      return 2;
+    }
+    if (result.status === null) {
+      console.error(`check-parity.ts: ${interpreter} was killed by signal ${result.signal}`);
+      return 2;
+    }
+    return result.status;
   }
-
-  let contract: Record<string, unknown>;
-  try {
-    contract = JSON.parse(raw);
-  } catch (err) {
-    console.error(`check-parity.ts: contract file is not valid JSON: ${(err as Error).message}`);
-    return 1;
-  }
-
-  const profiles = contract["profiles"] as Record<string, unknown> | undefined;
-  if (!profiles) {
-    console.error("check-parity.ts: contract file has no 'profiles' key");
-    return 1;
-  }
-
-  console.log(
-    "check-parity.ts: STUB — contract file is present and well-formed " +
-      `(${Object.keys(profiles).length} profiles declared). No TypeScript ` +
-      "integration package implements tool exposure yet, so there is nothing " +
-      "further to diff against. See this file's header comment for what D1+ " +
-      "must add.",
+  console.error(
+    "check-parity.ts: no Python interpreter found on PATH (tried python3, python). " +
+      "Install Python 3.10+ or run `python3 scripts/check-parity.py` directly.",
   );
-  return 0;
+  return 2;
 }
 
 process.exit(main());
