@@ -8,15 +8,14 @@ disclosure from the community.
 
 ## Supported versions
 
-This repository is currently a private, pre-release scaffold: no packages
-have been published yet (see the Status section of the root README). Once
-packages are published, security fixes will land on `main` and in the
-latest published release of each affected package.
+Each package in this repository is versioned and released independently
+(see the per-package tags and GitHub Releases). Security fixes land on
+`main` and in the latest release of each affected package.
 
 | Channel | Supported |
 | --- | --- |
-| Latest release / `main` | :white_check_mark: (once published) |
-| Older tagged releases | Best-effort; please upgrade to the latest |
+| Latest release of each package / `main` | :white_check_mark: |
+| Older releases | Best-effort; please upgrade to the latest |
 
 ## Reporting a vulnerability
 
@@ -65,7 +64,7 @@ concept, and the package version you tested.
   its closed-source implementation (lives in a separate private repository)
 - The `algenta-sdk` client libraries' own transport/auth code (that's
   `thyn-ai/algenta-sdk`'s `SECURITY.md`, not this repository's)
-- Any private control-plane, activation, or relay infrastructure
+- Algenta's internal control-plane and hosted infrastructure
 
 We also want to be upfront about the trust model: every package here is a
 thin wrapper around the published `algenta-sdk` client and is designed to be
