@@ -9,12 +9,12 @@ and every other package here is already shaped as "framework talks to Algenta," 
 reverse. See this package's README for the full reasoning.
 
 Genuinely all a vLLM-ecosystem (or any OpenAI-SDK-based) consumer needs is the standard `openai`
-client pointed at the right `base_url` -- confirmed directly, not assumed: a real
+client pointed at the right `base_url` -- confirmed directly against the engine's public
+OpenAI-compatible HTTP API, not assumed: a real
 `openai.OpenAI().chat.completions.create(...)` call, both streaming and non-streaming, correctly
-parses a response shaped exactly like Algenta's real `ChatCompletionsResponse`
-(`apps/api_server/schemas/llm.py` in `thyn-ai/algenta`) even though that response omits the
-`created` field the OpenAI wire format normally includes (the SDK's own model treats it as
-optional and leaves it `None` rather than raising) -- see `tests/test_chat_completions_matrix.py`
+parses the response the real `/v1/chat/completions` endpoint returns, even though that response
+omits the `created` field the OpenAI wire format normally includes (the SDK's own model treats it
+as optional and leaves it `None` rather than raising) -- see `tests/test_chat_completions_matrix.py`
 for the reproduction. This module exists only to save a caller from hand-computing the right
 `base_url` and remembering the right env var name; it adds no request/response shaping of its own.
 """
@@ -43,13 +43,11 @@ if TYPE_CHECKING:
 BASE_URL_ENV_VAR = "ALGENTA_BASE_URL"
 DEFAULT_ENGINE_ROOT = "http://localhost:8000"
 
-#: Every route on Algenta's LLM API router carries `Depends(require_verified_email)` and
-#: `Depends(bind_tenant_keys)` (`apps/api_server/routers/llm.py` in `thyn-ai/algenta`, confirmed
-#: by reading the router's own `APIRouter(... dependencies=[...])` declaration) -- i.e. every
-#: request needs an authenticated, org-bound caller identity, in every deployment mode this
-#: package has been able to verify from source. `build_client`/`build_async_client` below treat a
-#: credential as required in practice: they raise a clear error rather than silently sending a
-#: placeholder string that would just 401 deep inside the `openai` SDK's own error handling.
+#: Every route on the engine's public LLM HTTP API requires an authenticated, org-bound caller
+#: identity, in every deployment mode this package has been able to verify over that API --
+#: `build_client`/`build_async_client` below treat a credential as required in practice: they
+#: raise a clear error rather than silently sending a placeholder string that would just 401 deep
+#: inside the `openai` SDK's own error handling.
 API_KEY_ENV_VAR = "ALGENTA_API_KEY"
 
 
@@ -76,10 +74,9 @@ def _resolve_api_key(api_key: str | None) -> str:
     if not resolved:
         raise RuntimeError(
             f"No Algenta API key configured -- pass api_key= explicitly or set the "
-            f"{API_KEY_ENV_VAR} environment variable. Every route on Algenta's LLM API "
-            "(apps/api_server/routers/llm.py's `require_verified_email` / `bind_tenant_keys` "
-            "dependencies, in every deployment mode verified from source) needs an authenticated, "
-            "org-bound caller identity; this package does not send a placeholder credential in "
+            f"{API_KEY_ENV_VAR} environment variable. Every route on the engine's public LLM "
+            "HTTP API needs an authenticated, org-bound caller identity in every deployment mode "
+            "this package has verified; this package does not send a placeholder credential in "
             "its place, since that would only fail later with a confusing 401 instead of a clear "
             "error now."
         )

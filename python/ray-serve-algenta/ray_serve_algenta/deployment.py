@@ -13,9 +13,9 @@ removing the `__future__` import was the fix. Keep it that way in this file spec
 though the rest of this repository uses it freely elsewhere.
 
 Why a raw reverse proxy, not an MCP-aware client/server pair: the point of this package is that
-Algenta's `/mcp` route is *stateless* Streamable HTTP (verified against `apps/mcp_server/README.md`
-in `thyn-ai/algenta`'s own source -- "The canonical `/mcp` route implements stateless Streamable
-HTTP"), so nothing about routing a given request to a given replica needs to be sticky, and nothing
+Algenta's `/mcp` route is *stateless* Streamable HTTP (the engine's public MCP endpoint contract:
+"The canonical `/mcp` route implements stateless Streamable HTTP"), so nothing about routing a
+given request to a given replica needs to be sticky, and nothing
 about a given replica needs to remember anything about a previous request. A byte-transparent
 proxy is the most honest way to demonstrate that: if this proxy needed session affinity to work
 correctly, it would not prove the point it exists to prove. `ray_serve_algenta` never parses,
@@ -44,8 +44,9 @@ logger = logging.getLogger("ray_serve_algenta")
 BASE_URL_ENV_VAR = "ALGENTA_BASE_URL"
 DEFAULT_UPSTREAM_BASE_URL = "http://localhost:8000/mcp"
 
-#: The one path this proxy mounts -- matching the engine's own canonical `/mcp` mount
-#: (`apps/mcp_server/README.md`: "the MCP is already mounted at ... POST /mcp ... GET /mcp").
+#: The one path this proxy mounts -- matching the engine's canonical public `/mcp` mount
+#: (the engine's public MCP endpoint contract: "the MCP is already mounted at ... POST /mcp ...
+#: GET /mcp").
 #: `ALGENTA_BASE_URL` is expected to already be a full endpoint URL (e.g.
 #: `http://localhost:8000/mcp`), so a request received at this proxy's `/mcp` forwards verbatim
 #: to that URL with no path-joining logic -- there is nothing to join.
