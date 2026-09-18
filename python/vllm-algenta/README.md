@@ -1,5 +1,10 @@
 # vllm-algenta
 
+[![PyPI](https://img.shields.io/pypi/v/vllm-algenta.svg)](https://pypi.org/project/vllm-algenta/)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](../../LICENSE)
+
+> **Docs:** [docs.algenta.ai](https://docs.algenta.ai) · [All integrations](../../README.md)
+
 Point vLLM -- or any OpenAI-client-based consumer -- at Algenta's own OpenAI-compatible
 `/v1/chat/completions` and `/v1/responses` surface: `vllm_algenta.client.build_client` /
 `build_async_client`, two thin helpers that resolve the right `base_url`/`api_key` for the
@@ -105,34 +110,32 @@ backs the full conformance suite, including the tool-calling round trip.
 
 ## Capability status -- what works today, what does not, read this before you build on it
 
-Verified directly against `apps/api_server/schemas/llm.py` and
-`apps/api_server/routers/llm.py` in `thyn-ai/algenta` (the engine's own source repository, commit
-`a4233c335609d5828ddba874fc30f08c43cfcbb9` of `main`), not assumed from documentation or an
-internal planning note -- an earlier version of this table claimed materially *less* capability
-than the real schema/router code now has (tool calling and a widened `finish_reason` shipped after
-this table was last checked). Corrected here, plainly, model-dependence included:
+Verified directly against the engine's public OpenAI-compatible API contract (the
+`/v1/chat/completions` and `/v1/responses` request/response shapes it actually serves), not
+assumed from documentation or an internal planning note -- an earlier version of this table
+claimed materially *less* capability than the served API now has (tool calling and a widened
+`finish_reason` shipped after this table was last checked). Corrected here, plainly,
+model-dependence included:
 
 | Capability | Status | Evidence |
 |---|---|---|
 | Basic chat completion (`/v1/chat/completions`, non-streaming) | **Works** | `tests/test_chat_completions_matrix.py::test_basic_completion_round_trips_through_the_real_openai_client` |
-| `finish_reason` reflecting how generation actually ended | **Works, model-dependent** | Widened from a permanent `"stop"` to `Literal["stop", "tool_calls", "length", "content_filter"]` (`ChatCompletionChoice.finish_reason`, `apps/api_server/schemas/llm.py`). This package's own zero-config default model (`text.tokenizer`) is a deterministic utility model with nothing to truncate or interrupt, so it still only ever produces `"stop"` -- see `test_finish_reason_is_stop_for_the_deterministic_default_model`. A configured provider-backed model, or the bundled `algenta_local` backend, can genuinely produce `"tool_calls"` -- see the next row -- and provider-reported `"length"`/`"content_filter"` values pass through uninterpreted. |
-| Tool calling / function calling (`tools=`, `tool_choice=`) | **Works, model-dependent** | `ChatCompletionsRequest.tools` / `.tool_choice` / `.parallel_tool_calls` are real fields, forwarded to configured provider-backed models and to the bundled `algenta_local` backend (`apps/api_server/services/llm_api_service/_creation.py::create_chat_completion`) -- see `test_tool_calling_produces_real_tool_calls_and_finish_reason_on_a_tool_capable_model`, a genuine round trip through the real `openai` client, not an assertion from the schema alone. **This package's own zero-config default model (`text.tokenizer`) still has no tool-calling mechanism at all** -- sending `tools=` against it is now REJECTED with a loud `422 model_capability_unsupported`, a real improvement over silently dropping the argument (see `test_tools_argument_against_the_default_model_is_rejected_not_silently_ignored`). Pick a tool-capable model deliberately; don't assume the default one is it. |
-| Streaming (`stream=true`) | **Works; synthetic by default, model-dependent otherwise** | For this package's own zero-config default model, `apps/api_server/routers/llm.py::_chat_completion_stream` computes the full reply first, then slices it into fixed-size (24-character) chunks and re-emits them as SSE `chat.completion.chunk` events -- post-hoc rechunking, not the backend generating and emitting tokens incrementally as they're produced. Since then, the engine also has a real, incremental "passthrough" streaming mode for models that opt into one (`LLMModelResponse.streaming_mode`) -- this package's own test suite exercises only the synthetic default-model path (see `test_streaming_is_synthetic_post_hoc_rechunking_not_incremental_generation`), since faithfully exercising passthrough mode needs a real streaming backend. Separately: a completion that actually calls a tool cannot yet be streamed at all -- `stream=true` combined with an actual tool call is refused with `422 model_capability_unsupported` rather than silently dropping the tool call (see `test_streaming_is_refused_when_a_tool_call_would_actually_fire`). |
+| `finish_reason` reflecting how generation actually ended | **Works, model-dependent** | Widened from a permanent `"stop"` to `Literal["stop", "tool_calls", "length", "content_filter"]` (`ChatCompletionChoice.finish_reason` in the engine's public chat-completions schema). This package's own zero-config default model (`text.tokenizer`) is a deterministic utility model with nothing to truncate or interrupt, so it still only ever produces `"stop"` -- see `test_finish_reason_is_stop_for_the_deterministic_default_model`. A configured provider-backed model, or the bundled `algenta_local` backend, can genuinely produce `"tool_calls"` -- see the next row -- and provider-reported `"length"`/`"content_filter"` values pass through uninterpreted. |
+| Tool calling / function calling (`tools=`, `tool_choice=`) | **Works, model-dependent** | `ChatCompletionsRequest.tools` / `.tool_choice` / `.parallel_tool_calls` are real fields on the public request schema, forwarded to configured provider-backed models and to the bundled `algenta_local` backend -- see `test_tool_calling_produces_real_tool_calls_and_finish_reason_on_a_tool_capable_model`, a genuine round trip through the real `openai` client, not an assertion from the schema alone. **This package's own zero-config default model (`text.tokenizer`) still has no tool-calling mechanism at all** -- sending `tools=` against it is now REJECTED with a loud `422 model_capability_unsupported`, a real improvement over silently dropping the argument (see `test_tools_argument_against_the_default_model_is_rejected_not_silently_ignored`). Pick a tool-capable model deliberately; don't assume the default one is it. |
+| Streaming (`stream=true`) | **Works; synthetic by default, model-dependent otherwise** | For this package's own zero-config default model, the engine computes the full reply first, then slices it into fixed-size (24-character) chunks and re-emits them as SSE `chat.completion.chunk` events -- post-hoc rechunking, not the backend generating and emitting tokens incrementally as they're produced. Since then, the engine also has a real, incremental "passthrough" streaming mode for models that opt into one -- this package's own test suite exercises only the synthetic default-model path (see `test_streaming_is_synthetic_post_hoc_rechunking_not_incremental_generation`), since faithfully exercising passthrough mode needs a real streaming backend. Separately: a completion that actually calls a tool cannot yet be streamed at all -- `stream=true` combined with an actual tool call is refused with `422 model_capability_unsupported` rather than silently dropping the tool call (see `test_streaming_is_refused_when_a_tool_call_would_actually_fire`). |
 | `/v1/responses` unified envelope | **Works for a narrower shape than the real engine now supports -- see the caveat below** | This package's own stub/tests currently model `ResponsesRequest.input` as `str \| list[str]` and a three-event streaming sequence (`response.created` / `response.output_item.done` / `response.completed`, nothing else). **The real engine has since added its own `tools`/`tool_choice`/`parallel_tool_calls`/`previous_response_id` support and a typed OpenResponses-style input-array shape for `input`** -- a separate, later change from the Chat Completions fix this table's other rows describe. This package's `/v1/responses` coverage has not been updated to match yet; treat the rows above (Chat Completions) as the current, re-verified ones, and this row as a known, tracked gap rather than an accurate description of `/v1/responses` today. |
 | `previous_response_id` / multi-turn Responses continuation | **Now exists on the real engine; not yet covered by this package** | See the `/v1/responses` row above. |
 
 None of this is a defect this package is responsible for or can work around from the client side
 -- it's an honest, current description of the connected engine's real LLM API surface, so a reader
 building against it doesn't have to rediscover the gap the hard way. This package's own stub and
-test suite are re-verified against the engine's source on each update; if it's been a while since
-the commit cited above, re-verify before trusting this table blindly.
+test suite are re-verified against the engine's served API on each update; re-verify against your
+own engine version before trusting this table blindly.
 
 ## Auth is required, not optional
 
-Every route on Algenta's LLM API router carries `Depends(require_verified_email)` and
-`Depends(bind_tenant_keys)` (`apps/api_server/routers/llm.py`'s own `APIRouter(...)`
-declaration) -- every request needs an authenticated, org-bound caller identity, in every
-deployment mode this package has been able to verify from source. `build_client`/
+Every route on the engine's LLM API requires an authenticated, org-bound caller identity, in
+every deployment mode this package has been able to verify. `build_client`/
 `build_async_client` treat a credential as required in practice for that reason: they raise
 `RuntimeError` if neither `api_key=` nor `ALGENTA_API_KEY` resolves, rather than sending a
 placeholder string that would just 401 deep inside the `openai` SDK's own error handling. This
@@ -142,8 +145,8 @@ not the accounts/multi-tenancy stack) -- so tests pass an arbitrary non-secret s
 
 ## Why no `algenta-sdk` dependency
 
-Same reasoning as `litellm-algenta` (D4), `llamaindex-algenta`, and `ray-serve-algenta` (D6's
-other two lanes): every package in this repository may depend on at most one Algenta-owned thing,
+Same reasoning as `litellm-algenta`, `llamaindex-algenta`, and `ray-serve-algenta`: every
+package in this repository may depend on at most one Algenta-owned thing,
 the published `algenta-sdk` client -- but only if something in the package would actually use it.
 `vllm_algenta.client` computes a URL and forwards a credential to the standard `openai` client; it
 never constructs an MCP client, never calls a tool, and has no use for an SDK object of any kind.
@@ -153,10 +156,9 @@ pattern an adversarial review is on record catching elsewhere in this repository
 ## Testing this package
 
 The conformance suite runs against a real stub HTTP server (`tests/stub_server.py`, a real FastAPI
-app on a real `uvicorn` socket, never a mock) whose request/response Pydantic models were copied
-by hand, field-for-field, from `apps/api_server/schemas/llm.py` in `thyn-ai/algenta` -- see that
-file's own module docstring for the exact commit this was verified against, and re-verify against
-current `main` before trusting it blindly if it's been a while. Every test drives the real,
+app on a real `uvicorn` socket, never a mock) whose request/response Pydantic models mirror the
+engine's public `/v1` schema field-for-field -- re-verify against your own engine version before
+trusting it blindly if it's been a while. Every test drives the real,
 unmodified `openai` Python client (or, for the `/v1/responses` SSE event-sequence assertions,
 real `httpx` directly against the raw event stream) -- never a mocked client.
 

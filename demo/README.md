@@ -28,7 +28,7 @@ Exit codes: `0` all exercisable scenarios passed · `1` at least one failed · `
 
 ## The 12 scenarios, and which actually run
 
-Measured against `thyn-ai/algenta@main` over HTTP with a real Postgres — **9 exercisable, 3 not**.
+Measured against a current Algenta engine build over HTTP with a real Postgres — **9 exercisable, 3 not**.
 
 | # | Scenario | Status |
 |---|---|---|
@@ -51,18 +51,19 @@ Measured against `thyn-ai/algenta@main` over HTTP with a real Postgres — **9 e
 unapproved plan returns `409 plan_not_approved` and the plan stays `proposed`. There is no suspended
 execution to resume and no continuation token, because approval is a separate prior call
 (propose → approve → execute). That is a sound design, but it is not pause/resume, and asserting
-pause/resume would be asserting a design intention. Unblocked by Track C1 (the Responses-protocol
-approval-required event).
+pause/resume would be asserting a design intention. The scenario becomes exercisable once the
+engine's Responses-protocol approval-required event ships.
 
 **9 — Upstream timeout.** Needs a dependency that genuinely times out. This path talks only to
-Postgres; provoking a real timeout needs a fault-injection proxy or the compute worker under load.
-Patching a client to raise would test the mock, not the engine.
+Postgres; provoking a real timeout needs a fault-injection proxy or the engine's compute path
+under real load. Patching a client to raise would test the mock, not the engine.
 
-**12 — Replay determinism.** Determinism is a property of the Mojo kernels, and this configuration
-runs with `ALGENTA_SKIP_MOJO_RUNTIME=1`. Comparing two runs of the safe-MVP execute path would
-compare an artifact list to itself.
+**12 — Replay determinism.** Determinism is a property of the engine's compute kernels, and this
+configuration runs with the accelerated compute runtime disabled (`ALGENTA_SKIP_MOJO_RUNTIME=1`).
+Comparing two runs of the execute path in that configuration would compare an artifact list to
+itself.
 
-9 and 12 belong in the nightly live tier against a booted stack.
+9 and 12 belong in a scheduled live tier against a fully booted engine stack.
 
 **A blocked scenario is not a pass.** The runner reports `9 passed, 0 failed, 3 blocked` and prints
 each reason. `pytest.skip` was avoided deliberately — "10 passed, 2 skipped" reads like success.
@@ -89,8 +90,8 @@ nothing without the run that fails.
 
 `demo/fixtures/expected.json` carries the semantic evidence every framework example must reproduce,
 including the named error code each gate returns. It was **generated from a live run**, not authored
-by hand, and records the engine's git sha and configuration. A hand-written expectation is
-indistinguishable from a wish — regenerate it rather than editing it.
+by hand, and records the engine build and configuration it was observed against. A hand-written
+expectation is indistinguishable from a wish — regenerate it rather than editing it.
 
 One value there is worth noticing: scenario 7 (reused approval challenge) returns
 `plan_not_approvable`, not `invalid_nonce`. After a successful approval the plan leaves `proposed`,

@@ -1,5 +1,10 @@
 # maf-algenta
 
+[![PyPI](https://img.shields.io/pypi/v/maf-algenta.svg)](https://pypi.org/project/maf-algenta/)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](../../LICENSE)
+
+> **Docs:** [docs.algenta.ai](https://docs.algenta.ai) · [All integrations](../../README.md)
+
 Microsoft Agent Framework (MAF) tool integration for [Algenta](https://algenta.ai):
 `create_algenta_tools`, an async context manager that builds a governed-execution-aware list of
 [`agent_framework.FunctionTool`](https://github.com/microsoft/agent-framework)s from your own
@@ -137,7 +142,7 @@ just on the advertised schema.
 
 ## Denial mapping
 
-**The real contract, verified directly against the live, running Algenta Engine's own source**
+**The real contract, verified directly against the Algenta engine's real, served behavior**
 (not assumed from any planning document or from this package's own prior README, both of which
 turned out to describe a fictional contract): `execute_decision(decision_id, webhook_url,
 timeout_seconds?, force?, override_safety?, metadata?)` either
