@@ -1,131 +1,206 @@
 # Contributing to Algenta Integrations
 
-Thank you for your interest in contributing. This repository holds
-**framework-integration packages** — thin adapters that let agent
-frameworks (pydantic-ai, LangChain, LiteLLM, and TypeScript/JS tool-calling
-frameworks) call Algenta through the published `algenta-sdk` client.
+Thank you for your interest in contributing. This repository holds the
+framework-integration packages that let agent frameworks — pydantic-ai,
+LangChain/LangGraph, LiteLLM, Microsoft Agent Framework, Haystack,
+LlamaIndex, Ray Serve, vLLM, the Vercel AI SDK, and n8n — call a
+self-hosted [Algenta](https://algenta.ai) engine through its published
+client SDKs and public HTTP/MCP surface.
 
-The Algenta Engine itself (the compute/decision runtime these integrations
-ultimately talk to, over HTTP/MCP, against a customer's own self-hosted
-deployment) is closed and lives in a separate, private repository. The
-`algenta-sdk` client libraries these packages depend on are Apache-2.0 and
-live in the sibling repository
-[`thyn-ai/algenta-sdk`](https://github.com/thyn-ai/algenta-sdk). Nothing in
-this repository grants access to the engine, and no package here may vendor
-engine source, import engine-internal modules, or depend on anything other
-than the published `algenta-sdk` package (see
-[`scripts/check-no-engine-dependency.py`](./scripts/check-no-engine-dependency.py),
-which enforces this on every pull request — not just as a policy note).
+The Algenta engine itself is closed source and lives in a separate,
+private repository. The `algenta-sdk` client libraries these packages
+build on are Apache-2.0 and live in the sibling repository
+[`thyn-ai/algenta-sdk`](https://github.com/thyn-ai/algenta-sdk). Nothing
+in this repository grants access to the engine — see
+[The one rule that matters most](#the-one-rule-that-matters-most) below.
 
-## Status
+All ten integration packages are implemented and carry their own passing
+test suites. For per-package status, the roadmap, and exactly what
+"implemented" does and does not mean yet, see the root
+[README](./README.md#status--roadmap).
 
-This repository is a scaffold. No framework integration is implemented yet
-— see the root [README.md](./README.md#status--roadmap) for what's planned
-(D1–D9) versus what exists today.
+## Repository layout
 
-## What you can contribute
+| Path | What it is |
+|---|---|
+| `python/` | A [uv](https://docs.astral.sh/uv/) workspace with one member per Python integration package (`pydantic-ai-algenta`, `langchain-algenta`, `litellm-algenta`, `maf-algenta`, `haystack-algenta`, `llamaindex-algenta`, `ray-serve-algenta`, `vllm-algenta`), plus `examples/` (usage examples, not a released package) |
+| `typescript/` | Two independent [pnpm](https://pnpm.io/) + [Turborepo](https://turbo.build/) workspaces — `typescript/algenta-tools/` (Vercel AI SDK) and `typescript/n8n-nodes-algenta/` (n8n community node) — each holding its publishable package under `packages/` |
+| `contracts/` | The shared tool-profile contract (`integration-tool-contract.json`) every package must conform to |
+| `scripts/` | CI gates and release automation (standard-library Python, plus one plain-TypeScript twin) |
+| `demo/` | The cross-framework conformance suite — runs against a live, self-hosted engine |
+| `.github/` | CI, release, and publish workflows; issue and pull-request templates |
 
-| Area | Status | Notes |
-|------|--------|-------|
-| `python/pydantic-ai-algenta/` | 🚧 Scaffolded, implementation pending | |
-| `python/langchain-algenta/` | ✅ Implemented | See [its README](./python/langchain-algenta/README.md) and the root [README's status table](./README.md#status--roadmap) (D3) |
-| `python/litellm-algenta/` | 🚧 Scaffolded, implementation pending | |
-| `typescript/algenta-tools/` | 🚧 Scaffolded, implementation pending | |
-| `contracts/integration-tool-contract.json` | ✅ Open | The shared tool-profile contract every package must conform to |
-| `scripts/check-parity.{py,ts}` | ✅ Open | Cross-language parity checks (stubs today) |
-| `demo/` | 🔒 Not yet — see `demo/README.md` | The 12-scenario conformance fixture set is future work (tracked as D9) |
+## Development setup
 
-## Getting started
+Prerequisites: Python ≥ 3.10 with [uv](https://docs.astral.sh/uv/), and
+Node.js ≥ 18 (CI runs Node 20) with pnpm 9.
+
+### Python
 
 ```bash
 git clone https://github.com/thyn-ai/algenta-integrations
-cd algenta-integrations
+cd algenta-integrations/python
 
-# Python workspace (uv)
-cd python
-uv sync
-uv run pytest
-
-# TypeScript workspace (pnpm + turbo)
-cd typescript/algenta-tools
-pnpm install
-pnpm turbo run build test
+uv sync --all-packages --all-extras
 ```
 
-Every package here is a plain client of Algenta's published SDK — you do
-not need a running Algenta Engine to work on most of this code. Anything
-that requires a live self-hosted endpoint to exercise end-to-end says so in
-its own `README.md`.
+`--all-extras` is required, not cosmetic: pytest and its plugins live in
+each package's `dev` extra, so without them the test runner never gets
+installed into the workspace environment.
 
-## The one rule that matters most
+Run one package's test suite — one pytest process per package, because
+the suites use package-relative imports that deliberately do not collect
+together in a single pytest run:
 
-**Every package may depend only on the published `algenta-sdk` (PyPI) /
-`algenta-sdk` (npm) client, plus the customer's own self-hosted Algenta
-Engine over HTTP/MCP at runtime.** Never:
+```bash
+uv run pytest langchain-algenta -v
+```
 
-- a relative/local path into `decision-engine`, `mojo/`, or
-  `apps/api_server/`
-- a git/file/path dependency of any kind
-- a bundled or embedded engine of any form
+CI runs every package exactly this way (one process per package,
+discovered by glob); `examples/` is a workspace member without a test
+suite and is the one directory where collecting zero tests is expected.
 
-CI runs [`scripts/check-no-engine-dependency.py`](./scripts/check-no-engine-dependency.py)
-on every PR to enforce this mechanically. A PR that fails this check will
-not merge, no matter how small the violation looks.
+### TypeScript
 
-## Development workflow
+Each workspace under `typescript/` is self-contained, with its own
+lockfile and turbo pipeline:
 
-### Branch naming
-- `feat/short-description` — new feature
-- `fix/short-description` — bug fix
-- `docs/short-description` — documentation only
+```bash
+cd typescript/algenta-tools        # or typescript/n8n-nodes-algenta
+pnpm install
+pnpm turbo run build lint test
+```
 
-### Commit messages
-We follow [Conventional Commits](https://www.conventionalcommits.org/),
-which also drives this repository's automated version bumps (see
-`.github/workflows/auto-release.yml`):
+Run one package's tests within a workspace:
+
+```bash
+pnpm --filter algenta-tools test
+```
+
+### Linting and formatting
+
+Python code is linted and formatted with
+[Ruff](https://docs.astral.sh/ruff/) (configuration in
+[`ruff.toml`](./ruff.toml)); TypeScript packages lint via `tsc --noEmit`
+as part of `turbo run lint`. The repository's
+[pre-commit](./.pre-commit-config.yaml) hooks run Ruff plus whitespace,
+YAML/JSON, and security checks on every commit:
+
+```bash
+uv tool install pre-commit   # or: pipx install pre-commit
+pre-commit install
+```
+
+## Commit messages: Conventional Commits (required)
+
+This repository releases automatically from commit messages, so their
+format is a hard requirement, not a style preference. After every merge
+to `main`, [`scripts/compute_release_bumps.py`](./scripts/compute_release_bumps.py)
+runs (via [`.github/workflows/auto-release.yml`](./.github/workflows/auto-release.yml)),
+walks the commits that touched each package since that package's last
+tag, and derives a per-package semantic-version bump:
+
+| Commit message | Version effect |
+|---|---|
+| `feat: ...` | minor bump |
+| `fix: ...` | patch bump |
+| `BREAKING CHANGE:` in the body or footer, or `!` after the type/scope (e.g. `feat!:`) | major bump |
+| Any other type — `docs`, `chore`, `test`, `ci`, `refactor`, `perf`, `style`, `build` | no bump |
+
+The format is `type(scope): summary`, with the scope naming the package
+you changed:
+
 ```
 feat(langchain-algenta): add governed-query tool wrapper
 fix(algenta-tools): correct tool-profile default
-docs(pydantic-ai-algenta): document self-hosted base URL setup
+docs(vllm-algenta): document self-hosted base URL setup
 ```
 
-### Pull request checklist
-- [ ] Tests pass locally
-- [ ] New features have tests
-- [ ] Documentation updated if needed
-- [ ] No hardcoded credentials, secrets, or base URLs pointing at a hosted
-      cloud endpoint (every example defaults to the customer's own
-      self-hosted `ALGENTA_BASE_URL`)
-- [ ] `scripts/check-no-engine-dependency.py` passes
-- [ ] Any new tool exposed to a model is placed in the correct profile per
-      [`contracts/integration-tool-contract.json`](./contracts/integration-tool-contract.json)
-      (`execute`-tier tools are never in `observe`/`govern`, and
-      `force`/`override_safety`-shaped fields are never model-facing)
-- [ ] CLA signed (the CLA-assistant bot will comment on your first PR with
-      instructions)
+The scope is for human readers and release notes; which package actually
+gets bumped is determined by which paths the commit touched, so a commit
+that only changes repository-level files (CI, root docs) bumps nothing.
+Squash-merged pull requests keep this working as long as the final
+squashed commit message follows the format — please make sure it does.
 
-All CI checks must pass, including on forked-repository pull requests — CI
-runs with no secrets and no elevated permissions, so it's safe to run
-automatically on every PR.
+## The one rule that matters most
 
-## Contributor License Agreement
+**Every package in this repository may depend only on the published
+`algenta-sdk` package ([PyPI](https://pypi.org/project/algenta-sdk/) /
+[npm](https://www.npmjs.com/package/algenta-sdk)), and may talk only to
+the caller's own self-hosted Algenta engine over its public HTTP/MCP
+surface at runtime.** The engine is closed source; nothing here may
+vendor its source, import its internals, or take a path-, git-, or
+file-based dependency on anything outside this repository, and no
+package may depend on any Algenta-named artifact other than the
+published `algenta-sdk`.
 
-By submitting a pull request, you'll be asked to sign Algenta's Contributor
-License Agreement (a perpetual, worldwide, irrevocable grant letting
-Algenta, Inc. use your contribution across this and other Algenta
-products). The CLA-assistant bot handles this automatically on your first
-PR — you only need to sign once. See [`CLA.md`](./CLA.md) for the full text
-(currently a draft placeholder pending counsel review, mirroring
-`thyn-ai/algenta-sdk`'s own placeholder — see that file for why).
+This is enforced mechanically, not by convention:
+[`scripts/check-no-engine-dependency.py`](./scripts/check-no-engine-dependency.py)
+scans every dependency manifest and every import/require statement in
+the repository on every pull request, and
+[`scripts/test_check_no_engine_dependency.py`](./scripts/test_check_no_engine_dependency.py)
+exists to prove the gate actually catches violations. A pull request
+that fails this check does not merge, no matter how small the violation
+looks.
 
-## Reporting issues
+## Testing expectations
 
-- **Security vulnerabilities** → see [SECURITY.md](./SECURITY.md) (do NOT
-  open a public issue)
-- **Bugs** → [GitHub Issues](https://github.com/thyn-ai/algenta-integrations/issues)
-  with the `bug` label
-- **Questions** → GitHub Issues with the `question` label, or
-  https://algenta.ai/discord
+Every behavior change ships with tests, and CI runs the full suite on
+every pull request — including forks, with no secrets — so green locally
+must mean green in CI. Beyond ordinary unit coverage, changes to a
+package's tool surface must preserve three properties that every
+integration package's suite exercises:
+
+- **Contract parity** — the tools a package exposes per profile match
+  [`contracts/integration-tool-contract.json`](./contracts/integration-tool-contract.json)
+  exactly: same tool names, same profile boundaries, same `observe`
+  default.
+- **Profile filtering** — an `execute`-tier tool never leaks into the
+  `observe` or `govern` profiles, and `force` / `override_safety`-shaped
+  fields are never model-facing, in any profile.
+- **Receipts and denials** — `execute_decision`'s typed success receipt
+  and its synchronous, named policy-gate denials (`idempotency`,
+  `confidence`, `risk_floor`) keep their typed mapping onto the
+  package's own success and error types.
+
+Write tests the way the existing suites do: against a real stub server
+speaking real HTTP/MCP, not mocks of the package's own internals.
+End-to-end scenarios that need a live, self-hosted engine belong in the
+[`demo/`](./demo/README.md) conformance suite, not in a package's unit
+tests.
+
+One more repository-wide rule: no hardcoded credentials, tokens, or
+hosted-cloud endpoints anywhere. Every example and every default
+resolves its endpoint from the caller's own self-hosted deployment
+(`ALGENTA_BASE_URL`).
+
+## Pull requests
+
+- Branch from `main` as `feat/short-description`,
+  `fix/short-description`, or `docs/short-description`.
+- Keep the diff focused on one change; unrelated refactors go in their
+  own pull request.
+- Fill in the pull-request template's checklist — it restates the
+  contract and self-hosted-only requirements above.
+- All CI checks must pass. Review follows [`CODEOWNERS`](./CODEOWNERS):
+  changes to `contracts/`, the no-engine-dependency gate, or anything
+  under `.github/` always get deliberate maintainer review.
+
+## Reporting issues and getting help
+
+See [`SUPPORT.md`](./SUPPORT.md) for where to file what. Security
+reports are never public — follow [`SECURITY.md`](./SECURITY.md).
+
+## Licensing
+
+This repository is licensed under [Apache-2.0](./LICENSE) (see
+[`NOTICE`](./NOTICE)). Contributions are inbound = outbound: by
+submitting a pull request, you license your contribution under the
+project's existing Apache-2.0 license, consistent with section D.6 of
+the [GitHub Terms of
+Service](https://docs.github.com/en/site-policy/github-terms/github-terms-of-service#6-contributions-under-repository-license).
+There is no Contributor License Agreement (CLA) to sign. Please only
+contribute work you have the right to submit under these terms.
 
 ## Community
 
