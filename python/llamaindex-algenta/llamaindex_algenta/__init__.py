@@ -13,7 +13,13 @@ mapping design decisions, and `contracts/integration-tool-contract.json` in the
 
 from importlib import metadata as _metadata
 
-from .contract import DEFAULT_PROFILE, GOVERNED_TOOL_NAMES, NEVER_MODEL_FACING_FIELDS, TOOL_PROFILES, ToolProfile
+from .contract import (
+    DEFAULT_PROFILE,
+    GOVERNED_TOOL_NAMES,
+    NEVER_MODEL_FACING_FIELDS,
+    TOOL_PROFILES,
+    ToolProfile,
+)
 from .exceptions import AlgentaGovernedCallFailure, AlgentaToolDenied, AlgentaToolExecutionFailed
 from .receipts import (
     NAMED_EXECUTION_GATES,

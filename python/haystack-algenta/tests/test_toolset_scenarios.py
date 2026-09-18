@@ -17,10 +17,13 @@ from typing import Any
 
 import pytest
 from haystack.components.agents import Agent
-from haystack.hooks.human_in_the_loop import AlwaysAskPolicy, BlockingConfirmationStrategy, ConfirmationHook, ConfirmationUIResult
+from haystack.hooks.human_in_the_loop import (
+    AlwaysAskPolicy,
+    BlockingConfirmationStrategy,
+    ConfirmationHook,
+    ConfirmationUIResult,
+)
 from haystack.tools.errors import ToolInvocationError
-from haystack_integrations.tools.mcp import MCPToolset, StreamableHttpServerInfo
-
 from haystack_algenta import AlgentaToolDenied, build_algenta_governance_hooks, create_algenta_tools
 from haystack_algenta.receipts import (
     ExecutionBlocked,
@@ -28,6 +31,7 @@ from haystack_algenta.receipts import (
     extract_execution_outcome_from_tool_result,
     unwrap_mcp_tool_result,
 )
+from haystack_integrations.tools.mcp import MCPToolset, StreamableHttpServerInfo
 
 from .fake_chat_generator import ScriptedChatGenerator, text_reply, tool_call_reply
 from .stub_server import CONFIDENCE_BLOCKED_DECISION_ID, RISK_FLOOR_BLOCKED_DECISION_ID
@@ -50,7 +54,7 @@ class _ScriptedUI:
         return {"type": "tests.test_toolset_scenarios._ScriptedUI", "init_parameters": {"action": self.action}}
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "_ScriptedUI":
+    def from_dict(cls, data: dict[str, Any]) -> _ScriptedUI:
         return cls(**data.get("init_parameters", {}))
 
 

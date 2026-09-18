@@ -9,7 +9,6 @@ filtering is pure list-filtering logic and doesn't need a real MCP round trip to
 from __future__ import annotations
 
 import pytest
-
 from maf_algenta import create_algenta_tools
 
 from .helpers import build_full_fake_registry

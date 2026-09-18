@@ -15,8 +15,11 @@ import json
 from pathlib import Path
 
 import pytest
-
-from haystack_algenta.contract import FULL_PROFILE_SENTINEL, NEVER_MODEL_FACING_FIELDS, TOOL_PROFILES
+from haystack_algenta.contract import (
+    FULL_PROFILE_SENTINEL,
+    NEVER_MODEL_FACING_FIELDS,
+    TOOL_PROFILES,
+)
 
 
 def _find_contract_file() -> Path | None:

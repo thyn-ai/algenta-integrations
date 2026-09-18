@@ -16,7 +16,6 @@ from pydantic_ai.mcp import MCPToolset
 from pydantic_ai.messages import ToolReturnPart
 from pydantic_ai.models.test import TestModel
 from pydantic_ai.tools import DeferredToolRequests, ToolDenied
-
 from pydantic_ai_algenta import AlgentaToolset, ExecutionReceipt
 from pydantic_ai_algenta.receipts import parse_receipt
 

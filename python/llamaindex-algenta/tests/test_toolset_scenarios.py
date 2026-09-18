@@ -12,8 +12,12 @@ import pytest
 from llama_index.core.agent.workflow import FunctionAgent
 from llama_index.core.agent.workflow.workflow_events import ToolCallResult
 from llama_index.core.llms.llm import ToolSelection
-
-from llamaindex_algenta import AlgentaToolDenied, AlgentaToolExecutionFailed, ExecutionReceipt, create_algenta_tools
+from llamaindex_algenta import (
+    AlgentaToolDenied,
+    AlgentaToolExecutionFailed,
+    ExecutionReceipt,
+    create_algenta_tools,
+)
 
 from .helpers import ScriptedFunctionCallingLLM
 from .stub_server import LOW_CONFIDENCE_DECISION_ID, NON_ENVELOPE_RESULT, RISK_FLOOR_DECISION_ID

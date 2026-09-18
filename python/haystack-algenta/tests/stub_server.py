@@ -216,7 +216,7 @@ class StubServerFixture:
                 time.sleep(0.02)
         raise TimeoutError("stub server did not start in time")
 
-    def __enter__(self) -> "StubServerFixture":
+    def __enter__(self) -> StubServerFixture:
         self._thread.start()
         self._wait_until_serving()
         return self

@@ -13,7 +13,14 @@ conforms to.
 from importlib.metadata import PackageNotFoundError, version
 
 from .contract import DEFAULT_PROFILE, NEVER_MODEL_FACING_FIELDS, TOOL_PROFILES, ToolProfile
-from .receipts import EXECUTION_GATES, ExecutionDenial, ExecutionGate, ExecutionReceipt, parse_denial, parse_receipt
+from .receipts import (
+    EXECUTION_GATES,
+    ExecutionDenial,
+    ExecutionGate,
+    ExecutionReceipt,
+    parse_denial,
+    parse_receipt,
+)
 from .toolset import ALGENTA_BASE_URL_ENV_VAR, DEFAULT_ALGENTA_BASE_URL, AlgentaToolset
 
 try:

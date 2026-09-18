@@ -69,7 +69,12 @@ from .contract import (
     resolve_profile_tool_names,
 )
 from .exceptions import AlgentaToolDenied, AlgentaToolExecutionFailed
-from .receipts import ExecutionBlocked, ExecutionReceipt, parse_execution_blocked, parse_execution_receipt
+from .receipts import (
+    ExecutionBlocked,
+    ExecutionReceipt,
+    parse_execution_blocked,
+    parse_execution_receipt,
+)
 
 #: Default self-hosted Algenta MCP endpoint. Matches this whole program's standing rule: every
 #: default in this repository points at the caller's own self-hosted deployment, never a

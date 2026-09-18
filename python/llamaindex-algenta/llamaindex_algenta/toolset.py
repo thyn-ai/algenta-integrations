@@ -65,7 +65,14 @@ from llama_index.core.tools import FunctionTool
 from llama_index.core.tools.types import ToolMetadata
 from llama_index.tools.mcp import BasicMCPClient, McpToolSpec
 
-from .contract import DEFAULT_PROFILE, EXECUTE_DECISION, NEVER_MODEL_FACING_FIELDS, TOOL_PROFILES, ToolProfile, resolve_profile_tool_names
+from .contract import (
+    DEFAULT_PROFILE,
+    EXECUTE_DECISION,
+    NEVER_MODEL_FACING_FIELDS,
+    TOOL_PROFILES,
+    ToolProfile,
+    resolve_profile_tool_names,
+)
 from .exceptions import AlgentaToolDenied, AlgentaToolExecutionFailed
 from .receipts import (
     ExecutionDenial,

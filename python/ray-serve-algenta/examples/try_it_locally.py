@@ -46,7 +46,6 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 import ray  # noqa: E402
 from fastmcp import Client  # noqa: E402
 from ray import serve  # noqa: E402
-
 from ray_serve_algenta.deployment import build_app  # noqa: E402
 from tests.stub_server import StubServerFixture  # noqa: E402
 

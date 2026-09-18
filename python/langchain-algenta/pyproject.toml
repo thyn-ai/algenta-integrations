@@ -48,7 +48,7 @@ Repository = "https://github.com/thyn-ai/algenta-integrations"
 # MCP server (tests/stub_server.py) imports `mcp.server.fastmcp.FastMCP` directly -- a real MCP
 # server, not a mock of `AlgentaToolCallInterceptor`'s internals. `httpx` is likewise already
 # transitive (via `mcp`) but is listed explicitly since a test constructs an `httpx.Auth` value.
-dev = ["pytest", "pytest-asyncio", "mcp>=1.29.0", "httpx>=0.27"]
+dev = ["pytest", "pytest-asyncio", "pytest-cov", "mcp>=1.29.0", "httpx>=0.27"]
 # The full `langchain` metapackage is deliberately NOT a runtime dependency of this package --
 # see the "Install" section of the README for why (`create_algenta_tools` only ever needs the
 # lightweight `langchain-core`, already declared above). The README's own Quick start builds its
@@ -69,3 +69,14 @@ include = ["langchain_algenta*"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+
+[tool.coverage.run]
+# The workspace runs one pytest process per package (see .github/workflows/ci.yml), so each
+# run measures this package's own module only -- never the tests or sibling packages.
+source = ["langchain_algenta"]
+
+[tool.coverage.report]
+# Gate for the CI python job (enforced via pytest-cov): measured at 92% on Python 3.12
+# (2026-09-18), floored 2 points lower for headroom. Raise the floor as coverage grows.
+fail_under = 90
+show_missing = true

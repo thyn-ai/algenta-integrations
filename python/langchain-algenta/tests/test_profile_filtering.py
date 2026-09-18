@@ -9,9 +9,8 @@ filtering is pure list-filtering logic and doesn't need a real MCP round trip to
 from __future__ import annotations
 
 import pytest
-from langchain_core.tools import BaseTool
-
 from langchain_algenta import create_algenta_tools
+from langchain_core.tools import BaseTool
 
 from .helpers import mcp_shaped_tool
 

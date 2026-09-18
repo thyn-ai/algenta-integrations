@@ -54,6 +54,7 @@ Repository = "https://github.com/thyn-ai/algenta-integrations"
 dev = [
     "pytest",
     "pytest-asyncio>=0.24",
+    "pytest-cov",
     "fastmcp>=3.4",
 ]
 
@@ -75,3 +76,14 @@ asyncio_mode = "auto"
 filterwarnings = [
     "ignore:Using extra keyword arguments on `Field`:DeprecationWarning",
 ]
+
+[tool.coverage.run]
+# The workspace runs one pytest process per package (see .github/workflows/ci.yml), so each
+# run measures this package's own module only -- never the tests or sibling packages.
+source = ["ray_serve_algenta"]
+
+[tool.coverage.report]
+# Gate for the CI python job (enforced via pytest-cov): measured at 66% on Python 3.12
+# (2026-09-18), floored 2 points lower for headroom. Raise the floor as coverage grows.
+fail_under = 64
+show_missing = true

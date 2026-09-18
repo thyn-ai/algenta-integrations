@@ -10,8 +10,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import ValidationError
-
 from llamaindex_algenta.receipts import (
     ExecutionDenial,
     ExecutionReceipt,
@@ -21,6 +19,7 @@ from llamaindex_algenta.receipts import (
     parse_execution_receipt,
     unwrap_call_tool_result,
 )
+from pydantic import ValidationError
 
 
 class _FakeTextContent:

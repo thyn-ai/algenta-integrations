@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import pytest
 from pydantic_ai.toolsets.function import FunctionToolset
-
 from pydantic_ai_algenta import AlgentaToolset, ExecutionReceipt
 
 from .helpers import bare_run_context

@@ -5,7 +5,6 @@ omissions -- exercised over the real wire against `tests/stub_server.py`.
 from __future__ import annotations
 
 import pytest
-
 from llamaindex_algenta import TOOL_PROFILES, create_algenta_tools
 
 

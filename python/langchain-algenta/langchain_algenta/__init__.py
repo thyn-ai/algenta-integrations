@@ -17,7 +17,14 @@ import importlib.metadata
 from .contract import DEFAULT_PROFILE, NEVER_MODEL_FACING_FIELDS, TOOL_PROFILES, ToolProfile
 from .exceptions import AlgentaExecutionBlocked, AlgentaGovernedCallError, AlgentaToolDenied
 from .interceptor import AlgentaToolCallInterceptor
-from .receipts import NAMED_EXECUTION_GATES, ExecutionDenial, ExecutionGate, ExecutionReceipt, parse_denial, parse_receipt
+from .receipts import (
+    NAMED_EXECUTION_GATES,
+    ExecutionDenial,
+    ExecutionGate,
+    ExecutionReceipt,
+    parse_denial,
+    parse_receipt,
+)
 from .toolset import ALGENTA_BASE_URL_ENV_VAR, DEFAULT_ALGENTA_BASE_URL, create_algenta_tools
 
 __all__ = [

@@ -70,7 +70,7 @@ Repository = "https://github.com/thyn-ai/algenta-integrations"
 # `mcp.server.fastmcp.FastMCP` server, not a mock of anything in `haystack`'s internals) over a
 # real local HTTP socket. Not needed by this package's own runtime code, which only ever acts as
 # an MCP *client*.
-dev = ["pytest", "uvicorn>=0.34"]
+dev = ["pytest", "pytest-cov", "uvicorn>=0.34"]
 
 [build-system]
 requires = ["setuptools>=68.0", "wheel"]
@@ -78,3 +78,14 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 include = ["haystack_algenta*"]
+
+[tool.coverage.run]
+# The workspace runs one pytest process per package (see .github/workflows/ci.yml), so each
+# run measures this package's own module only -- never the tests or sibling packages.
+source = ["haystack_algenta"]
+
+[tool.coverage.report]
+# Gate for the CI python job (enforced via pytest-cov): measured at 96% on Python 3.12
+# (2026-09-18), floored 2 points lower for headroom. Raise the floor as coverage grows.
+fail_under = 94
+show_missing = true

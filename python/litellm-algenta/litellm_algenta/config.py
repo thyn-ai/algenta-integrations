@@ -96,18 +96,19 @@ from __future__ import annotations
 
 import argparse
 import sys
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Iterable, Literal
+from typing import Any, Literal
 
 import yaml
 
 from .contract import (
+    DEFAULT_PROFILE,
     EXECUTE_DECISION,
     EXECUTE_DECISION_MODEL_FACING_PARAMS,
     FULL_PROFILE_SENTINEL,
     NEVER_MODEL_FACING_FIELDS,
     TOOL_PROFILES,
-    DEFAULT_PROFILE,
     ToolProfile,
 )
 

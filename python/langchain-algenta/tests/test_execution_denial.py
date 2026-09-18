@@ -15,7 +15,6 @@ regression in the denial mapping would actually be caught here.
 from __future__ import annotations
 
 import pytest
-
 from langchain_algenta import AlgentaExecutionBlocked, create_algenta_tools
 from langchain_algenta.receipts import parse_receipt
 

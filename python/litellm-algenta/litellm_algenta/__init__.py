@@ -21,15 +21,16 @@ honest accounting of what LiteLLM's gateway does and doesn't enforce natively.
 
 from __future__ import annotations
 
-from importlib.metadata import PackageNotFoundError, version as _pkg_version
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _pkg_version
 
 from . import contract
 from .config import (
-    AuthType,
-    ConfigError,
     DEFAULT_BASE_URL_ENV_VAR,
     DEFAULT_SERVER_NAME,
     DEFAULT_TOKEN_ENV_VAR,
+    AuthType,
+    ConfigError,
     assert_safe,
     build_mcp_server_entry,
     lint_mcp_server_entry,

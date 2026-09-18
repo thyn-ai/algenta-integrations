@@ -23,16 +23,14 @@ from __future__ import annotations
 import asyncio
 import json
 import socket
-from typing import Any
 
 from fastmcp import FastMCP
 from fastmcp.server.dependencies import get_http_request
+from litellm_algenta.contract import EXECUTE_DECISION_GATES
 from starlette.middleware import Middleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
-
-from litellm_algenta.contract import EXECUTE_DECISION_GATES
 
 #: A decision_id whose confidence is always below `policy.min_confidence` -- `execute_decision`
 #: always refuses it with gate `"confidence"` unless `override_safety=true`.
@@ -285,7 +283,7 @@ class StubServerFixture:
         self.base_url: str = ""
         self.port: int = 0
 
-    async def __aenter__(self) -> "StubServerFixture":
+    async def __aenter__(self) -> StubServerFixture:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         sock.bind(("127.0.0.1", 0))
