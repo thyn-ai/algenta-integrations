@@ -10,7 +10,13 @@ body:
         - pydantic-ai-algenta
         - langchain-algenta
         - litellm-algenta
+        - maf-algenta
+        - haystack-algenta
+        - llamaindex-algenta
+        - ray-serve-algenta
+        - vllm-algenta
         - algenta-tools (TypeScript)
+        - n8n-nodes-algenta (TypeScript)
         - Not sure
     validations:
       required: true
@@ -18,7 +24,7 @@ body:
     id: version
     attributes:
       label: Package version
-      placeholder: e.g. langchain-algenta 0.1.0
+      description: e.g. langchain-algenta 0.1.3 — check `pip show` or your package.json.
     validations:
       required: true
   - type: textarea

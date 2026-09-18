@@ -14,5 +14,5 @@
       by a model)
 - [ ] No hardcoded credentials, secrets, or hosted-cloud base URLs (every
       example defaults to the customer's own self-hosted `ALGENTA_BASE_URL`)
-- [ ] I've signed the CLA, or the CLA-assistant bot will prompt me to on
-      this PR
+- [ ] I understand my contribution is licensed under this repository's
+      Apache-2.0 license (inbound = outbound — see CONTRIBUTING.md)
