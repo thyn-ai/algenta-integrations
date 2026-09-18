@@ -288,7 +288,7 @@ def _eval_python_node(node: ast.expr, env: dict[str, object]) -> object:
     if isinstance(node, ast.Set):
         values = [_eval_python_node(elt, env) for elt in node.elts]
         return _UNRESOLVED if any(v is _UNRESOLVED for v in values) else frozenset(values)
-    if isinstance(node, (ast.List, ast.Tuple)):
+    if isinstance(node, ast.List | ast.Tuple):
         values = [_eval_python_node(elt, env) for elt in node.elts]
         return _UNRESOLVED if any(v is _UNRESOLVED for v in values) else list(values)
     if isinstance(node, ast.Dict):
@@ -370,7 +370,7 @@ def evaluate_python_contract(path: Path) -> EmbeddedContract:
         )
     tool_profiles: dict[str, frozenset[str] | str] = {}
     for key, value in profiles_value.items():
-        if isinstance(value, (frozenset, set)):
+        if isinstance(value, frozenset | set):
             tool_profiles[str(key)] = frozenset(str(item) for item in value)
         elif isinstance(value, str):
             tool_profiles[str(key)] = value
@@ -384,7 +384,7 @@ def evaluate_python_contract(path: Path) -> EmbeddedContract:
         raise ContractParseError("DEFAULT_PROFILE must be a string constant")
 
     never_fields = require("NEVER_MODEL_FACING_FIELDS")
-    if not isinstance(never_fields, (frozenset, set)):
+    if not isinstance(never_fields, frozenset | set):
         raise ContractParseError("NEVER_MODEL_FACING_FIELDS must be a frozenset of field names")
 
     declared: frozenset[str] | None = None
