@@ -1,10 +1,7 @@
-# Tier-1, untrusted CI. Runs on every PR, including ones from forks (once this
-# repo is public — see the visibility note below). No secrets are referenced
-# anywhere in this file, on purpose.
+# Tier-1, untrusted CI. Runs on every PR, including ones from forks. No secrets are
+# referenced anywhere in this file, on purpose.
 #
-# Every job runs on standard GitHub-hosted runners: free for public repositories
-# and inside the org's included minutes while private, and -- unlike the org's
-# self-hosted fleet, whose runner group does not serve public repositories --
+# Every job runs on standard GitHub-hosted runners: free for public repositories, and
 # they run fork-triggered jobs the day this repository flips to public.
 name: ci
 
@@ -28,10 +25,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # Discovered, never hardcoded -- the old tool-cache path pinned a version, an arch and a
-      # layout, and all three broke when the fleet moved off macOS. See the action for detail.
-      - name: Fleet Python (discovered, into a venv)
-        uses: ./.github/actions/fleet-python
+      # The checker and its regression tests are stdlib-only scripts -- a vanilla,
+      # pinned interpreter is all they need.
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
       - name: Run the checker against this repository
         run: python scripts/check-no-engine-dependency.py --root .
       - name: Run the checker's own regression tests (proves it catches violations)
@@ -47,10 +45,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # Discovered, never hardcoded -- the old tool-cache path pinned a version, an arch and a
-      # layout, and all three broke when the fleet moved off macOS. See the action for detail.
-      - name: Fleet Python (discovered, into a venv)
-        uses: ./.github/actions/fleet-python
+      # The release scripts and their regression tests are stdlib-only -- a vanilla,
+      # pinned interpreter is all they need.
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
       - name: Run compute_release_bumps.py's regression tests
         run: python scripts/test_compute_release_bumps.py
       - name: Run resolve_release_target.py's regression tests
@@ -61,22 +60,26 @@ jobs:
   python:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      # Pin uv to the interpreter actions/setup-python just provisioned. Without this uv
+      # prefers its own "managed" CPython and silently downloads a second, floating
+      # interpreter -- the setup step would be decoration and the toolchain unpinned.
+      UV_PYTHON: "3.12"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # Discovered, never hardcoded -- the old tool-cache path pinned a version, an arch and a
-      # layout, and all three broke when the fleet moved off macOS. See the action for detail.
-      - name: Fleet Python (discovered, into a venv)
-        uses: ./.github/actions/fleet-python
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
       - name: Install uv
         run: python -m pip install --quiet --disable-pip-version-check uv
-      # --all-extras is required, not cosmetic: pytest/pytest-asyncio/anyio only live under each
-      # package's `dev` optional-dependencies extra (never a hard dependency of the published
-      # package). Without it, `.venv/bin/pytest` never gets created, so `uv run pytest` silently
-      # falls back to whatever global `pytest` happens to be on PATH (here, the fleet's
-      # pre-provisioned Python 3.14 tool cache) -- a completely different interpreter that can't
-      # see anything installed in this project's `.venv`. That produced a real, CI-reproduced
+      # --all-extras is required, not cosmetic: pytest/pytest-asyncio/pytest-cov/anyio only
+      # live under each package's `dev` optional-dependencies extra (never a hard dependency
+      # of the published package). Without it, `.venv/bin/pytest` never gets created, so
+      # `uv run pytest` silently falls back to whatever global `pytest` happens to be on
+      # PATH -- a completely different interpreter that can't see anything installed in this
+      # project's `.venv`. That produced a real, CI-reproduced
       # `ModuleNotFoundError: No module named 'pydantic_ai'` despite pydantic-ai-slim being
       # correctly listed and installed as pydantic-ai-algenta's dependency; the module was never
       # missing, `uv run pytest` was just running under the wrong Python entirely.
@@ -84,8 +87,8 @@ jobs:
         working-directory: python
         run: uv sync --all-packages --all-extras
       - name: Validate the shared tool-profile contract (stub today, see script header)
-        # Stdlib-only script -- no venv needed, but PATH already has fleet
-        # Python from the step above.
+        # Stdlib-only script -- no venv needed; PATH already has the pinned
+        # interpreter from the step above.
         run: python scripts/check-parity.py
       # ONE pytest PROCESS PER PACKAGE -- deliberately not a single invocation over several
       # package dirs. Every package's suite is laid out as `<pkg>/tests/` with a `tests/__init__.py`
@@ -110,6 +113,13 @@ jobs:
       # -- true for any still-scaffolded package -- so tolerate exactly 5 per package; any other
       # nonzero exit (a real failure or a collection error) fails the build, and the first such
       # code is preserved rather than masked by a later passing package.
+      #
+      # Packages WITH a tests/ directory additionally run under coverage. `--cov` takes its
+      # measure-what (this package's own module), the fail-under floor, and show-missing from
+      # the package's own pyproject.toml `[tool.coverage.*]` sections -- passed explicitly via
+      # --cov-config because coverage.py discovers config from the CWD (the workspace root),
+      # not from pytest's rootdir. The per-package floor is what FAILS the run below (pytest
+      # exits 1); the XML is only the Codecov input.
       - name: Run package tests (one pytest process per package)
         working-directory: python
         run: |
@@ -122,7 +132,16 @@ jobs:
             found=$((found + 1))
             echo "::group::pytest $pkg"
             set +e
-            uv run pytest "$pkg" -v
+            if [ -d "$pkg/tests" ]; then
+              uv run pytest "$pkg" -v --cov \
+                --cov-config="$pkg/pyproject.toml" \
+                --cov-report term \
+                --cov-report "xml:$pkg/coverage.xml"
+            else
+              # Scaffolded package with no suite yet: nothing to measure, and --cov
+              # would fail the run on 0% of nothing.
+              uv run pytest "$pkg" -v
+            fi
             code=$?
             set -e
             echo "::endgroup::"
@@ -141,6 +160,18 @@ jobs:
           fi
           echo "Ran $found package(s)."
           exit "$overall"
+      # Tokenless upload: Codecov accepts uploads without a token from GitHub Actions on
+      # PUBLIC repositories, so no secret is needed here once the repo flips. While the repo
+      # is still private the upload is rejected -- hence fail_ci_if_error: false (and the
+      # same on the TypeScript upload below). Coverage ENFORCEMENT is the per-package
+      # fail_under gate above; Codecov is only the dashboard, so an upload outage must never
+      # take CI down.
+      - name: Upload Python coverage to Codecov
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          directory: python
+          flags: python
+          fail_ci_if_error: false
 
   typescript:
     runs-on: ubuntu-latest
@@ -183,6 +214,35 @@ jobs:
           echo "Ran $found TS workspace(s)."
       - name: Validate the shared tool-profile contract (stub today, see script header)
         run: npx --yes tsx@4 scripts/check-parity.ts
+      # Tokenless upload -- see the Python job's Codecov step above for why no token is
+      # needed and why fail_ci_if_error is false. The lcov reports come from
+      # `vitest run --coverage` (v8 provider, thresholds in each package's
+      # vitest.config.ts), which runs inside `pnpm turbo run test` above.
+      - name: Upload TypeScript coverage to Codecov
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          directory: typescript
+          flags: typescript
+          fail_ci_if_error: false
+
+  # Lint gate. ruff.toml is the single configuration source for both this job and the
+  # local pre-commit hook, and the ruff release installed here is pinned to the exact one
+  # .pre-commit-config.yaml's ruff-pre-commit hook runs -- CI and a developer's laptop must
+  # agree byte-for-byte on what is clean. Bump both together.
+  ruff:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Install ruff (same release as the pre-commit hook)
+        run: python -m pip install --quiet --disable-pip-version-check "ruff==0.12.0"
+      - name: ruff check
+        run: ruff check --output-format github
 
   # contracts/integration-tool-contract.json's own JSON-syntax validity is
   # covered as a side effect of both check-parity.py and check-parity.ts
