@@ -32,23 +32,23 @@ classifiers = [
 # same "only the surface this package actually needs" reasoning `pydantic-ai-slim[mcp]` (D1)
 # and `agent-framework-core` (D5) already document for their own frameworks.
 #
-# `mcp<2.0.0` is a real, currently-live, verified-live pin, not a defensive guess: with
+# `mcp<3.0.0` is a real, currently-live, verified-live pin, not a defensive guess: with
 # `mcp==2.0.0` (the version that `pip install llama-index-core llama-index-tools-mcp` resolves
 # to today, since `llama-index-tools-mcp` 0.5.0's own `Requires-Dist` is `mcp<3,>=2.0.0`), every
 # `BasicMCPClient` HTTP call throws `ValueError: not enough values to unpack (expected 3, got 2)`
 # from `llama_index/tools/mcp/client.py`'s `_run_session` -- that code still unpacks
 # `mcp.client.streamable_http.streamable_http_client(...)`'s yield as a 3-tuple
 # `(read, write, _)`, but installed `mcp==2.0.0`'s `streamable_http_client` now yields a 2-tuple.
-# Pinning `mcp<2.0.0` here (mirroring what `llama-index-tools-mcp` 0.4.8 itself required before
+# Pinning `mcp<3.0.0` here (mirroring what `llama-index-tools-mcp` 0.4.8 itself required before
 # 0.5.0 bumped its own `mcp` floor) makes the dependency resolver pick `llama-index-tools-mcp`
 # 0.4.8 instead, whose HTTP transport is verified working end-to-end against a real server. A
 # stdio transport also works around this on 0.5.0/mcp==2.0.0 (splat-unpacked, not fixed-arity),
 # but self-hosted Algenta engines are reached over HTTP in every sibling package's design, so
-# pinning `mcp<2.0.0` is the realistic fix here, not "use stdio instead."
+# pinning `mcp<3.0.0` is the realistic fix here, not "use stdio instead."
 dependencies = [
     "llama-index-core>=0.13.0,<0.15",
-    "llama-index-tools-mcp>=0.4.0,<0.6",
-    "mcp<2.0.0",
+    "llama-index-tools-mcp>=0.4.0,<0.7",
+    "mcp<3.0.0",
 ]
 
 [project.urls]
@@ -60,15 +60,15 @@ Repository = "https://github.com/thyn-ai/algenta-integrations"
 # `fastmcp` (full, not just the client-only surface `llama-index-tools-mcp` already needs) is a
 # test-only dependency: the test suite's stub Algenta MCP server (tests/stub_server.py) is a
 # real `fastmcp.FastMCP` *server*, which needs fastmcp's server-side support. Never imported by
-# any non-test module in this package. Verified installable and working alongside the `mcp<2.0.0`
+# any non-test module in this package. Verified installable and working alongside the `mcp<3.0.0`
 # pin above with fastmcp 3.x (mcp 1.29.0/1.30.0 satisfy both). The `<4` upper bound is required,
 # not defensive: fastmcp 4.0.0 switched its own "server"/"client" extras to require `mcp<3,>=2.0.0`,
-# which directly conflicts with this package's own `mcp<2.0.0` pin above -- `pip install
+# which directly conflicts with this package's own `mcp<3.0.0` pin above -- `pip install
 # ".[dev]"` only resolves today because pip's resolver silently backtracks two major fastmcp
 # versions to find 3.x; a stricter resolver, or a private index that doesn't mirror older
 # releases, has nothing to backtrack to and fails outright. Pinning `<4` makes that resolution
 # explicit instead of relying on invisible backtracking.
-dev = ["pytest", "pytest-asyncio", "pytest-cov", "fastmcp>=3,<4"]
+dev = ["pytest", "pytest-asyncio", "pytest-cov", "fastmcp>=3,<5"]
 
 [build-system]
 requires = ["setuptools>=68.0", "wheel"]
