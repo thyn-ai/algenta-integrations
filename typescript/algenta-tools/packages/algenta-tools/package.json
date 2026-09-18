@@ -20,7 +20,7 @@
   "scripts": {
     "build": "tsup",
     "lint": "tsc --noEmit && tsc --noEmit -p examples",
-    "test": "vitest run",
+    "test": "vitest run --coverage",
     "example": "tsx examples/try-it-locally.ts"
   },
   "keywords": [
@@ -53,6 +53,7 @@
   "devDependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@types/node": "^26.5.1",
+    "@vitest/coverage-v8": "^5.0.0",
     "ai": "^7.0.99",
     "tsup": "^8.5.1",
     "tsx": "^4.23.13",
