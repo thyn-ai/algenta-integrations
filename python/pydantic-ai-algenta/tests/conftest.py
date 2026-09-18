@@ -11,8 +11,7 @@ from .stub_server import StubServerFixture
 # making a live network call: real `Model` subclasses check this flag inside `request()` /
 # `request_stream()` and raise if it's `False`. `TestModel` (used throughout this suite) is a
 # test double and doesn't check it, so this has no effect on the tests below beyond the guard
-# itself. See pydantic-ai's own testing docs / the pydantic-ai-harness AGENTS.md convention this
-# mirrors.
+# itself. See pydantic-ai's own testing docs for the convention this mirrors.
 pydantic_ai.models.ALLOW_MODEL_REQUESTS = False
 
 
