@@ -3,9 +3,8 @@ unmodified `openai` Python client (never a mocked client, never a mocked stub) -
 what this package's README claims works today, model-dependence included.
 
 Tool calling and a widened `finish_reason` are REAL capabilities of the engine today (see
-`tests/stub_server.py`'s module docstring for the exact commit this was re-verified against) --
-but both are model-dependent, matching
-`apps/api_server/services/llm_api_service/_creation.py::create_chat_completion` exactly:
+`tests/stub_server.py`'s module docstring for how that was verified against the engine's public
+HTTP API) -- but both are model-dependent, matching the real endpoint's own behavior exactly:
 
 - This package's own zero-config default model (`text.tokenizer`) has no tool-calling mechanism.
   A `tools=` argument against it is REJECTED with a loud `422 model_capability_unsupported`, not
@@ -87,11 +86,12 @@ def test_streaming_is_synthetic_post_hoc_rechunking_not_incremental_generation()
     chunk carrying only `{"role": "assistant"}`, then content chunks, then a final empty-delta
     chunk carrying `finish_reason="stop"`. For `text.tokenizer` (this package's own zero-config
     default model), the content chunks are sliced from an already-fully-computed string in
-    fixed-size (24-character) pieces (`apps/api_server/routers/llm.py::_stream_text_chunks`) --
+    fixed-size (24-character) pieces (the same fixed-size slicing the real endpoint performs --
+    see `tests/stub_server.py`'s `_stream_text_chunks`) --
     this is NOT the backend generating and emitting tokens incrementally as they're produced;
     every character of the reply already existed before the first content chunk was sent. The
     real engine also has a real, incremental "passthrough" streaming mode for models that opt into
-    it (Track C2) -- this stub does not simulate that mode; see this package's README for the
+    it -- this stub does not simulate that mode; see this package's README for the
     accurate, model-dependent framing. This test can't observe server-side timing from the client
     side, so it asserts the one client-observable fingerprint of fixed-size slicing instead: every
     content chunk except (possibly) the last is exactly `_STREAM_CHUNK_SIZE` characters, matching
@@ -127,7 +127,7 @@ def test_streaming_is_synthetic_post_hoc_rechunking_not_incremental_generation()
 
 def test_tools_argument_against_the_default_model_is_rejected_not_silently_ignored() -> None:
     """This package's own zero-config default model (`text.tokenizer`) has no tool-calling
-    mechanism at all (`apps/api_server/services/llm_api_service/_creation.py::create_chat_completion`)
+    mechanism at all (verified against the real endpoint's behavior)
     -- a `tools=` argument the standard `openai` client happily serializes and sends gets a loud
     `422 model_capability_unsupported` response, not a silent 200 with the argument dropped. This
     is the opposite of an earlier engine version's behavior, and a real improvement worth calling
@@ -149,10 +149,11 @@ def test_tools_argument_against_the_default_model_is_rejected_not_silently_ignor
 
 def test_tool_calling_produces_real_tool_calls_and_finish_reason_on_a_tool_capable_model() -> None:
     """`TOOL_CALLING_MODEL` stands in for a configured provider-backed model or the bundled
-    `algenta_local` backend -- both real, both able to call tools for real
-    (`apps/api_server/schemas/llm.py`'s `ChatCompletionsRequest.tools` /
-    `ChatCompletionChoice.finish_reason: Literal[..., "tool_calls", ...]`). This is the direct,
-    positive proof of the capability this package's README used to claim didn't exist at all."""
+    `algenta_local` backend -- both real, both able to call tools for real (see
+    `tests/stub_server.py`'s `ChatCompletionsRequest.tools` / `ChatCompletionChoice.finish_reason:
+    Literal[..., "tool_calls", ...]`, which mirror the engine's public wire shape). This is the
+    direct, positive proof of the capability this package's README used to claim didn't exist at
+    all."""
     with StubServerFixture() as stub:
         client = _client(stub.base_url)
         resp = client.chat.completions.create(
@@ -188,7 +189,7 @@ def test_tool_choice_none_suppresses_a_tool_call_even_when_tools_are_offered() -
 
 
 def test_streaming_is_refused_when_a_tool_call_would_actually_fire() -> None:
-    """Track C2's real per-backend streaming and its non-streaming tool calling shipped
+    """The real engine's per-backend streaming and its non-streaming tool calling shipped
     separately -- a completion that would actually call a tool cannot yet be streamed, and the
     real engine refuses this combination with `422 model_capability_unsupported` /
     `required_capability: "streaming_tool_calls"` rather than silently dropping the tool call into

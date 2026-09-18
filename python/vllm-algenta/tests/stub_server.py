@@ -1,24 +1,22 @@
 """A minimal, deterministic, real stub of Algenta's actual `/v1/chat/completions` and
 `/v1/responses` behavior -- a real FastAPI app on a real HTTP socket, never a mock.
 
-Every request/response field below is copied BY HAND from
-`apps/api_server/schemas/llm.py` and `apps/api_server/routers/llm.py` in `thyn-ai/algenta`
-(re-verified directly against commit `a4233c335609d5828ddba874fc30f08c43cfcbb9` of that
-repository's `main` branch -- re-verify against current `main` before trusting this file blindly
-if it's been a while) -- never imported from there, which
-`scripts/check-no-engine-dependency.py` forbids this repository from doing regardless. Copying the
-publicly-observable request/response SHAPE by hand, with no engine source or logic inside it, is
-the same pattern `contracts/integration-tool-contract.json`'s own `provenance_note` documents for
-this repository's MCP tool contract.
+Every request/response field below reproduces BY HAND the publicly-observable wire shape of the
+engine's public OpenAI-compatible HTTP API (what the real endpoints accept and return over HTTP)
+-- never imported or copied from engine source, which `scripts/check-no-engine-dependency.py`
+forbids this repository from doing regardless. Reproducing the publicly-observable
+request/response SHAPE by hand, with no engine source or logic inside it, is the same pattern
+`contracts/integration-tool-contract.json`'s own `provenance_note` documents for this
+repository's MCP tool contract. Re-verify against the live engine's public API before trusting
+this file blindly if it's been a while.
 
-What this stub reproduces on the `/v1/chat/completions` surface, corrected against the commit
-above after an earlier version of this file went stale (tool calling and a widened
-`finish_reason` landed on the real engine -- see `apps/api_server/schemas/llm.py`'s
-`ChatCompletionsRequest.tools` / `.tool_choice` / `.parallel_tool_calls` and
-`ChatCompletionChoice.finish_reason: Literal["stop", "tool_calls", "length", "content_filter"]`):
+What this stub reproduces on the `/v1/chat/completions` surface, corrected against the live
+public API after an earlier version of this file went stale (tool calling and a widened
+`finish_reason` are real on the current engine -- see this file's own `ChatCompletionsRequest`
+`tools` / `tool_choice` / `parallel_tool_calls` fields and `ChatCompletionChoice.finish_reason:
+Literal["stop", "tool_calls", "length", "content_filter"]` below, which mirror that API):
 
-- Tool calling is real, but MODEL-DEPENDENT, exactly like the real engine
-  (`apps/api_server/services/llm_api_service/_creation.py::create_chat_completion`):
+- Tool calling is real, but MODEL-DEPENDENT, exactly like the real engine's public endpoint:
   - `model="text.tokenizer"` (this package's own default, the zero-config deterministic utility
     model) does not support tool calling. Sending `tools=` against it is REJECTED with a loud
     `422 model_capability_unsupported` error -- not silently dropped. This is itself a real,
@@ -34,7 +32,7 @@ above after an earlier version of this file went stale (tool calling and a widen
     `test_tool_calling_produces_real_tool_calls_and_finish_reason_on_a_tool_capable_model`.
   - Streaming a completion that actually calls a tool is refused with the same
     `422 model_capability_unsupported` the real engine returns (`required_capability:
-    "streaming_tool_calls"`) -- Track C2's real per-backend streaming and Track C2's non-streaming
+    "streaming_tool_calls"`) -- the engine's real per-backend streaming and its non-streaming
     tool calling shipped separately, and combining them is still a documented gap on the real
     engine, not something this stub pretends is solved. See
     `test_streaming_is_refused_when_a_tool_call_would_actually_fire`.
@@ -45,11 +43,11 @@ above after an earlier version of this file went stale (tool calling and a widen
   `"content_filter"`, since both are real per-backend behaviors this stub has no backend to
   reproduce faithfully -- left as an honest gap rather than a fabricated one.
 - Non-tool-calling streaming is still post-hoc rechunking of an already-fully-computed string
-  (`_stream_text_chunks`, `chunk_size=24`), matching `apps/api_server/routers/llm.py`'s own
-  function of the same name for the deterministic default model. The real engine also has a real,
-  incremental "passthrough" streaming mode for models that opt into it (Track C2); this stub does
-  not simulate that mode, since doing so faithfully would require a real upstream backend to
-  stream from -- see this package's README for the accurate, model-dependent framing.
+  (`_stream_text_chunks`, `chunk_size=24`), matching the real endpoint's own fixed-size slicing
+  for the deterministic default model. The real engine also has a real, incremental "passthrough"
+  streaming mode for models that opt into it; this stub does not simulate that mode, since doing
+  so faithfully would require a real upstream backend to stream from -- see this package's README
+  for the accurate, model-dependent framing.
 - `/v1/responses` streaming still emits exactly the three event types this stub has always
   produced -- `response.created` / `response.output_item.done` / `response.completed`. NOTE: the
   real engine's `/v1/responses` surface has since grown its OWN tool-calling, typed input array,
@@ -76,15 +74,16 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 # ---------------------------------------------------------------------------------------------
-# Request/response models -- hand-copied field-for-field from apps/api_server/schemas/llm.py.
-# Deliberately excludes every field belonging to unrelated routes (tokenize, embeddings, rerank,
-# ...) that this package's own README makes no claim about.
+# Request/response models -- reproduced field-for-field from the publicly-observable wire shape
+# of the engine's public `/v1` endpoints. Deliberately excludes every field belonging to
+# unrelated routes (tokenize, embeddings, rerank, ...) that this package's own README makes no
+# claim about.
 # ---------------------------------------------------------------------------------------------
 
 #: The real engine's zero-config default utility model -- deterministic, no tool calling, no
 #: generation to truncate or interrupt. `finish_reason` is always "stop" for this model, and a
-#: `tools=` argument against it is a 422, not a silent no-op. Matches
-#: `ChatCompletionsRequest.model`'s own default in `apps/api_server/schemas/llm.py`.
+#: `tools=` argument against it is a 422, not a silent no-op. Matches the default the real
+#: endpoint applies when no `model` is supplied.
 DEFAULT_MODEL = "text.tokenizer"
 
 #: NOT a real Algenta model id -- a clearly-synthetic stand-in this stub uses to represent "any
@@ -245,12 +244,12 @@ class ResponsesResponse(BaseModel):
 # claimed as anything else.
 # ---------------------------------------------------------------------------------------------
 
-_STREAM_CHUNK_SIZE = 24  # matches apps/api_server/routers/llm.py's _STREAM_CHUNK_SIZE exactly
+_STREAM_CHUNK_SIZE = 24  # matches the real endpoint's own fixed-size slicing exactly
 
 
 def _stream_text_chunks(text: str, *, chunk_size: int = _STREAM_CHUNK_SIZE) -> list[str]:
-    """Copied verbatim from `apps/api_server/routers/llm.py::_stream_text_chunks` -- post-hoc
-    slicing of an already-fully-computed string, not incremental generation."""
+    """Mirrors the real endpoint's observable chunking exactly -- post-hoc slicing of an
+    already-fully-computed string, not incremental generation."""
     if not text:
         return []
     return [text[index : index + chunk_size] for index in range(0, len(text), chunk_size)]
@@ -301,10 +300,9 @@ def _tool_call_response(payload: ChatCompletionsRequest) -> ChatCompletionToolCa
 
 
 def _model_capability_unsupported(*, model: str, required_capability: str, message: str) -> HTTPException:
-    """Same shape the real engine's `_llm_api_http_exception` produces for
-    `LLMAPIError("model_capability_unsupported", ...)`: HTTP 422, top-level `{"error": {...}}`
-    (no FastAPI `{"detail": ...}` wrapper) -- see this stub's own `_http_exception_handler` below,
-    which mirrors the real app's `register_exception_handlers`."""
+    """Same error shape the real endpoint produces for a capability the model doesn't have:
+    HTTP 422, top-level `{"error": {...}}` (no FastAPI `{"detail": ...}` wrapper) -- see this
+    stub's own `_http_exception_handler` below, which mirrors the real app's envelope handling."""
     return HTTPException(
         status_code=422,
         detail={
@@ -329,9 +327,9 @@ def build_stub_app() -> FastAPI:
 
     @app.exception_handler(HTTPException)
     async def _http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
-        # Mirrors `apps/api_server/app_support.py::register_exception_handlers`: an
-        # `{"error": {...}}`-shaped detail is returned as the top-level body, unwrapped from
-        # FastAPI's default `{"detail": ...}` envelope, exactly like the real app.
+        # Mirrors the real endpoint's error envelope: an `{"error": {...}}`-shaped detail is
+        # returned as the top-level body, unwrapped from FastAPI's default `{"detail": ...}`
+        # envelope, exactly like the real app.
         if isinstance(exc.detail, dict) and "error" in exc.detail:
             return JSONResponse(status_code=exc.status_code, content=exc.detail)
         return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
@@ -339,9 +337,9 @@ def build_stub_app() -> FastAPI:
     @app.post("/v1/chat/completions")
     async def chat_completions(payload: ChatCompletionsRequest):
         if payload.tools and payload.model == DEFAULT_MODEL:
-            # Matches apps/api_server/services/llm_api_service/_creation.py::create_chat_completion
-            # exactly: the deterministic default model has no tool-calling mechanism at all, so a
-            # tools= argument against it is REJECTED (422), not silently dropped.
+            # Matches the real endpoint's behavior exactly: the deterministic default model has
+            # no tool-calling mechanism at all, so a tools= argument against it is REJECTED
+            # (422), not silently dropped.
             raise _model_capability_unsupported(
                 model=payload.model,
                 required_capability="tool_calling",
@@ -351,9 +349,10 @@ def build_stub_app() -> FastAPI:
         calls_a_tool = _should_call_a_tool(payload)
 
         if payload.stream and calls_a_tool:
-            # Matches the real engine's own refusal: Track C2's real streaming and its
-            # non-streaming tool calling are separate, and a completion that actually calls a tool
-            # cannot yet be streamed -- refuse loudly instead of dropping the tool_calls.
+            # Matches the real engine's own refusal: real per-backend streaming and
+            # non-streaming tool calling shipped separately, and a completion that actually
+            # calls a tool cannot yet be streamed -- refuse loudly instead of dropping the
+            # tool_calls.
             raise _model_capability_unsupported(
                 model=payload.model,
                 required_capability="streaming_tool_calls",
