@@ -47,10 +47,10 @@
 # The <token> should be a short-lived installation token for a GitHub App
 # scoped to `contents: read` on thyn-ai/algenta-sdk (to run) and granted
 # access to trigger dispatches on thyn-ai/algenta-integrations -- the same
-# create-github-app-token pattern already used by decision-engine's (the
-# private engine repo's) sync-public-sdk.yml for its own cross-repo PR, not
-# a long-lived PAT. That change belongs in thyn-ai/algenta-sdk's own PR
-# review process and is intentionally not made here.
+# create-github-app-token pattern the Algenta engine's internal release
+# pipeline already uses for its own cross-repo PR, not a long-lived PAT.
+# That change belongs in thyn-ai/algenta-sdk's own PR review process and is
+# intentionally not made here.
 name: sync-on-sdk-release
 
 on:
@@ -67,15 +67,20 @@ permissions:
 jobs:
   sync:
     runs-on: ubuntu-latest
+    env:
+      # Pin uv to the interpreter actions/setup-python just provisioned -- same reasoning
+      # as ci.yml's python job (otherwise uv downloads its own floating "managed" CPython).
+      UV_PYTHON: "3.12"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: true # this job commits + pushes a branch within THIS repo
 
-      # Discovered, never hardcoded -- the old tool-cache path pinned a version, an arch and a
-      # layout, and all three broke when the fleet moved off macOS. See the action for detail.
-      - name: Fleet Python (discovered, into a venv)
-        uses: ./.github/actions/fleet-python
+      # The version scripts below are stdlib-only -- a vanilla, pinned interpreter is
+      # all they need.
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
 
       - name: Determine target algenta-sdk version
         id: version

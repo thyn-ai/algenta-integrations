@@ -5,19 +5,19 @@
 # that history for the App-token workaround this repo tried first. That workaround was real and
 # working, but it still produced a SEPARATE bot-authored PR the owner explicitly didn't want here
 # ("no separate pr just to bump, come on - it must be in 1 pr") -- so instead of gating the bump
-# behind any PR at all, this pushes it straight to main, mirroring the proven
-# thyn-ai/codna auto-release-cli.yml pattern (zero PR, direct push, convergent).
+# behind any PR at all, this pushes it straight to main, mirroring a proven zero-PR,
+# direct-push, convergent auto-release pattern from another repository in the org.
 #
 # scripts/compute_release_bumps.py owns all the actual logic (Conventional-Commits classification,
 # per-package versioning, convergence). This workflow only wires it to git/GitHub: run the script,
 # commit + tag whatever it changed, push, create a GitHub Release per tag.
 #
-# Convergence is simpler here than in codna's version: codna reconciles against PyPI (an external,
-# cache-prone truth source), which needs an "is HEAD my own bump commit" guard to terminate. Here
-# the only state being reconciled is "do this package's git tags already cover every commit that
-# touches it", which is self-consistent: the moment a bump is tagged, that tag becomes the new
-# boundary, so the immediate re-trigger from this very push sees zero new commits and computes no
-# further bump. No self-commit detection needed.
+# Convergence is simpler here than the PyPI-reconciling variant of this pattern: reconciling
+# against PyPI (an external, cache-prone truth source) needs an "is HEAD my own bump commit"
+# guard to terminate. Here the only state being reconciled is "do this package's git tags
+# already cover every commit that touches it", which is self-consistent: the moment a bump is
+# tagged, that tag becomes the new boundary, so the immediate re-trigger from this very push
+# sees zero new commits and computes no further bump. No self-commit detection needed.
 #
 # Publishing is a SEPARATE workflow (publish.yml), triggered by the GitHub Releases this one
 # creates. Keeping it separate is what makes the registry side re-runnable on its own: a publish
@@ -42,10 +42,10 @@ jobs:
           persist-credentials: false
           fetch-depth: 0 # full history + tags -- the script needs both
 
-      # Discovered, never hardcoded -- the old tool-cache path pinned a version, an arch and a
-      # layout, and all three broke when the fleet moved off macOS. See the action for detail.
-      - name: Fleet Python (discovered, into a venv)
-        uses: ./.github/actions/fleet-python
+      # The bump script is stdlib-only -- a vanilla, pinned interpreter is all it needs.
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
 
       - name: Compute and apply version bumps
         id: bumps
