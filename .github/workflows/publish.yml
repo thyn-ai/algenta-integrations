@@ -33,27 +33,31 @@
 # scripts/resolve_release_target.py owns the tag -> package mapping and REFUSES a tag whose version
 # no longer matches the package on that commit; this workflow only wires it up.
 #
-# TWO CHECKOUTS PER JOB, ON PURPOSE. The tagged commit is checked out as the build source of
-# truth: `resolve_release_target.py`'s version check must run against what the tag actually
-# contains, not against main (which may have moved on since -- replaying an old release must
-# still build the OLD version, not spuriously fail because main bumped further). But
-# `.github/actions/fleet-python` was added to this repo on 2026-08-28, and every release tag
-# that existed before then does not carry it -- `uses: ./.github/actions/fleet-python` resolves
-# from whatever is checked out, so building an old tag with only that checkout 404s on the
-# action itself. Confirmed live: both manual verification runs against algenta-tools-v0.1.1 and
-# pydantic-ai-algenta-v0.1.1 (tagged 2026-08-24) failed exactly this way. A second checkout of
-# the default ref, to a side path, supplies the action without moving the build off the tag.
+# PYTHON FROM THE MARKETPLACE, NOT THE REPO. Every job below checks out the TAG being published
+# as the build source of truth: `resolve_release_target.py`'s version check must run against
+# what the tag actually contains, not against main (which may have moved on since -- replaying
+# an old release must still build the OLD version, not spuriously fail because main bumped
+# further). The interpreter therefore cannot come from a repo-local composite action: such an
+# action would have to exist in every tag, and an earlier revision of this workflow did supply
+# exactly that via a second checkout of the default ref. A SHA-pinned marketplace action
+# resolves identically no matter which ref the workflow file itself came from, so the second
+# checkout is gone.
 #
-# ONE MORE THING THE DUAL CHECKOUT CANNOT FIX: scripts/resolve_release_target.py itself is new in
-# this same change, so it does not exist in ANY of the 7 tags cut before it (2026-08-24). A
-# workflow_dispatch replay of one of those specific tags will fail at the resolve step -- there is
-# no script there to run. This is transitional, not structural: every tag cut from here forward
-# carries the script in its own tree, so real releases (the `release: published` trigger) are
-# unaffected starting now. Reconciling one of the 7 pre-existing tags, if ever needed, is a manual,
-# one-time action (build and upload that single package by hand) -- not something this workflow
-# needs to grow a root-override mechanism for, which would mean reworking
-# compute_release_bumps.py's REPO_ROOT model (shared with auto-release.yml) for an edge case that
-# resolves itself.
+# TWO TRANSITIONAL CONSEQUENCES, both one-time and manual. First:
+# scripts/resolve_release_target.py first shipped on 2026-08-28, so a workflow_dispatch replay
+# of any of the 7 tags cut before then (2026-08-24) fails at the resolve step -- the script is
+# not in those trees. Second: tags cut between 2026-08-28 and the marketplace port above carry
+# a workflow that still references the old repo-local action, which no longer exists on the
+# default ref their second checkout fetched it from -- the same 404-on-the-action failure that
+# was confirmed live back when the action was new, when manual verification runs against
+# algenta-tools-v0.1.1 and pydantic-ai-algenta-v0.1.1 (tagged 2026-08-24, before the action
+# existed) failed exactly that way. Neither failure is structural: every tag cut from here
+# forward carries both the script and this marketplace-based workflow in its own tree, so real
+# releases (the `release: published` trigger) are unaffected. Reconciling either class of old
+# tag, if ever needed, is a manual, one-time action (build and upload that single package by
+# hand) -- not something this workflow needs to grow a root-override mechanism for, which would
+# mean reworking compute_release_bumps.py's REPO_ROOT model (shared with auto-release.yml) for
+# an edge case that resolves itself.
 
 name: publish
 
@@ -94,14 +98,9 @@ jobs:
           ref: ${{ github.event.release.tag_name || inputs.tag }}
           persist-credentials: false
 
-      - name: Check out the default ref too, only to supply .github/actions/fleet-python
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          path: .ci-tooling
-          persist-credentials: false
-
-      - name: Set up Python
-        uses: ./.ci-tooling/.github/actions/fleet-python
+          python-version: "3.12"
 
       - name: Resolve the tag to a package
         id: target
@@ -128,17 +127,13 @@ jobs:
           ref: ${{ github.event.release.tag_name || inputs.tag }}
           persist-credentials: false
 
-      - name: Check out the default ref too, only to supply .github/actions/fleet-python
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          path: .ci-tooling
-          persist-credentials: false
-
-      - name: Set up Python
-        uses: ./.ci-tooling/.github/actions/fleet-python
+          python-version: "3.12"
 
       - name: Install uv
-        # Same as ci.yml: uv is not on the fleet image, it is pip-installed per job.
+        # Same as ci.yml: uv is not preinstalled on GitHub-hosted runners, so it is
+        # pip-installed per job.
         run: python -m pip install --quiet --disable-pip-version-check uv
 
       - name: Build the distribution

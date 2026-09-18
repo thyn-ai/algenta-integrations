@@ -1,7 +1,7 @@
 # Dependabot configuration. `ignore` rules mark upgrades that are deliberate migrations, not bumps:
 # mcp 2.x renames FastMCP (breaks tests/stub_server.py); fastmcp 4 requires mcp>=2; for the n8n node,
 # typescript 7 breaks the @typescript-eslint peer range, @types/node must track engines>=18.10, and
-# zod 3->4 is an incomplete migration (Codna review findings on #66/#68/#74, 2026-09-17).
+# zod 3->4 is an incomplete migration (review findings on #66/#68/#74, 2026-09-17).
 version: 2
 updates:
 - package-ecosystem: pip
@@ -149,8 +149,6 @@ updates:
   directory: /
   schedule:
     interval: weekly
-  ignore:
-  - dependency-name: thyn-ai/security-toolchain*
   groups:
     codeql-action:
       patterns:
