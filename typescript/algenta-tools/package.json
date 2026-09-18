@@ -15,7 +15,7 @@
     "lint": "turbo run lint"
   },
   "devDependencies": {
-    "turbo": "^2.10.12"
+    "turbo": "^2.10.13"
   },
   "engines": {
     "node": ">=18.0.0"
