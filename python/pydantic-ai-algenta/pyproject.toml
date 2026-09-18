@@ -45,7 +45,7 @@ Repository = "https://github.com/thyn-ai/algenta-integrations"
 # metadata) provides the `pytest.mark.anyio` plugin used for async tests. It also already
 # arrives transitively via `pydantic-ai-slim`, but is listed explicitly since the test suite
 # depends on its pytest plugin directly, not just on `anyio` the async library.
-dev = ["pytest", "anyio", "fastmcp>=3"]
+dev = ["pytest", "pytest-cov", "anyio", "fastmcp>=3"]
 
 [build-system]
 requires = ["setuptools>=68.0", "wheel"]
@@ -56,3 +56,14 @@ include = ["pydantic_ai_algenta*"]
 
 [tool.pytest.ini_options]
 anyio_mode = "auto"
+
+[tool.coverage.run]
+# The workspace runs one pytest process per package (see .github/workflows/ci.yml), so each
+# run measures this package's own module only -- never the tests or sibling packages.
+source = ["pydantic_ai_algenta"]
+
+[tool.coverage.report]
+# Gate for the CI python job (enforced via pytest-cov): measured at 97% on Python 3.12
+# (2026-09-18), floored 2 points lower for headroom. Raise the floor as coverage grows.
+fail_under = 95
+show_missing = true
