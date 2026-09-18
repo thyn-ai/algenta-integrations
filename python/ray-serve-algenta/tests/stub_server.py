@@ -4,9 +4,9 @@ own test actually needs (this package never calls `execute_decision` or any othe
 name, so none of that stub's governed-execution machinery applies here).
 
 Run with `stateless_http=True`: the one setting that makes this stub an honest stand-in for
-Algenta's own real `/mcp` route, which `apps/mcp_server/README.md` in `thyn-ai/algenta` states
-plainly implements "stateless Streamable HTTP" -- verified directly against that file's own text
-during this package's design, not assumed. A stateful stub would silently make this package's
+Algenta's own real `/mcp` route, whose public endpoint contract states plainly that it implements
+"stateless Streamable HTTP" -- verified against the live endpoint's documented behavior during
+this package's design, not assumed. A stateful stub would silently make this package's
 multi-replica proxy conformance test easier to pass than the real deployment target actually is,
 which would defeat the entire point of this package existing.
 
