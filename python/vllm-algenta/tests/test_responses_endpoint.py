@@ -5,11 +5,11 @@ strings, each an independent single-turn request), and a streaming SSE event seq
 exactly three event `type`s -- `response.created`, `response.output_item.done`,
 `response.completed` -- and nothing else.
 
-IMPORTANT, re-verified against `thyn-ai/algenta` commit `a4233c335609d5828ddba874fc30f08c43cfcbb9`:
+IMPORTANT, verified against the engine's public HTTP API:
 the REAL engine's `/v1/responses` surface has since grown its own `tools` / `tool_choice` /
 `parallel_tool_calls` / `previous_response_id` support and a typed OpenResponses-style input-array
-shape for `input` (`apps/api_server/schemas/llm.py`'s `ResponsesRequest`) -- a separate, later
-change from the Chat Completions tool-calling fix this package's own README and
+shape for `input` (see this file's own `ResponsesRequest` note in `tests/stub_server.py`) -- a
+separate, later change from the Chat Completions tool-calling fix this package's own README and
 `tests/test_chat_completions_matrix.py` were just updated for. This stub and this test file have
 NOT been updated to match that yet (tracked as a follow-up); do not read the assertions below as a
 claim about what the real `/v1/responses` endpoint can do today -- see this package's README's
