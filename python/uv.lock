@@ -16,7 +16,6 @@ resolution-markers = [
 
 [manifest]
 members = [
-    "algenta-integrations-examples",
     "algenta-integrations-workspace",
     "haystack-algenta",
     "langchain-algenta",
@@ -261,11 +260,6 @@ sdist = { url = "https://files.pythonhosted.org/packages/4e/8a/64761f4005f178097
 wheels = [
     { url = "https://files.pythonhosted.org/packages/00/b7/e3bf5133d697a08128598c8d0abc5e16377b51465a33756de24fa7dee953/aiosqlite-0.22.1-py3-none-any.whl", hash = "sha256:21c002eb13823fad740196c5a2e9d8e62f6243bd9e7e4a1f87fb5e44ecb4fceb", size = 17405, upload-time = "2025-12-23T19:25:42.139Z" },
 ]
-
-[[package]]
-name = "algenta-integrations-examples"
-version = "0.0.0"
-source = { editable = "examples" }
 
 [[package]]
 name = "algenta-integrations-workspace"
@@ -1790,7 +1784,7 @@ wheels = [
 
 [[package]]
 name = "haystack-algenta"
-version = "0.1.1"
+version = "0.1.3"
 source = { editable = "haystack-algenta" }
 dependencies = [
     { name = "haystack-ai" },
@@ -2421,7 +2415,7 @@ wheels = [
 
 [[package]]
 name = "langchain-algenta"
-version = "0.1.1"
+version = "0.1.3"
 source = { editable = "langchain-algenta" }
 dependencies = [
     { name = "algenta-sdk" },
@@ -2661,7 +2655,7 @@ proxy = [
 
 [[package]]
 name = "litellm-algenta"
-version = "0.1.1"
+version = "0.1.3"
 source = { editable = "litellm-algenta" }
 dependencies = [
     { name = "pyyaml" },
@@ -2790,7 +2784,7 @@ wheels = [
 
 [[package]]
 name = "llamaindex-algenta"
-version = "0.2.1"
+version = "0.2.3"
 source = { editable = "llamaindex-algenta" }
 dependencies = [
     { name = "llama-index-core" },
@@ -2827,7 +2821,7 @@ wheels = [
 
 [[package]]
 name = "maf-algenta"
-version = "0.1.1"
+version = "0.1.3"
 source = { editable = "maf-algenta" }
 dependencies = [
     { name = "agent-framework-core" },
@@ -4489,7 +4483,7 @@ email = [
 
 [[package]]
 name = "pydantic-ai-algenta"
-version = "0.1.1"
+version = "0.1.3"
 source = { editable = "pydantic-ai-algenta" }
 dependencies = [
     { name = "algenta-sdk" },
@@ -5011,7 +5005,7 @@ wheels = [
 
 [[package]]
 name = "ray-serve-algenta"
-version = "0.1.0"
+version = "0.1.2"
 source = { editable = "ray-serve-algenta" }
 dependencies = [
     { name = "fastapi" },
@@ -6138,7 +6132,7 @@ wheels = [
 
 [[package]]
 name = "vllm-algenta"
-version = "0.1.0"
+version = "0.1.2"
 source = { editable = "vllm-algenta" }
 dependencies = [
     { name = "openai" },
