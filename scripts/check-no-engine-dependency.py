@@ -2,39 +2,38 @@
 """
 check-no-engine-dependency.py — CI gate for the one rule this repo cannot break.
 
-No package in this repository may vendor, import, or depend on Algenta's
-closed-source engine (the private `decision-engine` repository: its
-`mojo/` kernel tree, `apps/api_server/` or `apps/mcp_server/` server
-internals) or on any local/relative filesystem path outside this repo. The
-only Algenta dependency any package may declare is the published
-`algenta-sdk` package (PyPI and npm) — a thin HTTP/MCP client with zero
-engine source in it.
+No package in this repository may vendor, import, or depend on the Algenta
+engine (closed source) — nothing from the closed engine's source tree may
+appear as a dependency name, dependency source, or import target — or on any
+local/relative filesystem path outside this repo. The only Algenta dependency
+any package may declare is the published `algenta-sdk` package (PyPI and npm)
+— a thin HTTP/MCP client with zero engine source in it.
 
-This script scans exactly the three surfaces named in the project brief:
+This script scans exactly three surfaces:
   1. every `pyproject.toml`  (structurally, via tomllib)
   2. every `package.json`    (structurally, via json)
   3. every import/require statement in *.py / *.ts / *.tsx / *.js / *.jsx /
      *.mjs / *.cjs source files (line-oriented regex, not full parsing)
 
-It deliberately does NOT scan prose (README/CONTRIBUTING/NOTICE/CLA/etc.),
+It deliberately does NOT scan prose (README/CONTRIBUTING/NOTICE/etc.),
 comments, or string literals that aren't import/require targets — this repo's
-own documentation legitimately discusses "decision-engine", "mojo", and
-"apps/api_server" in prose to explain why they're forbidden, and flagging
+own documentation legitimately describes the closed engine's source-tree
+layout in prose to explain why depending on it is forbidden, and flagging
 that would make the check impossible to satisfy while still documenting the
 constraint it enforces.
 
 IMPORTANT — a deliberate non-symmetry: the published `algenta-sdk` PyPI
-package's own Python import namespace is `decision_engine` (underscore) —
-confirmed from thyn-ai/algenta-sdk's packages/python-sdk/pyproject.toml and
-README (`from decision_engine import AlgentaClient`). That is a legitimate,
-correct import of the published SDK and must NOT be flagged. What must be
-flagged is the hyphenated string "decision-engine" (and, defensively, an
-underscore-spelled dependency of the same name) appearing as a MANIFEST
-DEPENDENCY NAME or SOURCE — i.e. someone trying to depend on the private
-engine repository itself rather than on the published SDK package. Python
-identifiers cannot contain hyphens, so "decision-engine" can only appear in
-manifests/URLs/paths, never as a bare Python import — which is exactly the
-surface this script locks down.
+package's own Python import namespace is `decision_engine` (underscore — a
+legacy name, kept) — confirmed from thyn-ai/algenta-sdk's
+packages/python-sdk/pyproject.toml and README (`from decision_engine import
+AlgentaClient`). That is a legitimate, correct import of the published SDK and
+must NOT be flagged. What must be flagged is the hyphenated spelling of that
+same name (and, defensively, an underscore-spelled dependency of the same
+name) appearing as a MANIFEST DEPENDENCY NAME or SOURCE — i.e. someone trying
+to depend on the closed engine's repository itself rather than on the
+published SDK package. Python identifiers cannot contain hyphens, so the
+hyphenated spelling can only appear in manifests/URLs/paths, never as a bare
+Python import — which is exactly the surface this script locks down.
 
 Exit codes:
   0  clean
