@@ -1,10 +1,10 @@
 """`ExecutionReceipt` / `ExecutionBlocked` -- the two, and only two, typed shapes a real
 `execute_decision` MCP tool call can produce.
 
-Verified directly against the real, running Algenta Engine's source
-(`apps/mcp_server/tools/decisions.py`, not visible from this package, but confirmed via that
-direct inspection) -- not assumed from this package's own prior README or any planning document,
-both of which turned out to describe a fictional contract. `execute_decision(decision_id,
+Verified directly against the real, running Algenta Engine's public MCP tool surface (observed
+over the wire from this package) -- not assumed from this package's own prior README or any
+planning document, both of which turned out to describe a fictional contract.
+`execute_decision(decision_id,
 webhook_url, timeout_seconds?, force?, override_safety?, metadata?)` either:
 
 - succeeds (HTTP 200): a real `ExecutionReceipt` -- `decision_id`, `webhook_url`,
@@ -18,8 +18,8 @@ webhook_url, timeout_seconds?, force?, override_safety?, metadata?)` either:
 
 There is no third state. No `plan_hash`, no `approval_state`, no async "pending" outcome, no
 `receipt_version`/`execution_id`/`trace_id` field exists anywhere on this tool in the real engine
--- confirmed by a grep across the whole real `apps/` tree (outside tests) returning zero hits for
-`GovernedExecutionReceipt`/`receipt_version`/`approval_state`. See `maf_algenta.exceptions` and
+-- confirmed against the engine's public MCP endpoint contract for this tool, which carries none
+of those fields. See `maf_algenta.exceptions` and
 `maf_algenta.toolset` for how the 409 shape maps onto MAF's own fail-closed primitive.
 
 This module is deliberately identical in shape to its (independently) corrected siblings,

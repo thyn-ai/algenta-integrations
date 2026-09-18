@@ -2,9 +2,9 @@
 `execute_decision` MCP tool call returns, plus the plumbing that recovers them from what a real
 `mcp.types.CallToolResult` actually looks like.
 
-**Only `execute_decision` gets this treatment.** Verified directly against the real engine's MCP
-tool surface (`apps/mcp_server/tools/decisions.py`, private, but its facts are authoritative
-here): `plan_decision` is a freeform passthrough to `POST /v1/decisions/plan`, `log_decision`
+**Only `execute_decision` gets this treatment.** Verified directly against the engine's public
+MCP tool surface (observed over the wire from a live engine, not assumed): `plan_decision` is a
+freeform passthrough to `POST /v1/decisions/plan`, `log_decision`
 returns its own small `{decision_id, chosen_action, expected_value, confidence, created_at,
 note}` shape, and `query_data`/`simulate`/`recommend`/`get_contract` each return whatever payload
 they document -- none of that is safety-critical and none of it is gated. `execute_decision`
