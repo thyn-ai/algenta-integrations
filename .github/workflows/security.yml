@@ -1,5 +1,23 @@
-# Authoritative security gate -- re-runs the pre-push policy on a clean checkout.
-# Managed by thyn-ai/security-toolchain (propagate bumps the pin). Change `overlay`/`mode` here.
+# Security gate -- re-runs on CI what the local pre-commit/pre-push hooks run on a laptop,
+# on a clean checkout, on standard GitHub-hosted runners, with no secrets referenced.
+#
+# Three public scanners, each pinned exactly (actions by commit SHA, binaries by version
+# AND sha256 verified before first run):
+#
+#   * gitleaks -- secret scanning over the FULL git history. FAILS the build on any
+#     finding: a secret committed to a public repository is compromised immediately and
+#     permanently, so advisory-mode secret scanning is noise. Installed from the project's
+#     own release tarball rather than via gitleaks' official GitHub Action, which requires
+#     a license key for organization-owned repositories -- this workflow stays secret-free.
+#   * opengrep -- SAST with the public `p/default` registry ruleset. ADVISORY: findings go
+#     to the Security tab via SARIF; a heuristic rule hit must not block an unrelated PR.
+#   * trivy    -- vulnerability + misconfiguration scan of the checked-out tree (lockfiles,
+#     manifests, workflow configs). ADVISORY, same SARIF routing. This also covers the
+#     dependency-CVE surface an osv-scanner pass would -- one dependency scanner is enough.
+#
+# SARIF uploads are skipped on fork PRs (GitHub does not grant security-events: write to
+# fork-PR tokens) and tolerate failure otherwise: the Security tab is a dashboard, not a
+# gate -- gitleaks is the only scanner here whose findings fail the build.
 name: security
 
 on:
@@ -9,11 +27,6 @@ on:
   schedule:
     - cron: "23 5 * * 1"
   workflow_dispatch:
-    inputs:
-      measure_baseline:
-        description: "Measure security/baseline/*.txt on CI and upload as an artifact"
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -23,14 +36,109 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  full:
-    uses: thyn-ai/security-toolchain/.github/workflows/security-full.yml@5384dbda80abae6e2041d09a0916b740729d75e4 # v0.1.8
+  gitleaks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
-      security-events: write
-      pull-requests: read
-      actions: read # SARIF upload needs it while this repository is private
-    with:
-      overlay: pnpm-monorepo
-      mode: advisory
-      measure_baseline: ${{ github.event_name == 'workflow_dispatch' && inputs.measure_baseline == true }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # Full history -- a secret in ANY commit of a public repository is compromised,
+          # so scanning only the tip would be a false sense of coverage.
+          fetch-depth: 0
+      - name: Install gitleaks (pinned by version and sha256)
+        env:
+          GITLEAKS_VERSION: "8.30.1"
+          # sha256 of gitleaks_8.30.1_linux_x64.tar.gz, from the release's own
+          # published checksums file.
+          GITLEAKS_SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+        run: |
+          set -euo pipefail
+          dest="$RUNNER_TEMP/gitleaks-bin"
+          mkdir -p "$dest"
+          curl -fsSL \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            -o "$dest/gitleaks.tar.gz"
+          echo "$GITLEAKS_SHA256  $dest/gitleaks.tar.gz" | sha256sum --check --strict
+          tar -xzf "$dest/gitleaks.tar.gz" -C "$dest" gitleaks
+          echo "$dest" >> "$GITHUB_PATH"
+      - name: Scan the full git history for secrets
+        run: gitleaks git --redact --exit-code 1 --log-level warn .
+
+  opengrep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      security-events: write # SARIF upload to code scanning
+      actions: read # code scanning requires this on PRIVATE repositories; harmless once public
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install opengrep (pinned by version and sha256)
+        env:
+          OPENGREP_VERSION: "1.30.0"
+          # sha256 of the opengrep_manylinux_x86 release asset (computed from the
+          # published binary; the project ships sigstore signatures but no checksums file).
+          OPENGREP_SHA256: "35779bdd72e92129c8df2a77f0c55e8c08356801ea92591ef32108d6b28d564c"
+        run: |
+          set -euo pipefail
+          dest="$RUNNER_TEMP/opengrep-bin"
+          mkdir -p "$dest"
+          curl -fsSL \
+            "https://github.com/opengrep/opengrep/releases/download/v${OPENGREP_VERSION}/opengrep_manylinux_x86" \
+            -o "$dest/opengrep"
+          echo "$OPENGREP_SHA256  $dest/opengrep" | sha256sum --check --strict
+          chmod +x "$dest/opengrep"
+          echo "$dest" >> "$GITHUB_PATH"
+      # Advisory: findings are reported via the SARIF upload below. opengrep exits non-zero
+      # only on scanner-internal errors, which DO fail this step -- a broken scan is not the
+      # same thing as "no findings". Scans git-tracked files only, so .venv/node_modules
+      # (never present on this fresh checkout anyway) cannot leak into the report.
+      - name: Scan (advisory), produce SARIF
+        run: opengrep scan --config p/default --sarif --output "$RUNNER_TEMP/opengrep.sarif" .
+      - name: Upload SARIF to code scanning
+        if: always() && github.event.pull_request.head.repo.fork != true
+        uses: github/codeql-action/upload-sarif@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0
+        continue-on-error: true
+        with:
+          sarif_file: ${{ runner.temp }}/opengrep.sarif
+          category: opengrep
+
+  trivy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      security-events: write # SARIF upload to code scanning
+      actions: read # code scanning requires this on PRIVATE repositories; harmless once public
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Advisory like opengrep (exit-code 0): a newly-published CVE must not block an
+      # unrelated PR -- triage happens from the Security tab. HIGH/CRITICAL only and
+      # unfixed vulnerabilities ignored; anything broader is noise for this purpose.
+      # Secrets are deliberately NOT scanned here -- gitleaks owns that surface fail-closed
+      # in its own job above. The action itself pins the trivy binary version it installs.
+      - name: Trivy filesystem scan (vulnerabilities + misconfigurations)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,misconfig
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          format: sarif
+          output: trivy-results.sarif
+          exit-code: "0"
+      - name: Upload SARIF to code scanning
+        if: always() && github.event.pull_request.head.repo.fork != true
+        uses: github/codeql-action/upload-sarif@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0
+        continue-on-error: true
+        with:
+          sarif_file: trivy-results.sarif
+          category: trivy
