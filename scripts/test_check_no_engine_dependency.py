@@ -45,8 +45,8 @@ def expect(condition: bool, message: str) -> None:
 
 
 def test_catches_file_path_engine_dependency() -> None:
-    """The exact violation named in the project brief: a package.json that
-    depends on the private engine repo via a local file: path."""
+    """The canonical violation this gate exists to catch: a package.json that
+    depends on the closed engine's repository via a local file: path."""
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         (root / "package.json").write_text(
