@@ -4,13 +4,15 @@ Copyright the Algenta Integrations contributors and Algenta, Inc.
 This product is licensed under the Apache License, Version 2.0. See LICENSE
 for the full license text.
 
-This repository contains framework-integration packages (pydantic-ai,
-LangChain, LiteLLM, and TypeScript/JS tool-calling helpers) that wrap
-Algenta's published client SDKs. It does not contain, vendor, or depend on
-the Algenta Engine or its runtime, which are separately distributed and
-subject to the Algenta Engine license, not Apache-2.0. Every package in
-this repository depends only on the published `algenta-sdk` package (PyPI
-and npm) and talks to a customer's own self-hosted Algenta Engine over
-HTTP/MCP at runtime — never a bundled or local engine. See
-scripts/check-no-engine-dependency.py, which is run in CI on every pull
-request to enforce this boundary mechanically, not just by policy.
+This repository contains framework-integration packages (for pydantic-ai,
+LangChain, LiteLLM, Microsoft Agent Framework, Haystack, LlamaIndex,
+Ray Serve, vLLM, the Vercel AI SDK, and n8n) that talk to a customer's own
+self-hosted Algenta Engine over its public HTTP/MCP APIs at runtime — never
+a bundled or local engine. It does not contain, vendor, or depend on the
+Algenta Engine or its runtime, which are separately distributed and subject
+to the Algenta Engine license, not Apache-2.0. A package in this repository
+depends on at most one Algenta-owned library — the published `algenta-sdk`
+package (PyPI and npm) — and several packages depend on no Algenta-owned
+library at all. See scripts/check-no-engine-dependency.py, which is run in
+CI on every pull request to enforce this boundary mechanically, not just by
+policy.
