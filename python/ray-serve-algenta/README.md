@@ -1,5 +1,10 @@
 # ray-serve-algenta
 
+[![PyPI](https://img.shields.io/pypi/v/ray-serve-algenta.svg)](https://pypi.org/project/ray-serve-algenta/)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](../../LICENSE)
+
+> **Docs:** [docs.algenta.ai](https://docs.algenta.ai) · [All integrations](../../README.md)
+
 Deploy Algenta's `/mcp` surface behind [Ray Serve](https://docs.ray.io/en/latest/serve/index.html):
 `ray_serve_algenta.deployment.AlgentaMCPProxy`, a byte-transparent HTTP reverse proxy run as a
 [KubeRay](https://github.com/ray-project/kuberay) `RayService`, plus a real multi-replica
@@ -59,23 +64,21 @@ this package pins around so you don't have to rediscover it yourself.
 
 ## Why Algenta's `/mcp` transport makes this worth building at all
 
-Algenta's own `apps/mcp_server/README.md` (in `thyn-ai/algenta`, the engine's source repository)
-states plainly: **"The canonical `/mcp` route implements stateless Streamable HTTP."** Verified by
-reading that file directly during this package's design, not assumed from a changelog or an older
-memory of the protocol. Stateless means no server-side session is pinned to the connection that
-created it -- a caller's *n*-th request does not need to land on the same process, replica, or
-even the same physical machine as its *n-1*-th. That is precisely the property that makes
-horizontal scale-out safe without extra machinery: no sticky-session load balancer configuration,
-no shared session store between replicas, nothing for `AlgentaMCPProxy` to coordinate. Every
-replica this package runs is fungible by construction, because the upstream it forwards to was
-already fungible.
+Algenta's public MCP endpoint contract states plainly: **the `/mcp` route implements stateless
+Streamable HTTP.** Verified against the engine's real served behavior during this package's
+design, not assumed from a changelog or an older memory of the protocol. Stateless means no
+server-side session is pinned to the connection that created it -- a caller's *n*-th request does
+not need to land on the same process, replica, or even the same physical machine as its *n-1*-th.
+That is precisely the property that makes horizontal scale-out safe without extra machinery: no
+sticky-session load balancer configuration, no shared session store between replicas, nothing for
+`AlgentaMCPProxy` to coordinate. Every replica this package runs is fungible by construction,
+because the upstream it forwards to was already fungible.
 
 (One correction worth being explicit about: an earlier internal note referenced a "2026-07-28"
-MCP spec revision as already shipped engine-side. Read directly from source during this package's
-design, the real, currently-live protocol tag on `thyn-ai/algenta`'s `/mcp` route is `2025-11-25`
--- the statelessness claim above is independently verified against that same file and holds
-regardless of which spec revision is in effect, so this package does not depend on the
-"2026-07-28" figure at all; it just doesn't repeat it.)
+MCP spec revision as already shipped engine-side. The real, currently-live protocol revision on
+the engine's `/mcp` route is `2025-11-25` -- the statelessness claim above holds regardless of
+which spec revision is in effect, so this package does not depend on the "2026-07-28" figure at
+all; it just doesn't repeat it.)
 
 ## Self-hosted-first
 

@@ -1,5 +1,10 @@
 # langchain-algenta
 
+[![PyPI](https://img.shields.io/pypi/v/langchain-algenta.svg)](https://pypi.org/project/langchain-algenta/)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](../../LICENSE)
+
+> **Docs:** [docs.algenta.ai](https://docs.algenta.ai) · [All integrations](../../README.md)
+
 LangChain / LangGraph tool integration for [Algenta](https://algenta.ai): `create_algenta_tools`,
 a function that builds a governed-execution-aware list of
 [`BaseTool`](https://python.langchain.com/api_reference/core/tools/langchain_core.tools.base.BaseTool.html)s

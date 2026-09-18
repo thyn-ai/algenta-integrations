@@ -1,12 +1,12 @@
-# Python integration examples (placeholder)
+# Python integration examples
 
-Empty for now. Once `pydantic-ai-algenta`, `langchain-algenta`, and
-`litellm-algenta` have real implementations (D1/D3/D4), this directory will
-hold runnable example scripts showing each package used against a
-self-hosted Algenta Engine — never against a hosted cloud endpoint by
-default, matching the rest of this repository's self-hosted-only
-positioning.
+A placeholder workspace member: this package exists only so `uv` treats this
+directory as a valid workspace member (see `../pyproject.toml`'s
+`[tool.uv.workspace]`). It declares no dependencies and is never published.
 
-This is a package only so it can be a valid `uv` workspace member (see
-`../pyproject.toml`'s `[tool.uv.workspace]`); it declares no dependencies
-and is never published.
+Runnable examples live with each integration package, not here — see the "Try
+it locally" section of each package's README (for example
+[`pydantic-ai-algenta`'s `local_demo.py`](../pydantic-ai-algenta/local_demo.py)
+and
+[`litellm-algenta`'s `examples/try_it_locally.py`](../litellm-algenta/examples/try_it_locally.py)),
+or the cross-framework conformance suite under [`demo/`](../../demo).
