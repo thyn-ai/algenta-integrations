@@ -1,10 +1,10 @@
 {
   "_provenance": {
-    "engine_config": "ALGENTA_SKIP_MOJO_RUNTIME=1 (governed-execution semantics need no compute worker)",
+    "engine_config": "runtime compute worker disabled (governed-execution semantics need no compute worker)",
     "engine_git_sha": "01114e6897ed",
     "how_to_reproduce": "ALGENTA_BASE_URL=... ALGENTA_API_KEY=... python -m demo.conformance.runner",
     "note": "Values here were OBSERVED, not authored. Regenerate rather than edit by hand.",
-    "recorded_from": "a live thyn-ai/algenta engine over HTTP with a real Postgres"
+    "recorded_from": "the engine's public HTTP API in internal CI (a live deployment over HTTP with a real Postgres)"
   },
   "expected_outcomes": {
     "approval_granted_then_execute": {

@@ -16,8 +16,9 @@ A scenario that cannot run is reported as such by the runner, with its reason, a
 toward a pass. `pytest.skip` was deliberately avoided: a skipped test disappears into a summary line
 and "10 passed, 2 skipped" reads like success.
 
-MEASURED against thyn-ai/algenta @ origin/main over HTTP (not the test client), with a real Postgres:
-9 of 12 are exercisable today. The three that are not are named below with the specific reason.
+MEASURED against the engine's public HTTP API in internal CI (over HTTP, not the test client,
+with a real Postgres): 9 of 12 are exercisable today. The three that are not are named below
+with the specific reason.
 """
 
 from __future__ import annotations
@@ -77,8 +78,8 @@ SCENARIOS: tuple[Scenario, ...] = (
             "is no suspended execution to resume, and no continuation token. Approval is a "
             "separate prior call (propose -> approve -> execute), which is a sound design but is "
             "not the pause/resume semantics this scenario describes. Interruption + continuation "
-            "is Track C1 work (the Responses-protocol approval-required event); asserting it now "
-            "would be asserting a design intention."
+            "is planned engine work (a Responses-protocol approval-required event); asserting it "
+            "now would be asserting a design intention."
         ),
         tags=("govern", "approval"),
     ),
@@ -137,9 +138,9 @@ SCENARIOS: tuple[Scenario, ...] = (
         blocked_reason=(
             "Requires a dependency that actually times out. The governed path exercised here talks "
             "only to Postgres; provoking a real timeout means either a fault-injection proxy in "
-            "front of an upstream or the Mojo compute worker under load, neither of which this "
+            "front of an upstream or the runtime compute worker under load, neither of which this "
             "environment has. Fabricating one by patching a client would test the mock, not the "
-            "engine. Belongs in the nightly live tier against a booted stack (plan section 6)."
+            "engine. Belongs in the nightly live tier against a booted stack."
         ),
         tags=("errors", "retry"),
     ),
@@ -165,11 +166,11 @@ SCENARIOS: tuple[Scenario, ...] = (
         Status.NEEDS_INFRA,
         "Re-running a recorded execution from its replay manifest yields a byte-identical result.",
         blocked_reason=(
-            "Determinism is a property of the Mojo compute kernels, and this environment runs with "
-            "ALGENTA_SKIP_MOJO_RUNTIME=1 -- the governed-execution semantics under test here do "
-            "not need the worker, but replay identity does. Comparing two runs of the safe-MVP "
-            "execute path would compare an artifact list to itself and prove nothing about "
-            "determinism. Belongs in the nightly live tier with the worker running."
+            "Determinism is a property of the engine's compute kernels, and this environment runs "
+            "with the runtime compute worker disabled -- the governed-execution semantics under "
+            "test here do not need the worker, but replay identity does. Comparing two runs of "
+            "the current execute path would compare an artifact list to itself and prove nothing "
+            "about determinism. Belongs in the nightly live tier with the worker running."
         ),
         tags=("evidence", "determinism"),
     ),
