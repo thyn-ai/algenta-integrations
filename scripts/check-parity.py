@@ -406,13 +406,19 @@ def evaluate_python_contract(path: Path) -> EmbeddedContract:
 # Phase 2b — static evaluation of TypeScript contract modules
 # ════════════════════════════════════════════════════════════════════════════
 
+# These patterns run over whole source files, so every repetition in them has to be unambiguous
+# (CodeQL py/redos). The optional type annotation is `(?::[^=;]+)?=`: `[^=;]` already covers
+# whitespace, so the `\s*` that used to sit on either side of it only gave the engine extra ways
+# to split the same run of spaces. The string body accepts an escape pair (`\\.`) or ONE
+# non-backslash, non-quote character -- disjoint on the first character, so a body of many `\x`
+# pairs matches exactly one way; letting `.` also swallow a backslash was the exponential case.
 _TS_STRING_DECL_RE = re.compile(
-    r"(?:export\s+)?const\s+([A-Za-z_$][\w$]*)\s*(?::\s*[^=;]+?)?\s*=\s*(['\"])((?:\\.|(?!\2).)*?)\2\s*(?:as\s+const)?\s*;"
+    r"(?:export\s+)?const\s+([A-Za-z_$][\w$]*)\s*(?::[^=;]+)?=\s*(['\"])((?:\\.|(?!\2)[^\\\n])*?)\2\s*(?:as\s+const\s*)?;"
 )
 _TS_SET_DECL_RE = re.compile(
-    r"(?:export\s+)?const\s+([A-Za-z_$][\w$]*)\s*(?::\s*[^=;]+?)?\s*=\s*new\s+Set(?:\s*<[^>]*>)?\s*\(\s*\[([\s\S]*?)\]\s*\)\s*;"
+    r"(?:export\s+)?const\s+([A-Za-z_$][\w$]*)\s*(?::[^=;]+)?=\s*new\s+Set(?:\s*<[^>]*>)?\s*\(\s*\[([\s\S]*?)\]\s*\)\s*;"
 )
-_TS_PROFILES_RE = re.compile(r"TOOL_PROFILES\s*(?::\s*[^=;]+?)?\s*=\s*\{([\s\S]*?)\}\s*;")
+_TS_PROFILES_RE = re.compile(r"TOOL_PROFILES\s*(?::[^=;]+)?=\s*\{([\s\S]*?)\}\s*;")
 _TS_PROFILE_ENTRY_RE = re.compile(r"([A-Za-z_$][\w$]*)\s*:\s*([A-Za-z_$][\w$]*)")
 _TS_TYPE_LITERALS_RE = re.compile(r"type\s+ToolProfile\s*=\s*([^;]+);")
 _TS_QUOTED_RE = re.compile(r"['\"]([^'\"]+)['\"]")
