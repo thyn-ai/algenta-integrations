@@ -2,12 +2,22 @@
 # mcp 2.x renames FastMCP (breaks tests/stub_server.py); fastmcp 4 requires mcp>=2; for the n8n node,
 # typescript 7 breaks the @typescript-eslint peer range, @types/node must track engines>=18.10, and
 # zod 3->4 is an incomplete migration (review findings on #66/#68/#74, 2026-09-17).
+#
+# Every entry carries `cooldown: default-days: 7`: a version bump is proposed only once the release
+# is a week old, so a compromised or hastily-yanked upload is caught upstream before it reaches a PR
+# here (Dependabot's own default is 3 days). Security updates are never delayed by cooldown. The
+# entries that exist only to track our own `algenta-sdk` (`allow: algenta-sdk`, daily) exclude it
+# from the cooldown: those are our releases, and the point of the entry is to pick them up at once.
 version: 2
 updates:
 - package-ecosystem: pip
   directory: /python/pydantic-ai-algenta
   schedule:
     interval: daily
+  cooldown:
+    default-days: 7
+    exclude:
+    - algenta-sdk
   allow:
   - dependency-name: algenta-sdk
   ignore:
@@ -20,6 +30,10 @@ updates:
   directory: /python/langchain-algenta
   schedule:
     interval: daily
+  cooldown:
+    default-days: 7
+    exclude:
+    - algenta-sdk
   allow:
   - dependency-name: algenta-sdk
   ignore:
@@ -32,6 +46,10 @@ updates:
   directory: /python/litellm-algenta
   schedule:
     interval: daily
+  cooldown:
+    default-days: 7
+    exclude:
+    - algenta-sdk
   allow:
   - dependency-name: algenta-sdk
   ignore:
@@ -44,6 +62,8 @@ updates:
   directory: /python/haystack-algenta
   schedule:
     interval: weekly
+  cooldown:
+    default-days: 7
   groups:
     deps:
       patterns:
@@ -58,6 +78,8 @@ updates:
   directory: /python/llamaindex-algenta
   schedule:
     interval: weekly
+  cooldown:
+    default-days: 7
   groups:
     deps:
       patterns:
@@ -75,6 +97,8 @@ updates:
   directory: /python/maf-algenta
   schedule:
     interval: weekly
+  cooldown:
+    default-days: 7
   groups:
     deps:
       patterns:
@@ -89,6 +113,8 @@ updates:
   directory: /python/ray-serve-algenta
   schedule:
     interval: weekly
+  cooldown:
+    default-days: 7
   groups:
     deps:
       patterns:
@@ -103,6 +129,8 @@ updates:
   directory: /python/vllm-algenta
   schedule:
     interval: weekly
+  cooldown:
+    default-days: 7
   groups:
     deps:
       patterns:
@@ -121,6 +149,8 @@ updates:
   directory: /python
   schedule:
     interval: weekly
+  cooldown: # inert here (version updates are off, and cooldown never delays security updates)
+    default-days: 7
   open-pull-requests-limit: 0
   commit-message:
     prefix: chore(workspace)
@@ -128,6 +158,10 @@ updates:
   directory: /typescript/algenta-tools/packages/algenta-tools
   schedule:
     interval: daily
+  cooldown:
+    default-days: 7
+    exclude:
+    - algenta-sdk
   allow:
   - dependency-name: algenta-sdk
   commit-message:
@@ -136,6 +170,8 @@ updates:
   directory: /typescript/algenta-tools
   schedule:
     interval: weekly
+  cooldown:
+    default-days: 7
   ignore:
   - dependency-name: algenta-sdk
   commit-message:
@@ -144,6 +180,8 @@ updates:
   directory: /typescript/n8n-nodes-algenta
   schedule:
     interval: weekly
+  cooldown:
+    default-days: 7
   commit-message:
     prefix: chore(deps)
   ignore:
@@ -164,6 +202,8 @@ updates:
   directory: /.github/requirements
   schedule:
     interval: weekly
+  cooldown:
+    default-days: 7
   groups:
     ci-tools:
       patterns:
@@ -174,6 +214,8 @@ updates:
   directory: /
   schedule:
     interval: weekly
+  cooldown:
+    default-days: 7
   groups:
     codeql-action:
       patterns:
