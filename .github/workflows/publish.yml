@@ -133,8 +133,11 @@ jobs:
 
       - name: Install uv
         # Same as ci.yml: uv is not preinstalled on GitHub-hosted runners, so it is
-        # pip-installed per job.
-        run: python -m pip install --quiet --disable-pip-version-check uv
+        # pip-installed per job, hash-pinned via .github/requirements/uv.txt. That file is read
+        # from the checked-out TAG's tree, so a workflow_dispatch replay of a tag cut before it
+        # existed fails here -- the same one-time, transitional class as the header's "TWO
+        # TRANSITIONAL CONSEQUENCES"; every tag cut from here forward carries it.
+        run: python -m pip install --quiet --disable-pip-version-check --require-hashes -r .github/requirements/uv.txt
 
       - name: Build the distribution
         working-directory: ${{ needs.resolve.outputs.directory }}
