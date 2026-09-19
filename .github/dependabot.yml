@@ -113,6 +113,17 @@ updates:
     - version-update:semver-major
   commit-message:
     prefix: chore(vllm-algenta)
+- package-ecosystem: uv
+  # The workspace lock (python/uv.lock) is what CI installs; the per-package pip entries above never
+  # touch it, so a transitive fix (nltk 3.10.4 for GHSA-8mgp-746c-j5xp, pulled in only by
+  # llama-index-core) would otherwise wait for someone to run `uv lock` by hand. Security-only:
+  # open-pull-requests-limit 0 disables version bumps while leaving security updates on.
+  directory: /python
+  schedule:
+    interval: weekly
+  open-pull-requests-limit: 0
+  commit-message:
+    prefix: chore(workspace)
 - package-ecosystem: npm
   directory: /typescript/algenta-tools/packages/algenta-tools
   schedule:
