@@ -252,7 +252,14 @@ class _RecordingUpstream:
         self._sock = sock
         server = uvicorn.Server(uvicorn.Config(asgi, lifespan="off", log_level="warning", access_log=False))
         self._task = asyncio.create_task(server.serve(sockets=[sock]))
-        await _wait_until_serving(self.port)
+        try:
+            await _wait_until_serving(self.port)
+        except BaseException:
+            # `async with` never reaches `__aexit__` when `__aenter__` raises, so a server that
+            # failed to come up (the readiness timeout, a cancelled test) must be torn down here
+            # or its task and socket outlive the test.
+            await self.__aexit__(None, None, None)
+            raise
         self.base_url = f"http://127.0.0.1:{self.port}/mcp"
         return self
 
