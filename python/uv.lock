@@ -5258,7 +5258,7 @@ wheels = [
 
 [[package]]
 name = "ray-serve-algenta"
-version = "0.1.2"
+version = "0.1.3"
 source = { editable = "ray-serve-algenta" }
 dependencies = [
     { name = "fastapi" },
@@ -5273,6 +5273,7 @@ dev = [
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
+    { name = "uvicorn" },
 ]
 
 [package.metadata]
@@ -5285,6 +5286,7 @@ requires-dist = [
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.24" },
     { name = "pytest-cov", marker = "extra == 'dev'" },
     { name = "ray", extras = ["serve"], specifier = ">=2.58.0" },
+    { name = "uvicorn", marker = "extra == 'dev'", specifier = ">=0.30" },
 ]
 provides-extras = ["dev"]
 

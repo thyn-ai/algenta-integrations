@@ -151,7 +151,10 @@ def _build_request(
 
 class _Sent:
     """What a response put on the ASGI `send` channel: status and headers exactly as uvicorn
-    would receive them, plus the body chunks in arrival order."""
+    would receive them, plus the body chunks in arrival order. `headers` is a plain dict, which
+    is only lossless while every header name occurs once -- `_drain` asserts exactly that, so a
+    repeated name (legal HTTP, e.g. `set-cookie`) fails the test instead of silently keeping
+    whichever copy came last."""
 
     def __init__(self) -> None:
         self.status: int | None = None
@@ -169,7 +172,9 @@ async def _drain(response: Response, *, on_chunk: Callable[[bytes], None] | None
     async def send(message: dict[str, Any]) -> None:
         if message["type"] == "http.response.start":
             sent.status = message["status"]
-            sent.headers = {k.decode("latin-1"): v.decode("latin-1") for k, v in message["headers"]}
+            pairs = [(k.decode("latin-1"), v.decode("latin-1")) for k, v in message["headers"]]
+            sent.headers = dict(pairs)
+            assert len(sent.headers) == len(pairs), f"repeated response header name in {pairs!r}"
         elif message["type"] == "http.response.body" and message.get("body"):
             sent.chunks.append(message["body"])
             if on_chunk is not None:

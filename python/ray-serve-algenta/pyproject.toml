@@ -51,11 +51,16 @@ Repository = "https://github.com/thyn-ai/algenta-integrations"
 # `fastmcp` (full, server-side) backs the test suite's stub Algenta MCP server
 # (tests/stub_server.py) -- a real server on a real socket, never a mock. Never imported by any
 # non-test module in this package. `pytest-asyncio` drives the async conformance tests.
+# `uvicorn` serves tests/test_in_process_proxy.py's recording upstream over a real socket. It is
+# already pulled in transitively by `ray[serve]` (which requires `uvicorn[standard]`), but a test
+# module that imports it directly declares it directly -- same reasoning as `jinja2` above: never
+# depend on another package's dependency list staying the way it is today.
 dev = [
     "pytest",
     "pytest-asyncio>=0.24",
     "pytest-cov",
     "fastmcp>=3.4",
+    "uvicorn>=0.30",
 ]
 
 [build-system]
