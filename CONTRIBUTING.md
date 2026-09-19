@@ -191,6 +191,16 @@ resolves its endpoint from the caller's own self-hosted deployment
 See [`SUPPORT.md`](./SUPPORT.md) for where to file what. Security
 reports are never public — follow [`SECURITY.md`](./SECURITY.md).
 
+## Recognizing contributors
+
+This project follows the [all-contributors](https://allcontributors.org)
+specification: everyone who contributes — code, docs, bug reports, reviews,
+or any other [contribution type](https://allcontributors.org/docs/en/emoji-key) —
+is recognized in the [README](./README.md#contributors). Maintainers add
+contributors by commenting `@all-contributors please add @user for code`
+(replacing `code` with the relevant contribution type) on an issue or pull
+request, and the bot opens a pull request updating the contributors table.
+
 ## Licensing
 
 This repository is licensed under [Apache-2.0](./LICENSE) (see
