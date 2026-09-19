@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
-keywords = ["algenta", "ray", "ray-serve", "kuberay", "mcp", "agent", "decision"]
+keywords = ["algenta", "ray", "ray-serve", "kuberay", "mcp", "agent", "decision", "agent-governance", "llm", "guardrails", "audit-trail", "receipts"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",

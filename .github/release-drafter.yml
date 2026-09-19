@@ -1,0 +1,67 @@
+# Drafts human-readable "what changed on main" release notes and autolabels PRs from
+# their Conventional-Commit titles. This is a DRAFT only: real releases stay per-package
+# (<package>-vX.Y.Z) via auto-release.yml, which this never publishes or tags over.
+#
+# Autolabeler only assigns labels that exist on the repository (enhancement, bug,
+# documentation, dependencies, ci) -- release-drafter fails the run on unknown labels.
+name-template: "v$RESOLVED_VERSION"
+tag-template: "v$RESOLVED_VERSION"
+categories:
+  - title: "Features"
+    labels:
+      - "feature"
+      - "enhancement"
+  - title: "Fixes"
+    labels:
+      - "fix"
+      - "bug"
+  - title: "Docs"
+    labels:
+      - "docs"
+      - "documentation"
+  - title: "CI"
+    labels:
+      - "ci"
+  - title: "Dependencies"
+    labels:
+      - "dependencies"
+version-resolver:
+  major:
+    labels:
+      - "major"
+  minor:
+    labels:
+      - "minor"
+      - "enhancement"
+  patch:
+    labels:
+      - "patch"
+      - "bug"
+      - "documentation"
+      - "ci"
+      - "dependencies"
+  default: patch
+template: |
+  ## What's Changed
+
+  $CHANGES
+
+  ## New Contributors
+
+  $NEW_CONTRIBUTORS
+autolabeler:
+  - label: "enhancement"
+    title:
+      - "/^feat(\\(.+\\))?!?:.+/i"
+  - label: "bug"
+    title:
+      - "/^fix(\\(.+\\))?!?:.+/i"
+  - label: "documentation"
+    title:
+      - "/^docs(\\(.+\\))?!?:.+/i"
+  - label: "ci"
+    title:
+      - "/^ci(\\(.+\\))?!?:.+/i"
+  - label: "dependencies"
+    title:
+      - "/^(deps|build)(\\(.+\\))?!?:.+/i"

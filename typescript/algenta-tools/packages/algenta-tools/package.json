@@ -31,7 +31,11 @@
     "decision",
     "ai-sdk",
     "vercel",
-    "mcp"
+    "mcp",
+    "agent-governance",
+    "receipts",
+    "approvals",
+    "guardrails"
   ],
   "homepage": "https://docs.algenta.ai",
   "repository": {

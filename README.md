@@ -6,6 +6,7 @@
 
 [![CI](https://github.com/thyn-ai/algenta-integrations/actions/workflows/ci.yml/badge.svg)](https://github.com/thyn-ai/algenta-integrations/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/thyn-ai/algenta-integrations/actions/workflows/codeql.yml/badge.svg)](https://github.com/thyn-ai/algenta-integrations/actions/workflows/codeql.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/thyn-ai/algenta-integrations/badge)](https://scorecard.dev/viewer/?uri=github.com/thyn-ai/algenta-integrations)
 [![codecov](https://codecov.io/gh/thyn-ai/algenta-integrations/graph/badge.svg)](https://codecov.io/gh/thyn-ai/algenta-integrations)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
 
