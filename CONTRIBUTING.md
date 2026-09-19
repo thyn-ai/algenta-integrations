@@ -122,6 +122,73 @@ that only changes repository-level files (CI, root docs) bumps nothing.
 Squash-merged pull requests keep this working as long as the final
 squashed commit message follows the format — please make sure it does.
 
+## Releases
+
+Releases are automatic and per package. After every merge to `main`,
+[`auto-release.yml`](./.github/workflows/auto-release.yml) tags each
+bumped package `<package-name>-v<version>` and creates a GitHub Release
+for the tag. [`publish.yml`](./.github/workflows/publish.yml) then builds
+the tagged tree, publishes it to PyPI or npm, and attaches to that
+Release:
+
+- the published artifacts themselves — the wheel and sdist of a Python
+  package, or the `npm pack` tarball of a TypeScript package;
+- a keyless [Sigstore](https://www.sigstore.dev/) signature bundle per
+  asset (`<asset>.sigstore.json`), signed by the `publish.yml` run itself;
+- SLSA build provenance covering every asset
+  (`<package-name>-<version>.intoto.jsonl`), from the
+  [SLSA generic generator](https://github.com/slsa-framework/slsa-github-generator).
+
+Releases cut before this landed (September 2026) carry no assets and are
+not retro-signed.
+
+### Verifying a release
+
+With [cosign](https://docs.sigstore.dev/cosign/system_config/installation/)
+and [slsa-verifier](https://github.com/slsa-framework/slsa-verifier#installation)
+installed, download a release and check every asset against both its
+signature and the provenance. `PACKAGE` is the package name and `VERSION`
+the released version; the tag is `<package-name>-v<version>`:
+
+```bash
+PACKAGE=<package-name>
+VERSION=<version>
+TAG="${PACKAGE}-v${VERSION}"
+gh release download "$TAG" --repo thyn-ai/algenta-integrations
+
+for asset in *.whl *.tar.gz *.tgz; do
+  [ -e "$asset" ] || continue
+
+  cosign verify-blob "$asset" \
+    --bundle "${asset}.sigstore.json" \
+    --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+    --certificate-identity "https://github.com/thyn-ai/algenta-integrations/.github/workflows/publish.yml@refs/tags/${TAG}"
+
+  slsa-verifier verify-artifact "$asset" \
+    --provenance-path "${PACKAGE}-${VERSION}.intoto.jsonl" \
+    --source-uri github.com/thyn-ai/algenta-integrations \
+    --source-tag "$TAG"
+done
+```
+
+`cosign` prints `Verified OK` and `slsa-verifier` prints `PASSED` for each
+asset. The signing identity is the workflow file at the ref the run sat
+on: a release published by the automatic `release` trigger was signed at
+`refs/tags/<tag>` (as above); one replayed through `publish.yml`'s
+`workflow_dispatch` was signed from the dispatched branch, so its
+certificate identity ends in `@refs/heads/main` and its provenance
+verifies with `--source-branch main` instead of `--source-tag`. The
+bundle and the provenance both record which.
+
+### Rehearsing the release pipeline
+
+Maintainers can run `publish.yml` for an existing tag with **Dry run**
+enabled (Actions → publish → Run workflow, or
+`gh workflow run publish.yml -f tag=<tag> -f dry_run=true`). Nothing is
+published: the registry and Release uploads are skipped, and the build,
+its signature bundles and its provenance are attached to the run as
+workflow artifacts instead.
+
 ## The one rule that matters most
 
 **Every package in this repository may depend only on the published
