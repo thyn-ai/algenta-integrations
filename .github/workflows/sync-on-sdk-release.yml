@@ -188,16 +188,24 @@ jobs:
           fi
           os="$(uname -s | tr '[:upper:]' '[:lower:]')"
           arch="$(uname -m)"
+          # Pinned by hash, not just by version: the binary this installs runs with the job's
+          # contents/pull-requests write token, so a tampered download must fail here. The digests are
+          # the official ones from gh_${version}_checksums.txt on the cli/cli release; bump them with
+          # the version (never trust a checksums file fetched at run time over the same channel).
+          version="2.98.0"
           case "$arch" in
-            x86_64) arch="amd64" ;;
-            aarch64|arm64) arch="arm64" ;;
+            x86_64)        arch="amd64"; expected_sha="3b8ac6b30336802fc1a858d7c084e11cdf24ac1a761ca90b68022d7d729208de" ;;
+            aarch64|arm64) arch="arm64"; expected_sha="cf689084f3a3618f7eae4a2420d335d74626d65f5e594b9828d125d69f800d86" ;;
             *) echo "unsupported arch: $arch" >&2; exit 1 ;;
           esac
-          version="2.98.0"
+          [ "$os" = "linux" ] || { echo "gh fallback is pinned for linux only (got $os)" >&2; exit 1; }
           dest="$RUNNER_TEMP/gh-cli"
           mkdir -p "$dest"
-          curl -fsSL "https://github.com/cli/cli/releases/download/v${version}/gh_${version}_${os}_${arch}.tar.gz" \
-            | tar -xz -C "$dest" --strip-components=1
+          tarball="$RUNNER_TEMP/gh_${version}_${os}_${arch}.tar.gz"
+          curl -fsSL -o "$tarball" "https://github.com/cli/cli/releases/download/v${version}/gh_${version}_${os}_${arch}.tar.gz"
+          echo "${expected_sha}  ${tarball}" | sha256sum -c --strict -
+          tar -xz -C "$dest" --strip-components=1 -f "$tarball"
+          rm -f "$tarball"
           echo "$dest/bin" >> "$GITHUB_PATH"
 
       - name: Open the version-bump PR
