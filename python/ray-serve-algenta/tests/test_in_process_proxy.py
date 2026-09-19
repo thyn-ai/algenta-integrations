@@ -25,8 +25,11 @@ is asserted at the byte level rather than inferred from "the cluster answered 20
 from __future__ import annotations
 
 import asyncio
+import gzip
 import inspect
+import json
 import socket
+import zlib
 from collections.abc import AsyncIterator, Callable, Iterable
 from dataclasses import dataclass, field
 from typing import Any
@@ -446,6 +449,138 @@ async def test_response_side_contract_streams_each_chunk_as_it_arrives_and_strip
         assert sent.headers["cache-control"] == "no-cache"
         assert sent.headers["x-upstream-note"] == "kept"
         assert not _NEVER_RELAYED & set(sent.headers)
+
+
+def _gzip_stream(pieces: list[bytes]) -> list[bytes]:
+    """One gzip member spread over `len(pieces)` wire chunks: each piece is compressed and
+    sync-flushed on its own, so an upstream can emit (and a test gate) every chunk independently
+    while the concatenation stays a single stream that any gzip decoder, streaming or whole,
+    accepts -- the shape a compressing server gives a `text/event-stream` response."""
+    compressor = zlib.compressobj(wbits=zlib.MAX_WBITS | 16)
+    chunks = [compressor.compress(piece) + compressor.flush(zlib.Z_SYNC_FLUSH) for piece in pieces]
+    chunks[-1] += compressor.flush()
+    return chunks
+
+
+async def test_compressed_upstream_reply_is_relayed_undecoded_under_its_own_content_encoding(
+    make_proxy: Callable[..., Any],
+) -> None:
+    """A caller that offered `accept-encoding: gzip` and an engine that took the offer up. The proxy
+    never decodes (`aiter_raw` yields wire bytes), so the bytes it relays are the compressed ones
+    and the upstream's `content-encoding` label has to travel with them -- stripped, as it was
+    until 0.1.4, a caller received gzip bytes with no way to recognise them. Asserted the way a
+    real client sees it: an `httpx.Response` built from exactly the relayed status, headers and
+    body decodes to the fixture's JSON. The caller's own offer, not httpx's default, is what
+    reaches the engine."""
+    payload = {"jsonrpc": "2.0", "id": 7, "result": {"tools": [{"name": "query_data"}]}}
+    encoded = json.dumps(payload).encode()
+    compressed = gzip.compress(encoded)
+    async with _RecordingUpstream(
+        headers=[
+            ("content-type", "application/json"),
+            ("content-encoding", "gzip"),
+            ("content-length", str(len(compressed))),
+        ],
+        chunks=[compressed],
+    ) as upstream:
+        proxy = make_proxy(upstream_base_url=upstream.base_url)
+        sent = await _drain(
+            await proxy.mcp(
+                _build_request(
+                    "POST",
+                    headers=(("host", "ray-proxy.internal"), ("accept-encoding", "gzip"), *_MCP_REQUEST_HEADERS),
+                    body=_TOOLS_LIST,
+                )
+            )
+        )
+
+        (forwarded,) = upstream.requests
+        assert forwarded.headers["accept-encoding"] == "gzip"
+
+        assert sent.status == 200
+        assert sent.headers["content-encoding"] == "gzip"
+        assert sent.headers["content-type"] == "application/json"
+        assert sent.headers[REPLICA_HEADER] == "unknown"
+        assert not _NEVER_RELAYED & set(sent.headers)
+        assert sent.body == compressed
+        assert gzip.decompress(sent.body) == encoded
+        as_a_client_sees_it = httpx.Response(sent.status, headers=sent.headers, content=sent.body)
+        assert as_a_client_sees_it.json() == payload
+
+
+async def test_compressed_event_stream_is_still_relayed_chunk_by_chunk_under_its_label(
+    make_proxy: Callable[..., Any],
+) -> None:
+    """The same contract where it matters most, `text/event-stream`: a streaming caller decodes
+    each compressed chunk as it arrives, so the proxy must both carry `content-encoding` on the
+    response start (before any body byte) and keep forwarding chunk by chunk -- the second event
+    is released by the upstream only after the first has been sent downstream, exactly as in the
+    uncompressed streaming test, so a proxy that buffered to decode could never finish. The
+    relayed chunks, fed to a streaming gzip decoder in arrival order, reproduce the events."""
+    events = [
+        b'event: message\r\ndata: {"jsonrpc":"2.0","id":1,"result":{}}\r\n\r\n',
+        b'event: message\r\ndata: {"jsonrpc":"2.0","id":2,"result":{}}\r\n\r\n',
+    ]
+    chunks = _gzip_stream(events)
+    first_forwarded = asyncio.Event()
+    async with _RecordingUpstream(
+        headers=[
+            ("content-type", "text/event-stream"),
+            ("content-encoding", "gzip"),
+            ("cache-control", "no-cache"),
+        ],
+        chunks=[chunks[0], *((first_forwarded, chunk) for chunk in chunks[1:])],
+    ) as upstream:
+        proxy = make_proxy(upstream_base_url=upstream.base_url)
+        response = await proxy.mcp(
+            _build_request(
+                "GET",
+                headers=(
+                    ("host", "ray-proxy.internal"),
+                    ("accept", "text/event-stream"),
+                    ("accept-encoding", "gzip, br"),
+                ),
+            )
+        )
+        sent = await asyncio.wait_for(
+            _drain(response, on_chunk=lambda _chunk: first_forwarded.set()), timeout=5.0
+        )
+
+        (forwarded,) = upstream.requests
+        assert forwarded.headers["accept-encoding"] == "gzip, br"
+
+        assert sent.status == 200
+        assert sent.headers["content-encoding"] == "gzip"
+        assert sent.headers["content-type"] == "text/event-stream"
+        assert sent.headers["cache-control"] == "no-cache"
+        assert not _NEVER_RELAYED & set(sent.headers)
+        assert len(sent.chunks) >= len(chunks)
+        assert sent.body == b"".join(chunks)
+        decoder = zlib.decompressobj(wbits=zlib.MAX_WBITS | 16)
+        streamed = b"".join(decoder.decompress(chunk) for chunk in sent.chunks) + decoder.flush()
+        assert streamed == b"".join(events)
+
+
+async def test_a_caller_that_offers_no_accept_encoding_is_not_offered_compression_on_its_behalf(
+    make_proxy: Callable[..., Any],
+) -> None:
+    """httpx's own client default is `gzip, deflate, zstd`. A proxy that let it through would be
+    negotiating compression for a caller that never asked for any and then -- correctly, now --
+    relaying compressed bytes that caller may not expect. So when the caller sends no
+    `accept-encoding` the upstream hop must see `identity`, and an upstream that then sends no
+    `content-encoding` gets none invented for it downstream."""
+    request_headers = (("host", "ray-proxy.internal"), *_MCP_REQUEST_HEADERS)
+    assert "accept-encoding" not in {name for name, _value in request_headers}
+    async with _RecordingUpstream(headers=[("content-type", "application/json")], chunks=[b"{}"]) as upstream:
+        proxy = make_proxy(upstream_base_url=upstream.base_url)
+        sent = await _drain(await proxy.mcp(_build_request("POST", headers=request_headers, body=_TOOLS_LIST)))
+
+        (forwarded,) = upstream.requests
+        assert forwarded.headers["accept-encoding"] == "identity"
+
+        assert sent.status == 200
+        assert sent.body == b"{}"
+        assert "content-encoding" not in sent.headers
 
 
 async def test_request_timeout_seconds_is_honoured_against_a_stalled_upstream(
