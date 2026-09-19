@@ -303,9 +303,9 @@ jobs:
           VERSION: ${{ needs.resolve.outputs.version }}
         run: |
           set -euo pipefail
-          # A real pack, not --dry-run: this tarball is the Release asset. `npm publish` below
-          # packs the same tree again, and npm packs deterministically (fixed entry mtimes, fixed
-          # gzip header), so the registry receives these same bytes.
+          # A real pack, not --dry-run: this tarball is the Release asset AND the file `npm
+          # publish` below uploads, so the registry, the Release, the signature and the
+          # provenance all refer to one set of bytes -- no second pack whose output could drift.
           mkdir -p "$RUNNER_TEMP/release-assets"
           npm pack --pack-destination "$RUNNER_TEMP/release-assets"
           packed_version=$(node -p "require('./package.json').version")
@@ -354,18 +354,24 @@ jobs:
 
       - name: Publish to npm
         if: needs.resolve.outputs.publishing_enabled == 'true'
-        working-directory: ${{ needs.resolve.outputs.directory }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          # n8n-nodes-algenta's package.json runs `n8n-node prerelease` as prepublishOnly --
-          # @n8n/node-cli's own prerelease command (dist/commands/prerelease.js) exits 1 with
-          # "Run `npm run release` to publish the package" unless RELEASE_MODE is set. This is
-          # the tool's own documented guard against an accidental bare `npm publish`, not
-          # something to route around -- our own resolve/version-check steps upstream already
-          # own the "is this a legitimate release" decision, so satisfying this flag here is
-          # correct, not a bypass. A no-op for algenta-tools (no such script).
-          RELEASE_MODE: "true"
-        run: npm publish --access public
+        # The TARBALL packed above, not the package directory: the registry receives the very
+        # bytes the Release carries, the signature covers and the provenance attests. A
+        # directory publish would pack a second time, and nothing but npm's own determinism
+        # would tie that second tarball to the first.
+        #
+        # npm runs prepublishOnly / publish / postpublish only for directory publishes (its
+        # lib/commands/publish.js: "only run scripts for directory type publishes"), so
+        # n8n-nodes-algenta's `n8n-node prerelease` prepublishOnly hook does not run here. That
+        # hook is @n8n/node-cli's guard against an accidental bare `npm publish` -- it exits 1
+        # unless RELEASE_MODE is set and does nothing else (dist/commands/prerelease.js). The
+        # resolve/version-check steps upstream are what make this a legitimate release, which is
+        # exactly the property the guard exists to ensure. Verified locally on npm 11: a
+        # tarball `publish --dry-run` succeeds without RELEASE_MODE and reports the same
+        # integrity as `npm pack --json`, where a directory `publish --dry-run` runs the hook and
+        # exits 1.
+        run: npm publish "$RUNNER_TEMP"/release-assets/*.tgz --access public
 
   # The two jobs below run once the registry job for this tag has succeeded -- `pypi` or `npm`,
   # whichever the tag resolved to; the other is skipped, hence the explicit result check instead
