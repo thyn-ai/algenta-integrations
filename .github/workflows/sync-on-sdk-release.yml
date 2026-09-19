@@ -60,13 +60,18 @@ on:
     - cron: "13 3 * * *" # nightly
   workflow_dispatch: {} # manual trigger, e.g. to test this workflow itself
 
+# The workflow-wide token is read-only; the single job below elevates itself to exactly the
+# two writes it needs. Same permissions as before, scoped one level down (OpenSSF Scorecard's
+# Token-Permissions check flags a top-level write, not a job-level one).
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 jobs:
   sync:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # commits + pushes the sync/algenta-sdk-v* branch
+      pull-requests: write # opens the version-bump PR via gh
     env:
       # Pin uv to the interpreter actions/setup-python just provisioned -- same reasoning
       # as ci.yml's python job (otherwise uv downloads its own floating "managed" CPython).
@@ -115,7 +120,8 @@ jobs:
 
       - name: Install uv
         if: steps.diff.outputs.changed == 'true'
-        run: python -m pip install --quiet --disable-pip-version-check uv
+        # Hash-pinned via .github/requirements/uv.txt -- same file as ci.yml's python job.
+        run: python -m pip install --quiet --disable-pip-version-check --require-hashes -r .github/requirements/uv.txt
 
       - name: Refresh Python lockfile
         if: steps.diff.outputs.changed == 'true'

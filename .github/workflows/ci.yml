@@ -73,7 +73,9 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install uv
-        run: python -m pip install --quiet --disable-pip-version-check uv
+        # Hash-pinned: pip refuses any wheel/sdist whose hash is not in
+        # .github/requirements/uv.txt (see the .in file there for how to bump).
+        run: python -m pip install --quiet --disable-pip-version-check --require-hashes -r .github/requirements/uv.txt
       # --all-extras is required, not cosmetic: pytest/pytest-asyncio/pytest-cov/anyio only
       # live under each package's `dev` optional-dependencies extra (never a hard dependency
       # of the published package). Without it, `.venv/bin/pytest` never gets created, so
@@ -240,7 +242,9 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install ruff (same release as the pre-commit hook)
-        run: python -m pip install --quiet --disable-pip-version-check "ruff==0.12.0"
+        # The release pin itself lives in .github/requirements/ruff.in (hash-pinned in ruff.txt);
+        # it and .pre-commit-config.yaml's ruff-pre-commit rev move together.
+        run: python -m pip install --quiet --disable-pip-version-check --require-hashes -r .github/requirements/ruff.txt
       - name: ruff check
         run: ruff check --output-format github
 
