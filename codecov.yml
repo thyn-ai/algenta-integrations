@@ -1,6 +1,10 @@
-# Codecov configuration. Coverage is INFORMATION here, not a gate: the per-package floors in CI
-# (pytest --cov fail_under) are what fail a build, so Codecov's own project/patch statuses never
-# block a merge. Uploads authenticate with GitHub OIDC (use_oidc in the workflows) -- no token secret.
+# Codecov configuration for this repository's coverage dashboard.
+#
+# Architecture: coverage is ENFORCED in CI itself -- per-package pytest-cov `fail_under`
+# floors in each python/*/pyproject.toml, and vitest coverage thresholds in each
+# typescript package's vitest.config.ts. Codecov is the DASHBOARD for trends and per-file
+# drill-down, so every status check below is informational and can never block a merge.
+# The two flags mirror the two upload steps in .github/workflows/ci.yml.
 coverage:
   status:
     project:
@@ -9,7 +13,14 @@ coverage:
     patch:
       default:
         informational: true
+
+flags:
+  python:
+    paths:
+      - python/
+  typescript:
+    paths:
+      - typescript/
+
 comment:
-  layout: "condensed_header, diff, flags, files"
-  require_changes: true
-  behavior: default
+  layout: "diff, flags, files"
