@@ -4,10 +4,13 @@
   "description": "n8n community node for Algenta: a governed-execution-aware node exposing your own self-hosted Algenta Engine's MCP tool surface (get_contract, query_data, simulate, recommend, plan_decision, log_decision, execute_decision) as typed n8n operations, with a real ExecutionReceipt/ExecutionBlockedError contract on execute_decision.",
   "keywords": [
     "n8n-community-node-package",
+    "n8n",
     "algenta",
     "mcp",
     "decision",
-    "governed-execution"
+    "governed-execution",
+    "agent-governance",
+    "approvals"
   ],
   "license": "Apache-2.0",
   "homepage": "https://docs.algenta.ai",
