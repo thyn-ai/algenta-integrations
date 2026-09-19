@@ -62,6 +62,13 @@ spec:
               # (`pip install ray-serve-algenta` or your own internal build) -- no image is
               # published by this repository.
               image: your-registry.example.com/algenta-mcp-proxy:latest
+              # rayproject/ray images end with a numeric `USER 1000` (the `ray` user, gid 100),
+              # so the kubelet can verify runAsNonRoot without a runAsUser pin here -- and a
+              # pin would break an image whose base picked a different non-root uid. Ray
+              # itself needs neither root nor setuid binaries.
+              securityContext:
+                runAsNonRoot: true
+                allowPrivilegeEscalation: false
               resources:
                 requests:
                   cpu: "500m"
@@ -93,6 +100,9 @@ spec:
             containers:
               - name: ray-worker
                 image: your-registry.example.com/algenta-mcp-proxy:latest
+                securityContext: # same reasoning as ray-head above
+                  runAsNonRoot: true
+                  allowPrivilegeEscalation: false
                 resources:
                   requests:
                     cpu: "250m"

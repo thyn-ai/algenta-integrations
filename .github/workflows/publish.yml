@@ -104,14 +104,21 @@ jobs:
 
       - name: Resolve the tag to a package
         id: target
+        env:
+          # Every `${{ }}` this file needs inside a shell script goes through `env:` and is read
+          # back as "$VAR": the value reaches bash as data, never as script text, so a crafted
+          # tag or output cannot inject commands (GitHub's script-injection hardening).
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
         run: |
           python3 scripts/resolve_release_target.py \
-            --tag "${{ github.event.release.tag_name || inputs.tag }}" \
+            --tag "$RELEASE_TAG" \
             --github-output
 
       - name: Is publishing switched on
         id: gate
-        run: echo "enabled=${{ vars.PUBLISH_TO_REGISTRIES == 'true' }}" >> "$GITHUB_OUTPUT"
+        env:
+          ENABLED: ${{ vars.PUBLISH_TO_REGISTRIES == 'true' }}
+        run: echo "enabled=$ENABLED" >> "$GITHUB_OUTPUT"
 
   pypi:
     name: PyPI
@@ -145,12 +152,14 @@ jobs:
 
       - name: Check the artifacts before offering them to a registry
         working-directory: ${{ needs.resolve.outputs.directory }}
+        env:
+          VERSION: ${{ needs.resolve.outputs.version }}
         run: |
           set -euo pipefail
           uvx twine check --strict dist/*
           # The filename carries the version, so this catches a build that silently produced a
           # different one from the tag -- a bad sdist name is not recoverable once uploaded.
-          version="${{ needs.resolve.outputs.version }}"
+          version="$VERSION"
           ls dist/
           for artifact in dist/*; do
             case "$(basename "$artifact")" in
@@ -161,9 +170,13 @@ jobs:
 
       - name: Explain the skip (publishing not switched on)
         if: needs.resolve.outputs.publishing_enabled != 'true'
+        env:
+          PACKAGE_NAME: ${{ needs.resolve.outputs.name }}
+          VERSION: ${{ needs.resolve.outputs.version }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
         run: |
           {
-            echo "### PyPI publish skipped for \`${{ needs.resolve.outputs.name }}\` ${{ needs.resolve.outputs.version }}"
+            echo "### PyPI publish skipped for \`$PACKAGE_NAME\` $VERSION"
             echo
             echo "The distribution built and passed \`twine check --strict\`, but publishing is off."
             echo
@@ -171,7 +184,7 @@ jobs:
             echo "1. Set the \`PYPI_TOKEN\` secret on this repository (or on the \`pypi\` environment)."
             echo "2. Set the repository variable \`PUBLISH_TO_REGISTRIES\` to \`true\`."
             echo
-            echo "Then re-run this workflow with tag \`${{ github.event.release.tag_name || inputs.tag }}\`."
+            echo "Then re-run this workflow with tag \`$RELEASE_TAG\`."
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Publish to PyPI
@@ -215,29 +228,37 @@ jobs:
         # devDependency-only `n8n-node` CLI missing and `npm publish`'s prerelease lifecycle hook
         # failing with "command not found" (exit 127). Confirmed live: PR run
         # https://github.com/thyn-ai/algenta-integrations/actions/runs/34162436762.
+        env:
+          PACKAGE_DIR: ${{ needs.resolve.outputs.directory }}
         run: |
           set -euo pipefail
-          workspace_root="$(echo '${{ needs.resolve.outputs.directory }}' | sed 's#/packages/.*##')"
+          workspace_root="${PACKAGE_DIR%%/packages/*}"
           cd "$workspace_root"
           pnpm install --frozen-lockfile
           pnpm turbo run build
 
       - name: Check the tarball before offering it to a registry
         working-directory: ${{ needs.resolve.outputs.directory }}
+        env:
+          VERSION: ${{ needs.resolve.outputs.version }}
         run: |
           set -euo pipefail
           npm pack --dry-run
           packed_version=$(node -p "require('./package.json').version")
-          if [ "$packed_version" != "${{ needs.resolve.outputs.version }}" ]; then
-            echo "::error::package.json is at $packed_version but the tag says ${{ needs.resolve.outputs.version }}"
+          if [ "$packed_version" != "$VERSION" ]; then
+            echo "::error::package.json is at $packed_version but the tag says $VERSION"
             exit 1
           fi
 
       - name: Explain the skip (publishing not switched on)
         if: needs.resolve.outputs.publishing_enabled != 'true'
+        env:
+          PACKAGE_NAME: ${{ needs.resolve.outputs.name }}
+          VERSION: ${{ needs.resolve.outputs.version }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
         run: |
           {
-            echo "### npm publish skipped for \`${{ needs.resolve.outputs.name }}\` ${{ needs.resolve.outputs.version }}"
+            echo "### npm publish skipped for \`$PACKAGE_NAME\` $VERSION"
             echo
             echo "The package built and packed cleanly, but publishing is off."
             echo
@@ -247,7 +268,7 @@ jobs:
             echo "   unscoped package names."
             echo "2. Set the repository variable \`PUBLISH_TO_REGISTRIES\` to \`true\`."
             echo
-            echo "Then re-run this workflow with tag \`${{ github.event.release.tag_name || inputs.tag }}\`."
+            echo "Then re-run this workflow with tag \`$RELEASE_TAG\`."
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Publish to npm
