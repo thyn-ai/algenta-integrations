@@ -21,12 +21,12 @@ jobs:
     steps:
       - uses: actions/first-interaction@1c4688942c71f71d4f5502a26ea67c331730fa4d # v3.1.0
         with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          issue-message: >-
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          issue_message: >-
             Thanks for opening your first issue here. If you are looking for a place
             to contribute, CONTRIBUTING.md describes the workflow and the
             'good first issue' label marks curated starter issues.
-          pr-message: >-
+          pr_message: >-
             Thanks for opening your first pull request. Please make sure it follows
             CONTRIBUTING.md (conventional commits, minimal focused diffs, green CI);
             a maintainer will review it. The 'good first issue' label is a good place
