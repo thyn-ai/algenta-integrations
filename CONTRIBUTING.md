@@ -147,10 +147,12 @@ not retro-signed.
 With [cosign](https://docs.sigstore.dev/cosign/system_config/installation/)
 and [slsa-verifier](https://github.com/slsa-framework/slsa-verifier#installation)
 installed, download a release and check every asset against both its
-signature and the provenance. For tag `ray-serve-algenta-v0.1.4`,
-`PACKAGE=ray-serve-algenta` and `VERSION=0.1.4`:
+signature and the provenance. `PACKAGE` is the package name and `VERSION`
+the released version; the tag is `<package-name>-v<version>`:
 
 ```bash
+PACKAGE=<package-name>
+VERSION=<version>
 TAG="${PACKAGE}-v${VERSION}"
 gh release download "$TAG" --repo thyn-ai/algenta-integrations
 

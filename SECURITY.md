@@ -19,8 +19,8 @@ Each package in this repository is versioned and released independently
 
 ## Release integrity
 
-Every GitHub Release cut after the signed-release pipeline landed (late
-September 2026) carries the published artifacts, a keyless Sigstore
+Every GitHub Release cut after the signed-release pipeline landed
+(September 2026) carries the published artifacts, a keyless Sigstore
 signature bundle per asset and SLSA build provenance, all produced by the
 release workflow itself. Releases cut before that carry no assets and are
 not retro-signed. How to check a release's assets with `cosign` and
