@@ -11,7 +11,7 @@
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
 [![All Contributors](https://img.shields.io/badge/all_contributors-0-orange.svg)](#contributors)
 
-[Docs](https://docs.algenta.ai) · [Contributing](./CONTRIBUTING.md) · [Support](./SUPPORT.md) · [Security](./SECURITY.md) · [Tool-profile contract](./contracts/integration-tool-contract.json)
+[Docs](https://docs.algenta.ai) · [Wiki](https://github.com/thyn-ai/algenta-integrations/wiki) · [Contributing](./CONTRIBUTING.md) · [Support](./SUPPORT.md) · [Security](./SECURITY.md) · [Tool-profile contract](./contracts/integration-tool-contract.json)
 
 </div>
 
