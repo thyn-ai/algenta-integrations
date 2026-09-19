@@ -156,6 +156,20 @@ updates:
   - dependency-name: zod
     update-types:
     - version-update:semver-major
+- package-ecosystem: pip
+  # The hash-pinned tool requirements (.in -> .txt via `uv pip compile --generate-hashes`) that the
+  # workflows pip-install with --require-hashes. Weekly and grouped so a pin and its hashes are
+  # refreshed in one PR. A ruff bump here must land together with .pre-commit-config.yaml's
+  # ruff-pre-commit rev -- see .github/requirements/ruff.in.
+  directory: /.github/requirements
+  schedule:
+    interval: weekly
+  groups:
+    ci-tools:
+      patterns:
+      - '*'
+  commit-message:
+    prefix: chore(ci)
 - package-ecosystem: github-actions
   directory: /
   schedule:
