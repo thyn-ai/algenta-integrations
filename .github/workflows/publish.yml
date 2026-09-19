@@ -371,7 +371,18 @@ jobs:
         # tarball `publish --dry-run` succeeds without RELEASE_MODE and reports the same
         # integrity as `npm pack --json`, where a directory `publish --dry-run` runs the hook and
         # exits 1.
-        run: npm publish "$RUNNER_TEMP"/release-assets/*.tgz --access public
+        run: |
+          set -euo pipefail
+          # Exactly one tarball, checked explicitly: an unmatched glob would hand npm the literal
+          # pattern, and two matches would hand it two positional arguments, which `npm publish
+          # <package-spec>` does not define. Neither can happen after the pack step above
+          # succeeded, and this is what makes that a hard guarantee rather than an inference.
+          tarballs=("$RUNNER_TEMP"/release-assets/*.tgz)
+          if [ "${#tarballs[@]}" -ne 1 ] || [ ! -f "${tarballs[0]}" ]; then
+            echo "::error::expected exactly one packed tarball under $RUNNER_TEMP/release-assets, found: ${tarballs[*]}"
+            exit 1
+          fi
+          npm publish "${tarballs[0]}" --access public
 
   # The two jobs below run once the registry job for this tag has succeeded -- `pypi` or `npm`,
   # whichever the tag resolved to; the other is skipped, hence the explicit result check instead
