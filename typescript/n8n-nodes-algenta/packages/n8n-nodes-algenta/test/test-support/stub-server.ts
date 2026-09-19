@@ -19,7 +19,9 @@
  * payload, matching the real engine's contract that only `execute_decision` has this particular
  * success/denial shape. `admin_only_diagnostic_tool` is a test-only administrative tool (not part
  * of the real contract) representing part of a real server's wider registry that only the
- * `"full"` profile should ever see.
+ * `"full"` profile should ever see; its three `admin_only_*` siblings answer in the result shapes
+ * the contract tools never use (JSON in a bare text block, a non-JSON string, no content), so the
+ * client's documented fallbacks for those shapes are exercised over the real wire too.
  */
 import { randomUUID } from "node:crypto";
 import { createServer, type IncomingMessage, type Server as HttpServer, type ServerResponse } from "node:http";
@@ -53,6 +55,13 @@ function jsonResult(payload: unknown): CallToolResult {
     content: [{ type: "text", text: JSON.stringify(payload) }],
     structuredContent: payload as Record<string, unknown>,
   };
+}
+
+/** Wraps a plain string as ONLY a text content block, with no `structuredContent` -- the shape a
+ * server tool without a declared `outputSchema` uses, whether or not the text happens to be JSON
+ * (the client has to find out). */
+function textOnlyResult(text: string): CallToolResult {
+  return { content: [{ type: "text", text }] };
 }
 
 /** Builds the real, synchronous denial shape: a tool-error result whose payload is
@@ -249,6 +258,29 @@ export function buildStubAlgentaServer(
     "admin_only_diagnostic_tool",
     { description: "Not in the contract -- full-profile-only diagnostic tool." },
     async () => jsonResult({ ok: true }),
+  );
+
+  // Three more wider-registry tools (full-profile-only, not in the contract), each answering in a
+  // result shape the contract tools above never use, so `../../src/mcp-client.ts`'s
+  // `extractStructuredOrTextContent` fallbacks are exercised over the real wire: JSON carried only
+  // in a text block (a server tool with no declared `outputSchema`), a plain non-JSON string, and
+  // no content blocks at all.
+  server.registerTool(
+    "admin_only_text_json_tool",
+    { description: "Not in the contract -- JSON in a bare text block, no structuredContent." },
+    async () => textOnlyResult(JSON.stringify({ ok: true, source: "text-block" })),
+  );
+
+  server.registerTool(
+    "admin_only_plain_text_tool",
+    { description: "Not in the contract -- a human-readable string, not JSON." },
+    async () => textOnlyResult("pong"),
+  );
+
+  server.registerTool(
+    "admin_only_empty_result_tool",
+    { description: "Not in the contract -- a result with no content blocks." },
+    async (): Promise<CallToolResult> => ({ content: [] }),
   );
 
   return { server, executeDecisionCalls };

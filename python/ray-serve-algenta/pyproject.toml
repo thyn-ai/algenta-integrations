@@ -83,7 +83,9 @@ filterwarnings = [
 source = ["ray_serve_algenta"]
 
 [tool.coverage.report]
-# Gate for the CI python job (enforced via pytest-cov): measured at 66% on Python 3.12
-# (2026-09-18), floored 2 points lower for headroom. Raise the floor as coverage grows.
-fail_under = 64
+# Gate for the CI python job (enforced via pytest-cov): measured at 100% on Python 3.12
+# (2026-09-19, once tests/test_in_process_proxy.py drove the per-request handlers in the pytest
+# process itself -- inside Ray replica processes they run unmeasured), floored 2 points lower for
+# headroom. Raise the floor as coverage grows; never lower it.
+fail_under = 98
 show_missing = true
