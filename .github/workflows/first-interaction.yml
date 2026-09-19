@@ -1,0 +1,33 @@
+# Greets first-time issue authors and PR authors once, pointing them at the
+# contributing guide and the curated 'good first issue' label. pull_request_target
+# runs in the base repo's context so first-time fork contributors are covered too;
+# safe here because the action never checks out or executes PR code.
+name: first-interaction
+
+on:
+  issues:
+    types: [opened]
+  pull_request_target:
+    types: [opened]
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  welcome:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/first-interaction@1c4688942c71f71d4f5502a26ea67c331730fa4d # v3.1.0
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          issue-message: >-
+            Thanks for opening your first issue here. If you are looking for a place
+            to contribute, CONTRIBUTING.md describes the workflow and the
+            'good first issue' label marks curated starter issues.
+          pr-message: >-
+            Thanks for opening your first pull request. Please make sure it follows
+            CONTRIBUTING.md (conventional commits, minimal focused diffs, green CI);
+            a maintainer will review it. The 'good first issue' label is a good place
+            to find follow-up work.
