@@ -59,6 +59,9 @@ jobs:
 
   python:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write  # Codecov OIDC upload
     timeout-minutes: 20
     env:
       # Pin uv to the interpreter actions/setup-python just provisioned. Without this uv
@@ -171,12 +174,16 @@ jobs:
       - name: Upload Python coverage to Codecov
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
+          use_oidc: true  # GitHub OIDC instead of a Codecov token (the job grants id-token write)
           directory: python
           flags: python
           fail_ci_if_error: false
 
   typescript:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write  # Codecov OIDC upload
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -223,6 +230,7 @@ jobs:
       - name: Upload TypeScript coverage to Codecov
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
+          use_oidc: true  # GitHub OIDC instead of a Codecov token (the job grants id-token write)
           directory: typescript
           flags: typescript
           fail_ci_if_error: false

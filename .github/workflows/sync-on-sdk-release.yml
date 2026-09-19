@@ -61,8 +61,8 @@ on:
   workflow_dispatch: {} # manual trigger, e.g. to test this workflow itself
 
 # The workflow-wide token is read-only; the single job below elevates itself to exactly the
-# two writes it needs. Same permissions as before, scoped one level down (OpenSSF Scorecard's
-# Token-Permissions check flags a top-level write, not a job-level one).
+# two writes it needs. Same permissions as before, scoped one level down: OpenSSF Scorecard's
+# Token-Permissions check zeroes the score for a top-level write and only notes job-level ones.
 permissions:
   contents: read
 
