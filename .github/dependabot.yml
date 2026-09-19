@@ -1,4 +1,7 @@
 # Dependabot configuration. `ignore` rules mark upgrades that are deliberate migrations, not bumps:
+# each such rule names the blocked `versions` range as well as the update type, because a
+# requirement-range widening (`<2.0.0` -> `<3.0.0`) is not a semver-major *bump* and slips past
+# `update-types` alone (it did, in #115 and #116 on 2026-09-19).
 # mcp 2.x renames FastMCP (breaks tests/stub_server.py); fastmcp 4 requires mcp>=2; for the n8n node,
 # typescript 7 breaks the @typescript-eslint peer range, @types/node must track engines>=18.10, and
 # zod 3->4 is an incomplete migration (review findings on #66/#68/#74, 2026-09-17).
@@ -24,6 +27,8 @@ updates:
   - dependency-name: mcp
     update-types:
     - version-update:semver-major
+    versions:
+    - ">=2.0.0"
   commit-message:
     prefix: chore(pydantic-ai-algenta)
 - package-ecosystem: pip
@@ -40,6 +45,8 @@ updates:
   - dependency-name: mcp
     update-types:
     - version-update:semver-major
+    versions:
+    - ">=2.0.0"
   commit-message:
     prefix: chore(langchain-algenta)
 - package-ecosystem: pip
@@ -56,6 +63,8 @@ updates:
   - dependency-name: mcp
     update-types:
     - version-update:semver-major
+    versions:
+    - ">=2.0.0"
   commit-message:
     prefix: chore(litellm-algenta)
 - package-ecosystem: pip
@@ -72,6 +81,8 @@ updates:
   - dependency-name: mcp
     update-types:
     - version-update:semver-major
+    versions:
+    - ">=2.0.0"
   commit-message:
     prefix: chore(haystack-algenta)
 - package-ecosystem: pip
@@ -88,9 +99,13 @@ updates:
   - dependency-name: mcp
     update-types:
     - version-update:semver-major
+    versions:
+    - ">=2.0.0"
   - dependency-name: fastmcp
     update-types:
     - version-update:semver-major
+    versions:
+    - ">=4.0.0"
   commit-message:
     prefix: chore(llamaindex-algenta)
 - package-ecosystem: pip
@@ -107,6 +122,8 @@ updates:
   - dependency-name: mcp
     update-types:
     - version-update:semver-major
+    versions:
+    - ">=2.0.0"
   commit-message:
     prefix: chore(maf-algenta)
 - package-ecosystem: pip
@@ -123,6 +140,8 @@ updates:
   - dependency-name: mcp
     update-types:
     - version-update:semver-major
+    versions:
+    - ">=2.0.0"
   commit-message:
     prefix: chore(ray-serve-algenta)
 - package-ecosystem: pip
@@ -139,6 +158,8 @@ updates:
   - dependency-name: mcp
     update-types:
     - version-update:semver-major
+    versions:
+    - ">=2.0.0"
   commit-message:
     prefix: chore(vllm-algenta)
 - package-ecosystem: uv
