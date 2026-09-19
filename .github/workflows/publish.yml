@@ -214,7 +214,8 @@ jobs:
         run: |
           set -euo pipefail
           sha256sum -- * | tee "$RUNNER_TEMP/subjects.sha256sum"
-          echo "hashes=$(base64 -w0 "$RUNNER_TEMP/subjects.sha256sum")" >> "$GITHUB_OUTPUT"
+          hashes=$(base64 -w0 "$RUNNER_TEMP/subjects.sha256sum")
+          echo "hashes=$hashes" >> "$GITHUB_OUTPUT"
 
       # Handed to the `sign` job below, which signs and attaches these exact bytes without
       # rebuilding anything.
@@ -321,7 +322,8 @@ jobs:
         run: |
           set -euo pipefail
           sha256sum -- * | tee "$RUNNER_TEMP/subjects.sha256sum"
-          echo "hashes=$(base64 -w0 "$RUNNER_TEMP/subjects.sha256sum")" >> "$GITHUB_OUTPUT"
+          hashes=$(base64 -w0 "$RUNNER_TEMP/subjects.sha256sum")
+          echo "hashes=$hashes" >> "$GITHUB_OUTPUT"
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
