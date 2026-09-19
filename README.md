@@ -110,14 +110,21 @@ milestone, and until they pass, no package here claims the "validated integratio
 label. See [`demo/README.md`](./demo/README.md) for the exact, falsifiable accounting
 of what runs today — including the scenarios that are blocked and why.
 
-## Self-hosted only
+## Self-hosted by default — no hosted fallback
 
 Every example, default, and piece of documentation in this repository resolves its
 Algenta endpoint from **your own self-hosted engine** — `ALGENTA_BASE_URL` pointed at
 your own deployment, over HTTP or MCP. Nothing here defaults to, or silently falls
-back to, an Algenta-hosted cloud endpoint. Where you run the engine — your laptop,
-your datacenter, your cloud account — is entirely your choice; these packages only
-require that it is reachable over the network.
+back to, an Algenta-hosted cloud endpoint.
+
+This is a deliberate difference from the
+[`algenta-sdk`](https://github.com/thyn-ai/algenta-sdk) client these packages build
+on, whose `AlgentaClient` defaults to the hosted `https://api.algenta.ai` for a
+zero-config quickstart. These integrations never use that default: the endpoint
+resolves from `base_url=` / `ALGENTA_BASE_URL` (with a localhost fallback for a
+local engine), full stop. Where you run the engine — your laptop, your datacenter,
+your cloud account — is entirely your choice; these packages only require that it
+is reachable over the network.
 
 ## Powered by Mojo
 
