@@ -17,6 +17,16 @@ Each package in this repository is versioned and released independently
 | Latest release of each package / `main` | :white_check_mark: |
 | Older releases | Best-effort; please upgrade to the latest |
 
+## Release integrity
+
+Every GitHub Release cut since September 2026 carries the published
+artifacts, a keyless Sigstore signature bundle per asset and SLSA build
+provenance, all produced by the release workflow itself. How to check them
+with `cosign` and `slsa-verifier` is in
+[CONTRIBUTING.md → Verifying a release](./CONTRIBUTING.md#verifying-a-release).
+An asset that fails verification is a security report — please send it
+through the channels below.
+
 ## Reporting a vulnerability
 
 **Please do not open a public issue, pull request, or discussion for
