@@ -59,6 +59,9 @@ jobs:
 
   python:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write  # Codecov OIDC upload
     timeout-minutes: 20
     env:
       # Pin uv to the interpreter actions/setup-python just provisioned. Without this uv
@@ -73,7 +76,9 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install uv
-        run: python -m pip install --quiet --disable-pip-version-check uv
+        # Hash-pinned: pip refuses any wheel/sdist whose hash is not in
+        # .github/requirements/uv.txt (see the .in file there for how to bump).
+        run: python -m pip install --quiet --disable-pip-version-check --require-hashes -r .github/requirements/uv.txt
       # --all-extras is required, not cosmetic: pytest/pytest-asyncio/pytest-cov/anyio only
       # live under each package's `dev` optional-dependencies extra (never a hard dependency
       # of the published package). Without it, `.venv/bin/pytest` never gets created, so
@@ -169,12 +174,16 @@ jobs:
       - name: Upload Python coverage to Codecov
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
+          use_oidc: true  # GitHub OIDC instead of a Codecov token (the job grants id-token write)
           directory: python
           flags: python
           fail_ci_if_error: false
 
   typescript:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write  # Codecov OIDC upload
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -221,6 +230,7 @@ jobs:
       - name: Upload TypeScript coverage to Codecov
         uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
+          use_oidc: true  # GitHub OIDC instead of a Codecov token (the job grants id-token write)
           directory: typescript
           flags: typescript
           fail_ci_if_error: false
@@ -240,7 +250,9 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install ruff (same release as the pre-commit hook)
-        run: python -m pip install --quiet --disable-pip-version-check "ruff==0.12.0"
+        # The release pin itself lives in .github/requirements/ruff.in (hash-pinned in ruff.txt);
+        # it and .pre-commit-config.yaml's ruff-pre-commit rev move together.
+        run: python -m pip install --quiet --disable-pip-version-check --require-hashes -r .github/requirements/ruff.txt
       - name: ruff check
         run: ruff check --output-format github
 
