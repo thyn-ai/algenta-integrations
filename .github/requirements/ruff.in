@@ -1,0 +1,5 @@
+# `ruff` for ci.yml's ruff job. MUST stay the same release as .pre-commit-config.yaml's
+# ruff-pre-commit `rev`: CI and a developer's laptop have to agree byte-for-byte on what is clean
+# (see the ruff job's comment in ci.yml). Bump both together, then regenerate ruff.txt:
+#   cd .github/requirements && uv pip compile --generate-hashes --python-version 3.12 ruff.in -o ruff.txt
+ruff==0.12.0

@@ -319,6 +319,30 @@ over HTTP in every sibling package's design, so pinning `mcp<2.0.0` is the reali
 loosen this pin deliberately -- don't just widen it blindly, since the whole point of this section
 is that the wider range is silently broken today.
 
+## `llama-index-workflows` 2.24.0 -- a live upstream incompatibility this package does NOT pin
+
+A fresh, unpinned `pip install llamaindex-algenta` today resolves `llama-index-workflows==2.24.0`
+(llama-index-core 0.14.24 declares no ceiling on it). With that pair, every `FunctionAgent.run()` --
+the Quick start above included -- fails before your first tool call:
+
+```
+TypeError: unhashable type: 'FunctionAgent'
+```
+
+raised from the serializer cache in `workflows/runtime/types/plugin.py` (a `WeakKeyDictionary`
+keyed on the workflow object). `llama-index-workflows==2.23.3` works; that is what this monorepo's
+`uv.lock` resolves and what CI runs.
+
+This package deliberately does **not** add `llama-index-workflows<2.24` to its own dependencies,
+even though that would make the fresh install work: it never imports `llama-index-workflows`, and a
+ceiling on a dependency it does not own would propagate to every consumer and block resolution the
+day llama-index-core itself moves to 2.24+. The incompatibility is llama-index-core's to fix. Until a
+llama-index-core release declares compatibility, install the working pair yourself:
+
+```bash
+pip install "llamaindex-algenta" "llama-index-workflows<2.24"
+```
+
 ## Why `llama-index-tools-mcp`, not the `llama-index` metapackage
 
 Verified directly from `llama-index-tools-mcp`'s installed `.dist-info/METADATA`: its own
