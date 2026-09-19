@@ -81,13 +81,15 @@ _HOP_BY_HOP_REQUEST_HEADERS = frozenset(
         "proxy-authorization",
     }
 )
-#: Same set, plus `content-encoding`: httpx's `aiter_raw()` (used below) replays the upstream's
-#: response bytes exactly as received on the wire, but `httpx.AsyncClient` still transparently
-#: decompresses gzip/br *unless* told not to -- forwarding a stale `content-encoding` label next
-#: to already-decoded bytes would lie about the body's real encoding. This proxy asks httpx not
-#: to auto-decompress at all (see `_build_http_client`), so this exclusion is defensive, not
-#: currently load-bearing -- kept in case that changes.
-_HOP_BY_HOP_RESPONSE_HEADERS = _HOP_BY_HOP_REQUEST_HEADERS | frozenset({"content-encoding"})
+#: Same set for the response direction. `content-encoding` is deliberately NOT in it: `_proxy`
+#: relays the body with httpx's `aiter_raw()`, which yields the upstream's bytes exactly as they
+#: arrived on the wire -- httpx only decodes gzip/deflate/br/zstd in `aiter_bytes()`/`aiter_text()`,
+#: never here -- so the upstream's own `content-encoding` is the one true description of the bytes
+#: the caller receives. Stripping it (as this proxy did until 0.1.4) would hand a caller compressed
+#: bytes with no label to decode them by the first time the upstream chose to compress.
+#: `content-length` stays excluded: the body is re-chunked for the new hop, and the label alone,
+#: not a byte count, is what describes the bytes.
+_HOP_BY_HOP_RESPONSE_HEADERS = _HOP_BY_HOP_REQUEST_HEADERS
 
 
 def _filtered_headers(headers, drop: frozenset) -> dict:
@@ -95,12 +97,17 @@ def _filtered_headers(headers, drop: frozenset) -> dict:
 
 
 def _build_http_client(timeout_seconds: float) -> httpx.AsyncClient:
-    # decode=False (via the transport-level `Accept-Encoding` passthrough): this proxy never
-    # wants to transparently decompress a response only to lose the ability to state its real
-    # `content-encoding` honestly -- see `_HOP_BY_HOP_RESPONSE_HEADERS` above. In practice
-    # Algenta's `/mcp` responses are JSON or `text/event-stream`, neither of which this codebase
-    # has ever observed compressed, but the byte-transparent contract should hold regardless.
-    return httpx.AsyncClient(timeout=timeout_seconds)
+    # `accept-encoding: identity` is this client's DEFAULT for the upstream hop, not a fixed value:
+    # httpx layers each request's own headers over the client's (`_merge_headers`), and a caller's
+    # `accept-encoding` is an end-to-end header `_proxy` relays untouched, so whenever the caller
+    # sent one it replaces this default and the engine negotiates against exactly what the caller
+    # offered. Without it httpx would send its own `gzip, deflate, zstd` whenever the caller sent
+    # nothing, negotiating compression on behalf of a caller that never asked for any -- and since
+    # this proxy never decodes (see `_HOP_BY_HOP_RESPONSE_HEADERS`), that caller would receive the
+    # compressed bytes. In practice Algenta's `/mcp` responses are JSON or `text/event-stream`,
+    # neither of which this codebase has ever observed compressed, but the byte-transparent
+    # contract has to hold regardless.
+    return httpx.AsyncClient(timeout=timeout_seconds, headers={"accept-encoding": "identity"})
 
 
 fastapi_app = FastAPI(title="algenta-mcp-ray-proxy", docs_url=None, redoc_url=None, openapi_url=None)
@@ -192,6 +199,9 @@ class AlgentaMCPProxy:
         full request/response body are all forwarded byte-for-byte in both directions, streamed
         rather than buffered -- load-bearing for `GET /mcp`'s optional `text/event-stream`
         response and for any `POST /mcp` response the upstream chooses to answer the same way.
+        Byte-for-byte includes a compressed body: it is relayed undecoded, under the upstream's
+        own `content-encoding`, and only ever compressed if the caller's `accept-encoding` invited
+        it (see `_build_http_client`).
         This handler never branches on JSON-RPC method names, MCP tool names, or response
         content -- see the module docstring for why that's deliberate, not an omission.
         """

@@ -165,8 +165,9 @@ suite. Two things are still honestly pending:
 
 ## Contributing, governance, and support
 
-- [Contributing](./CONTRIBUTING.md) — development setup, testing, and the release
-  process. Contributions are inbound=outbound under GitHub's Terms of Service §D.6;
+- [Contributing](./CONTRIBUTING.md) — development setup, testing, the release
+  process, and [how to verify a release](./CONTRIBUTING.md#verifying-a-release).
+  Contributions are inbound=outbound under GitHub's Terms of Service §D.6;
   there is no CLA.
 - [Governance](./GOVERNANCE.md) — how decisions about this repository get made.
 - [Support](./SUPPORT.md) — where to ask questions and what is covered.

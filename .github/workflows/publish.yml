@@ -1,4 +1,5 @@
-# Publish a released package to PyPI or npm.
+# Publish a released package to PyPI or npm, and attach the signed, attested artifacts to its
+# GitHub Release.
 #
 # WHAT THIS FIXES. auto-release.yml versions, tags and creates GitHub Releases -- and stops there.
 # Seven packages carried GitHub Releases (0.1.1 / 0.2.1) while every one of them 404'd on PyPI and
@@ -32,6 +33,19 @@
 #
 # scripts/resolve_release_target.py owns the tag -> package mapping and REFUSES a tag whose version
 # no longer matches the package on that commit; this workflow only wires it up.
+#
+# RELEASE ASSETS, SIGNATURES AND PROVENANCE. A GitHub Release used to carry nothing but notes, and
+# OpenSSF Scorecard's Signed-Releases check scored this repository "no releases found" for exactly
+# that reason. Every Release this workflow handles now carries the bytes the registry received
+# (wheel + sdist, or the npm tarball), one keyless Sigstore signature bundle per asset
+# (`<asset>.sigstore.json`, signed by this workflow's own OIDC identity) and SLSA build provenance
+# (`<package>-<version>.intoto.jsonl`, from the SLSA generic generator). The `sign` and
+# `provenance` jobs are the ONLY ones granted `id-token: write` or `contents: write`; the registry
+# jobs keep `contents: read` and hold nothing but their registry token. Both run on every build --
+# dry runs and gated-off runs included -- so the signing path is exercised as often as the build
+# path (see the paragraph above on jobs that rot quietly); only the Release upload sits behind the
+# gate. How to verify a release is documented in CONTRIBUTING.md ("Releases"). Releases cut before
+# this landed carry no assets and are not retro-signed.
 #
 # PYTHON FROM THE MARKETPLACE, NOT THE REPO. Every job below checks out the TAG being published
 # as the build source of truth: `resolve_release_target.py`'s version check must run against
@@ -70,6 +84,11 @@ on:
         description: "Release tag to publish (e.g. langchain-algenta-v0.1.1). Reconciles a release whose publish was skipped or failed."
         required: true
         type: string
+      dry_run:
+        description: "Rehearse without publishing: build, sign and attest the tag, but skip the registry and Release uploads. Everything lands in the run's workflow artifacts."
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -117,8 +136,22 @@ jobs:
       - name: Is publishing switched on
         id: gate
         env:
-          ENABLED: ${{ vars.PUBLISH_TO_REGISTRIES == 'true' }}
+          # A dry run forces publishing off for this one run, whatever the variable says.
+          ENABLED: ${{ vars.PUBLISH_TO_REGISTRIES == 'true' && inputs.dry_run != true }}
         run: echo "enabled=$ENABLED" >> "$GITHUB_OUTPUT"
+
+      - name: Explain the dry run
+        if: inputs.dry_run == true
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          {
+            echo "### Dry run for \`$RELEASE_TAG\` -- nothing is published"
+            echo
+            echo "No registry upload and no Release upload. The build, its Sigstore bundles and"
+            echo "its SLSA provenance are attached to this run as workflow artifacts"
+            echo "(\`release-assets\`, \`release-signatures\`, and the generator's own)."
+          } >> "$GITHUB_STEP_SUMMARY"
 
   pypi:
     name: PyPI
@@ -128,6 +161,9 @@ jobs:
     environment: pypi
     permissions:
       contents: read
+    outputs:
+      # base64(sha256sum) of the release assets, consumed by `provenance`.
+      hashes: ${{ steps.hash.outputs.hashes }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -168,8 +204,29 @@ jobs:
             esac
           done
 
+      # Subjects for the SLSA provenance: sha256sum of exactly the files the Release will carry,
+      # by asset (base) name so the provenance subjects match the asset names, base64-encoded
+      # as the generator expects. Recorded BEFORE the registry upload: the bytes are the same
+      # either way, and a failed upload still leaves an inspectable build behind.
+      - name: Record the release-asset digests (SLSA subjects)
+        id: hash
+        working-directory: ${{ needs.resolve.outputs.directory }}/dist
+        run: |
+          set -euo pipefail
+          sha256sum -- * | tee "$RUNNER_TEMP/subjects.sha256sum"
+          hashes=$(base64 -w0 "$RUNNER_TEMP/subjects.sha256sum")
+          echo "hashes=$hashes" >> "$GITHUB_OUTPUT"
+
+      # Handed to the `sign` job below, which signs and attaches these exact bytes without
+      # rebuilding anything.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-assets
+          path: ${{ needs.resolve.outputs.directory }}/dist/
+          if-no-files-found: error
+
       - name: Explain the skip (publishing not switched on)
-        if: needs.resolve.outputs.publishing_enabled != 'true'
+        if: needs.resolve.outputs.publishing_enabled != 'true' && inputs.dry_run != true
         env:
           PACKAGE_NAME: ${{ needs.resolve.outputs.name }}
           VERSION: ${{ needs.resolve.outputs.version }}
@@ -203,6 +260,9 @@ jobs:
     environment: npm
     permissions:
       contents: read
+    outputs:
+      # base64(sha256sum) of the release asset, consumed by `provenance`.
+      hashes: ${{ steps.hash.outputs.hashes }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -237,21 +297,42 @@ jobs:
           pnpm install --frozen-lockfile
           pnpm turbo run build
 
-      - name: Check the tarball before offering it to a registry
+      - name: Pack the tarball and check it before offering it to a registry
         working-directory: ${{ needs.resolve.outputs.directory }}
         env:
           VERSION: ${{ needs.resolve.outputs.version }}
         run: |
           set -euo pipefail
-          npm pack --dry-run
+          # A real pack, not --dry-run: this tarball is the Release asset AND the file `npm
+          # publish` below uploads, so the registry, the Release, the signature and the
+          # provenance all refer to one set of bytes -- no second pack whose output could drift.
+          mkdir -p "$RUNNER_TEMP/release-assets"
+          npm pack --pack-destination "$RUNNER_TEMP/release-assets"
           packed_version=$(node -p "require('./package.json').version")
           if [ "$packed_version" != "$VERSION" ]; then
             echo "::error::package.json is at $packed_version but the tag says $VERSION"
             exit 1
           fi
 
+      # Same contract as the PyPI job's step of the same name: subjects for the SLSA provenance,
+      # recorded before the registry upload.
+      - name: Record the release-asset digests (SLSA subjects)
+        id: hash
+        working-directory: ${{ runner.temp }}/release-assets
+        run: |
+          set -euo pipefail
+          sha256sum -- * | tee "$RUNNER_TEMP/subjects.sha256sum"
+          hashes=$(base64 -w0 "$RUNNER_TEMP/subjects.sha256sum")
+          echo "hashes=$hashes" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-assets
+          path: ${{ runner.temp }}/release-assets/
+          if-no-files-found: error
+
       - name: Explain the skip (publishing not switched on)
-        if: needs.resolve.outputs.publishing_enabled != 'true'
+        if: needs.resolve.outputs.publishing_enabled != 'true' && inputs.dry_run != true
         env:
           PACKAGE_NAME: ${{ needs.resolve.outputs.name }}
           VERSION: ${{ needs.resolve.outputs.version }}
@@ -273,15 +354,116 @@ jobs:
 
       - name: Publish to npm
         if: needs.resolve.outputs.publishing_enabled == 'true'
-        working-directory: ${{ needs.resolve.outputs.directory }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          # n8n-nodes-algenta's package.json runs `n8n-node prerelease` as prepublishOnly --
-          # @n8n/node-cli's own prerelease command (dist/commands/prerelease.js) exits 1 with
-          # "Run `npm run release` to publish the package" unless RELEASE_MODE is set. This is
-          # the tool's own documented guard against an accidental bare `npm publish`, not
-          # something to route around -- our own resolve/version-check steps upstream already
-          # own the "is this a legitimate release" decision, so satisfying this flag here is
-          # correct, not a bypass. A no-op for algenta-tools (no such script).
-          RELEASE_MODE: "true"
-        run: npm publish --access public
+        # The TARBALL packed above, not the package directory: the registry receives the very
+        # bytes the Release carries, the signature covers and the provenance attests. A
+        # directory publish would pack a second time, and nothing but npm's own determinism
+        # would tie that second tarball to the first.
+        #
+        # npm runs prepublishOnly / publish / postpublish only for directory publishes (its
+        # lib/commands/publish.js: "only run scripts for directory type publishes"), so
+        # n8n-nodes-algenta's `n8n-node prerelease` prepublishOnly hook does not run here. That
+        # hook is @n8n/node-cli's guard against an accidental bare `npm publish` -- it exits 1
+        # unless RELEASE_MODE is set and does nothing else (dist/commands/prerelease.js). The
+        # resolve/version-check steps upstream are what make this a legitimate release, which is
+        # exactly the property the guard exists to ensure. Verified locally on npm 11: a
+        # tarball `publish --dry-run` succeeds without RELEASE_MODE and reports the same
+        # integrity as `npm pack --json`, where a directory `publish --dry-run` runs the hook and
+        # exits 1.
+        run: |
+          set -euo pipefail
+          # Exactly one tarball, checked explicitly: an unmatched glob would hand npm the literal
+          # pattern, and two matches would hand it two positional arguments, which `npm publish
+          # <package-spec>` does not define. Neither can happen after the pack step above
+          # succeeded, and this is what makes that a hard guarantee rather than an inference.
+          tarballs=("$RUNNER_TEMP"/release-assets/*.tgz)
+          if [ "${#tarballs[@]}" -ne 1 ] || [ ! -f "${tarballs[0]}" ]; then
+            echo "::error::expected exactly one packed tarball under $RUNNER_TEMP/release-assets, found: ${tarballs[*]}"
+            exit 1
+          fi
+          npm publish "${tarballs[0]}" --access public
+
+  # The two jobs below run once the registry job for this tag has succeeded -- `pypi` or `npm`,
+  # whichever the tag resolved to; the other is skipped, hence the explicit result check instead
+  # of a bare `needs` (a bare `needs` on a skipped job skips the dependant too). They sign and
+  # attest the bytes the registry received -- the `release-assets` artifact -- with nothing
+  # rebuilt or checked out, and they are the only jobs in this file holding `id-token: write` or
+  # `contents: write`.
+  sign:
+    name: Sign the release assets (Sigstore keyless)
+    needs: [resolve, pypi, npm]
+    if: ${{ !cancelled() && (needs.pypi.result == 'success' || needs.npm.result == 'success') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # upload the assets and their .sigstore.json bundles to the Release
+      id-token: write # Sigstore keyless signing with this job's OIDC identity
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-assets
+          path: release-assets
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - uses: sigstore/gh-action-sigstore-python@790bc6befb9d733738f18d8f895854b453640ec9 # v3.5.0
+        with:
+          inputs: release-assets/*
+          # Verify each bundle right after signing, against the identity the certificate must
+          # carry: this workflow file at the run's ref -- the tag on a `release` event, the
+          # dispatched branch on a workflow_dispatch. That is also the identity consumers verify
+          # (CONTRIBUTING.md, "Verifying a release").
+          verify: true
+          verify-cert-identity: ${{ github.server_url }}/${{ github.repository }}/.github/workflows/publish.yml@${{ github.ref }}
+          verify-oidc-issuer: https://token.actions.githubusercontent.com
+          # The action's own Release upload fires on every `release` event, gate or no gate, and
+          # never on a dispatch. The step below uploads instead: same gate as the registry
+          # upload, both trigger paths.
+          release-signing-artifacts: false
+
+      # Kept as a workflow artifact on every run, so a dry run or a gated-off run still leaves
+      # the bundles inspectable.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-signatures
+          path: release-assets/*.sigstore.json
+          if-no-files-found: error
+
+      - name: Attach the assets and their signatures to the GitHub Release
+        if: needs.resolve.outputs.publishing_enabled == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        # No checkout in this job, so the repository is named explicitly. --clobber keeps a
+        # replay of the same tag idempotent: the assets are replaced instead of the upload
+        # failing on "asset already exists".
+        run: gh release upload "$RELEASE_TAG" release-assets/* --clobber --repo "$GITHUB_REPOSITORY"
+
+  provenance:
+    name: SLSA provenance (generic generator)
+    needs: [resolve, pypi, npm]
+    if: ${{ !cancelled() && (needs.pypi.result == 'success' || needs.npm.result == 'success') }}
+    permissions:
+      actions: read # the generator reads this run's workflow metadata
+      id-token: write # keyless signing of the provenance
+      contents: write # upload the .intoto.jsonl to the Release
+    # Referenced by TAG -- deliberately the one exception to this repo's SHA-pinning. The
+    # generator downloads its builder binary from the release named by the ref it was called
+    # at, and slsa-verifier trusts the generator only at a `vX.Y.Z` tag (its README,
+    # "Referencing SLSA builders and generators"; slsa-framework/slsa-verifier#12). A SHA here
+    # fails the job or yields provenance no verifier accepts. thyn-ai/algenta-sdk's release.yml
+    # and ossf/scorecard's own release do the same. v2.1.0 = f7dd8c54c2067bafc12ca7a55595d5ee9b75204a.
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.1.0
+    with:
+      # Exactly one of the two registry jobs ran; a skipped job's outputs are empty.
+      base64-subjects: ${{ needs.pypi.outputs.hashes || needs.npm.outputs.hashes }}
+      # One self-describing file per Release instead of the generator's default
+      # (`multiple.intoto.jsonl` for a wheel + sdist, `<tarball>.intoto.jsonl` for npm), so the
+      # provenance of several packages can sit in one directory.
+      provenance-name: ${{ needs.resolve.outputs.name }}-${{ needs.resolve.outputs.version }}.intoto.jsonl
+      # Same gate as the registry and Release uploads above. On a `release` event the run sits
+      # on the tag ref, on a dispatch it sits on a branch -- naming the tag explicitly covers both.
+      upload-assets: ${{ needs.resolve.outputs.publishing_enabled == 'true' }}
+      upload-tag-name: ${{ github.event.release.tag_name || inputs.tag }}
