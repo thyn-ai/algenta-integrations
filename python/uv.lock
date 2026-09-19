@@ -2928,7 +2928,6 @@ source = { editable = "llamaindex-algenta" }
 dependencies = [
     { name = "llama-index-core" },
     { name = "llama-index-tools-mcp" },
-    { name = "llama-index-workflows" },
     { name = "mcp" },
 ]
 
@@ -2945,7 +2944,6 @@ requires-dist = [
     { name = "fastmcp", marker = "extra == 'dev'", specifier = ">=3,<4" },
     { name = "llama-index-core", specifier = ">=0.13.0,<0.15" },
     { name = "llama-index-tools-mcp", specifier = ">=0.4.0,<0.6" },
-    { name = "llama-index-workflows", specifier = ">=2.23.3,<2.24" },
     { name = "mcp", specifier = "<2.0.0" },
     { name = "pytest", marker = "extra == 'dev'" },
     { name = "pytest-asyncio", marker = "extra == 'dev'" },

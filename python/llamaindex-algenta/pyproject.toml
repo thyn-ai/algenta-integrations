@@ -45,15 +45,9 @@ classifiers = [
 # stdio transport also works around this on 0.5.0/mcp==2.0.0 (splat-unpacked, not fixed-arity),
 # but self-hosted Algenta engines are reached over HTTP in every sibling package's design, so
 # pinning `mcp<2.0.0` is the realistic fix here, not "use stdio instead."
-# `llama-index-workflows` is llama-index-core's own dependency, constrained here because a fresh,
-# unpinned install today resolves 2.24.0, and 2.24.0 breaks `FunctionAgent.run()` on
-# llama-index-core 0.14.24 (`TypeError: unhashable type: 'FunctionAgent'` from the serializer
-# cache in workflows/runtime/types/plugin.py). 2.23.3 -- what python/uv.lock pins and CI runs --
-# works. Lift the ceiling once a llama-index-core release declares compatibility with 2.24+.
 dependencies = [
     "llama-index-core>=0.13.0,<0.15",
     "llama-index-tools-mcp>=0.4.0,<0.6",
-    "llama-index-workflows>=2.23.3,<2.24",
     "mcp<2.0.0",
 ]
 
