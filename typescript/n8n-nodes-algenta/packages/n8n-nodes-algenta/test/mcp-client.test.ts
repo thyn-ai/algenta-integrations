@@ -83,3 +83,37 @@ describe('connectAlgentaMcp', () => {
 		}
 	});
 });
+
+describe('connectAlgentaMcp: result shapes without structuredContent', () => {
+	// Every contract tool answers with `structuredContent`; a real server's wider registry need not.
+	// These three stub tools exist to exercise the client's documented fallbacks over the real wire.
+	it('parses JSON carried only in a text block when the tool declares no structuredContent', async () => {
+		handle = await startStubAlgentaServer();
+		const connection = await connectAlgentaMcp(handle.baseUrl.replace(/\/mcp$/, ''), '');
+		try {
+			expect(await connection.callTool('admin_only_text_json_tool', {})).toEqual({ ok: true, source: 'text-block' });
+		} finally {
+			await connection.close();
+		}
+	});
+
+	it('returns a non-JSON text block as the raw string instead of failing to parse it', async () => {
+		handle = await startStubAlgentaServer();
+		const connection = await connectAlgentaMcp(handle.baseUrl.replace(/\/mcp$/, ''), '');
+		try {
+			expect(await connection.callTool('admin_only_plain_text_tool', {})).toBe('pong');
+		} finally {
+			await connection.close();
+		}
+	});
+
+	it('returns null for a tool result with no content blocks at all', async () => {
+		handle = await startStubAlgentaServer();
+		const connection = await connectAlgentaMcp(handle.baseUrl.replace(/\/mcp$/, ''), '');
+		try {
+			expect(await connection.callTool('admin_only_empty_result_tool', {})).toBeNull();
+		} finally {
+			await connection.close();
+		}
+	});
+});
