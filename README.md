@@ -9,6 +9,7 @@
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/thyn-ai/algenta-integrations/badge)](https://scorecard.dev/viewer/?uri=github.com/thyn-ai/algenta-integrations)
 [![codecov](https://codecov.io/gh/thyn-ai/algenta-integrations/graph/badge.svg)](https://codecov.io/gh/thyn-ai/algenta-integrations)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](./LICENSE)
+[![All Contributors](https://img.shields.io/badge/all_contributors-0-orange.svg)](#contributors)
 
 [Docs](https://docs.algenta.ai) · [Contributing](./CONTRIBUTING.md) · [Support](./SUPPORT.md) · [Security](./SECURITY.md) · [Tool-profile contract](./contracts/integration-tool-contract.json)
 
@@ -171,6 +172,21 @@ suite. Two things are still honestly pending:
 
 - [Discord](https://discord.gg/w8NDsph9an)
 - community@algenta.ai
+
+## Contributors
+
+Thanks to everyone who contributes to this project — we follow the
+[all-contributors](https://allcontributors.org) specification and recognize
+contributions of [every kind](https://allcontributors.org/docs/en/emoji-key),
+not just code.
+
+<!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
+<!-- prettier-ignore-start -->
+<!-- markdownlint-disable -->
+
+<!-- markdownlint-restore -->
+<!-- prettier-ignore-end -->
+<!-- ALL-CONTRIBUTORS-LIST:END -->
 
 ## License
 
