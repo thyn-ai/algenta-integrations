@@ -41,7 +41,7 @@ package ships:
   cloud service -- see [Self-hosted-first](#self-hosted-first) below. If you don't have an engine
   running yet, skip to [Try it locally](#try-it-locally-no-live-engine-required): it stands up a
   real stub engine for you, with nothing external to configure.
-- **Python 3.10 or newer.**
+- **Python 3.12 or newer.**
 - **No Algenta API key or credential is required by this package itself.** `AlgentaMCPProxy`
   forwards whatever headers a caller sends it, unchanged, straight to your upstream URL -- if your
   engine requires authentication, that's configured between the caller and the engine (or its

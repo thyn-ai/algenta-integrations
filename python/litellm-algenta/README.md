@@ -40,7 +40,7 @@ What this package ships instead:
 - **That engine's MCP endpoint URL and bearer credential** (or OAuth2 client credentials, if
   your engine uses those instead) -- set as environment variables, never as literal values in a
   config file (see [Self-hosted-first](#self-hosted-first) below).
-- **Python 3.10+.**
+- **Python 3.12+.**
 - **`litellm[proxy]`, installed separately, only once you're ready to actually run the gateway**
   (see [Install](#install) below) -- generating and linting a config needs nothing but this
   package itself.

@@ -152,7 +152,7 @@ class LiteLLMProxyFixture:
             self._proc.terminate()
             try:
                 await asyncio.wait_for(self._proc.wait(), timeout=10.0)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 self._proc.kill()
                 await self._proc.wait()
         if self._reader_task is not None:

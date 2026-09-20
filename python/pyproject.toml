@@ -2,7 +2,7 @@
 name = "algenta-integrations-workspace"
 version = "0.0.0"
 description = "uv workspace root for Algenta's framework-integration packages (pydantic-ai, LangChain, LiteLLM). Not published — see each member package for its own pyproject.toml."
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 # This root package itself has no code and is never published; each real
 # package under this workspace declares its own dependencies independently.
 dependencies = []

@@ -53,7 +53,7 @@ function main(): number {
   }
   console.error(
     "check-parity.ts: no Python interpreter found on PATH (tried python3, python). " +
-      "Install Python 3.10+ or run `python3 scripts/check-parity.py` directly.",
+      "Install Python 3.12+ or run `python3 scripts/check-parity.py` directly.",
   );
   return 2;
 }

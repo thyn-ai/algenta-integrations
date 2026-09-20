@@ -239,7 +239,7 @@ class StubServerFixture:
             self._server.should_exit = True
         try:
             await asyncio.wait_for(self._task, timeout=5.0)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             self._task.cancel()
             try:
                 await self._task

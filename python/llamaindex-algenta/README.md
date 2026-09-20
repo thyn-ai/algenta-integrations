@@ -31,7 +31,7 @@ real contract.
 
 Before running the example below, you need:
 
-- **Python 3.10+**.
+- **Python 3.12+**.
 - **A running self-hosted Algenta engine**, reachable over MCP. This package is self-hosted only --
   there is no Algenta-operated cloud API to fall back to. Point this package at your engine with
   the `ALGENTA_BASE_URL` environment variable, or pass `base_url=` directly; it defaults to

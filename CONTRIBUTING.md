@@ -32,7 +32,7 @@ test suites. For per-package status, the roadmap, and exactly what
 
 ## Development setup
 
-Prerequisites: Python ≥ 3.10 with [uv](https://docs.astral.sh/uv/), and
+Prerequisites: Python ≥ 3.12 with [uv](https://docs.astral.sh/uv/), and
 Node.js ≥ 18 (CI runs Node 20) with pnpm 9.
 
 ### Python
