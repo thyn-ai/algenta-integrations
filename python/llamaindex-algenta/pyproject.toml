@@ -46,7 +46,7 @@ classifiers = [
 # but self-hosted Algenta engines are reached over HTTP in every sibling package's design, so
 # pinning `mcp<2.0.0` is the realistic fix here, not "use stdio instead."
 dependencies = [
-    "llama-index-core>=0.13.0,<0.15",
+    "llama-index-core>=0.14.24,<0.15",
     "llama-index-tools-mcp>=0.4.0,<0.6",
     "mcp<2.0.0",
 ]
