@@ -81,7 +81,7 @@ Repository = "https://github.com/thyn-ai/algenta-integrations"
 # over a real local HTTP socket. Not needed by this package's own runtime code, which only ever
 # acts as an MCP *client* (`mcp` itself is a main dependency, see above, precisely because the
 # client role is not test-only).
-dev = ["pytest", "pytest-asyncio", "pytest-cov", "uvicorn>=0.34"]
+dev = ["pytest", "pytest-asyncio", "pytest-cov", "uvicorn>=0.52.4"]
 
 [build-system]
 requires = ["setuptools>=68.0", "wheel"]
