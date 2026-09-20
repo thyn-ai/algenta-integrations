@@ -24,8 +24,10 @@ classifiers = [
 # it anyway would repeat a leftover-placeholder-dependency mistake already caught and fixed
 # elsewhere in this repository; see this package's own README for the full note.
 #
-# `agent-framework-core` (real PyPI package, 1.15.0 confirmed installed and exercised while
-# building this package), not the `agent-framework` umbrella package -- verified directly against
+# `agent-framework-core` (real PyPI package; 1.15.0 confirmed installed and exercised while
+# building this package, and the floor raised to 1.18.0 on 2026-09-20 with 1.18.0 and 1.19.0 both
+# re-verified against this package's full test suite), not the `agent-framework` umbrella package
+# -- verified directly against
 # PyPI metadata that `agent-framework==1.15.0`'s *only* dependency is `agent-framework-core[all]`,
 # whose `[all]` extra unconditionally drags in the Foundry-hosting bridge
 # (`agent-framework-foundry-hosting`) and pre-release `azure-ai-agentserver-*` packages this
