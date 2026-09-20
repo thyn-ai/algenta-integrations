@@ -3,7 +3,7 @@ name = "ray-serve-algenta"
 version = "0.1.4"
 description = "Deploy Algenta's stateless /mcp surface behind Ray Serve: a byte-transparent reverse-proxy Deployment, a KubeRay RayService manifest, and a real multi-replica conformance test suite"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 keywords = ["algenta", "ray", "ray-serve", "kuberay", "mcp", "agent", "decision", "agent-governance", "llm", "guardrails", "audit-trail", "receipts"]
@@ -11,8 +11,6 @@ classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Typing :: Typed",

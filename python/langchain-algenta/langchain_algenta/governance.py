@@ -20,15 +20,13 @@ the `tools=` path's raw result is whatever plain value the wrapped tool's own co
 
 from __future__ import annotations
 
-from typing import Any, TypeVar
+from typing import Any
 
 from .exceptions import AlgentaExecutionBlocked
 from .receipts import ExecutionDenial, parse_denial
 
-T = TypeVar("T")
 
-
-def resolve_governed_call(
+def resolve_governed_call[T](
     tool_name: str,
     raw_result: T,
     payload: Any,

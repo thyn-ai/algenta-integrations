@@ -3,7 +3,7 @@ name = "litellm-algenta"
 version = "0.1.3"
 description = "LiteLLM MCP Gateway config generation for a self-hosted Algenta engine: profile-aware allowed_tools/allowed_params templates, a config linter, and a real-proxy conformance test suite"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 keywords = ["algenta", "litellm", "mcp", "gateway", "agent", "tools", "decision", "agent-governance", "llm", "guardrails", "audit-trail", "receipts"]
@@ -11,8 +11,6 @@ classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Typing :: Typed",

@@ -3,7 +3,7 @@ name = "vllm-algenta"
 version = "0.1.2"
 description = "Point vLLM (or any OpenAI-client-based consumer) at Algenta's own OpenAI-compatible /v1/chat/completions and /v1/responses surface -- a thin base-url/api-key helper plus a real, honest capability-fidelity conformance suite"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
 keywords = ["algenta", "vllm", "openai", "openai-compatible", "agent", "decision", "mcp", "agent-governance", "llm", "guardrails", "audit-trail", "receipts"]
@@ -11,8 +11,6 @@ classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Typing :: Typed",

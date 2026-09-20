@@ -38,7 +38,7 @@ Before you install anything, you need:
   service to point at instead -- see [Self-hosted-first](#self-hosted-first) below. No engine
   running yet? Skip to [Try it locally](#try-it-locally-no-live-engine-required) below, which
   needs nothing but this package's own test dependencies.
-- **Python 3.10 or newer.**
+- **Python 3.12 or newer.**
 - **An API key for whatever chat-completion model you drive your agent with** (e.g.
   `OPENAI_API_KEY` for the `OpenAIChatGenerator` used in [Quick start](#quick-start) below). This
   is a key for your model provider, not for Algenta -- this package and the engine it talks to
