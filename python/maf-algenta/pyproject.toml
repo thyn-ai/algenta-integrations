@@ -84,7 +84,7 @@ Repository = "https://github.com/thyn-ai/algenta-integrations"
 dev = ["pytest", "pytest-asyncio", "pytest-cov", "uvicorn>=0.52.4"]
 
 [build-system]
-requires = ["setuptools>=68.0", "wheel"]
+requires = ["setuptools>=84.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
