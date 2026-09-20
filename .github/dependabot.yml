@@ -106,6 +106,10 @@ updates:
     - version-update:semver-major
     versions:
     - ">=4.0.0"
+  - dependency-name: llama-index-tools-mcp
+    # 0.5.0+ requires mcp>=2.0.0, unsolvable with this package's mcp<2.0.0 pin until the mcp 2 migration
+    versions:
+    - ">=0.5.0"
   commit-message:
     prefix: chore(llamaindex-algenta)
 - package-ecosystem: pip
