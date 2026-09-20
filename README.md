@@ -2,7 +2,7 @@
 
 # Algenta Integrations
 
-**Official framework integrations for the [Algenta](https://algenta.ai) decision engine — governed tool profiles, typed execution receipts, and policy-gated execution for the agent frameworks you already use.**
+**Framework integrations for [Algenta](https://algenta.ai) — governed tool profiles, typed execution receipts, and policy-gated execution for the agent frameworks you already use.**
 
 [![CI](https://github.com/thyn-ai/algenta-integrations/actions/workflows/ci.yml/badge.svg)](https://github.com/thyn-ai/algenta-integrations/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/thyn-ai/algenta-integrations/actions/workflows/codeql.yml/badge.svg)](https://github.com/thyn-ai/algenta-integrations/actions/workflows/codeql.yml)
@@ -17,10 +17,11 @@
 
 ---
 
-Algenta exposes its decision engine capabilities — querying governed data, running
-simulations, planning and recording decisions, and executing them in the real world —
-as a governed tool surface over MCP. Each package in this repository maps that surface
-onto the conventions of one agent framework: four **tool profiles** (`observe`,
+Algenta is self-hosted building blocks for AI applications: 6,000+ deterministic functions
+on custom Mojo kernels behind one API, SDK and MCP surface. The engine exposes querying
+governed data, running simulations, planning and recording decisions, and executing them in
+the real world as a governed tool surface over MCP. Each package in this repository maps
+that surface onto the conventions of one agent framework: four **tool profiles** (`observe`,
 `govern`, `execute`, `full`) decide which tools a model can even see, a successful
 `execute_decision` returns a typed **execution receipt**, and a call the engine's
 policy refuses is denied **synchronously, by a named gate** — approvals are enforced
@@ -199,14 +200,14 @@ not just code.
 
 ## Related repositories
 
-Open-source repositories from the Algenta team. The Algenta engine itself is proprietary; everything listed here is Apache-2.0. Issues and discussions are welcome in whichever repository owns the code.
+Open-source tooling around Algenta, from the Algenta team. The Algenta engine itself is proprietary; everything listed here is Apache-2.0. Issues and discussions are welcome in whichever repository owns the code.
 
-- [thyn-ai/algenta-sdk](https://github.com/thyn-ai/algenta-sdk) — Python & TypeScript SDKs for the Algenta decision engine: governed tool profiles, execution receipts, approvals.
+- [thyn-ai/algenta-sdk](https://github.com/thyn-ai/algenta-sdk) — Python and TypeScript SDKs for Algenta: governed data queries, simulations, decision memory with execution receipts, agent runs with approvals.
 - [thyn-ai/algenta-integrations](https://github.com/thyn-ai/algenta-integrations) (this repository) — Framework integrations for Algenta: LangChain, LlamaIndex, pydantic-ai, MAF, Haystack, LiteLLM, Ray Serve, vLLM, Vercel AI SDK and n8n.
 - [thyn-ai/mojo-kernels](https://github.com/thyn-ai/mojo-kernels) — Clean-room Mojo kernels as drop-in accelerators for popular Python/TypeScript libraries, with bit-exact parity and pure-language fallbacks.
 - [thyn-ai/security-toolchain](https://github.com/thyn-ai/security-toolchain) — The pinned, checksum-verified security toolchain (Gitleaks, Opengrep, OSV-Scanner, Trivy config, actionlint) that every thyn-ai repository runs locally and in CI.
-- [thyn-ai/feedback](https://github.com/thyn-ai/feedback) — Public issue intake for the Algenta family of open-source projects and the Codna GitHub App.
-- [thyn-ai/codna-action](https://github.com/thyn-ai/codna-action) — Public GitHub Action wrapper for Codna.
+- [thyn-ai/feedback](https://github.com/thyn-ai/feedback) — Public issue intake for the open-source tooling around Algenta and for the Codna GitHub App.
+- [thyn-ai/codna-action](https://github.com/thyn-ai/codna-action) — GitHub Action for Codna: fix, review or secure a repository in CI through the same packaged local runtime the CLI uses.
 
 ## License
 

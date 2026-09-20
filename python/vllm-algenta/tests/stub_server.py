@@ -55,7 +55,7 @@ Literal["stop", "tool_calls", "length", "content_filter"]` below, which mirror t
   this file just received) that this stub does not yet reflect -- see this package's README for
   the honest caveat and this repository's tracked follow-up.
 
-Nothing here talks to any real Algenta Engine -- none is reachable from this test environment.
+Nothing here talks to any real Algenta engine -- none is reachable from this test environment.
 """
 
 from __future__ import annotations

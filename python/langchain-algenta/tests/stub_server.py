@@ -9,7 +9,7 @@ real `mcp` client -> real wire -> this server round trip, so a wire-shape regres
 denial not surviving the real MCP error-content round trip) would actually be caught here, unlike
 a test that mocks tool execution directly.
 
-Nothing here talks to any real Algenta Engine -- none is reachable from this test environment.
+Nothing here talks to any real Algenta engine -- none is reachable from this test environment.
 `execute_decision` below is the only tool shaped like the real, documented governed-execution
 contract (see `langchain_algenta.receipts`): it either returns a real `ExecutionReceipt`, or
 raises -- exactly like a real MCP tool wrapping a caught HTTP `409` would -- causing FastMCP to

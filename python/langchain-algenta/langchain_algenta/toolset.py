@@ -1,5 +1,5 @@
 """`create_algenta_tools` -- builds a governed-execution-aware list of LangChain `BaseTool`s from
-a self-hosted Algenta Engine's MCP tool surface.
+a self-hosted Algenta engine's MCP tool surface.
 
 Layers three things on top of the wrapped MCP tools' real calls:
 
@@ -169,7 +169,7 @@ async def create_algenta_tools(
     denial_model: type[ExecutionDenial] = ExecutionDenial,
     **connection_kwargs: Any,
 ) -> list[BaseTool]:
-    """Build a governed-execution-aware list of `BaseTool`s from a self-hosted Algenta Engine.
+    """Build a governed-execution-aware list of `BaseTool`s from a self-hosted Algenta engine.
 
     Args:
         base_url: The self-hosted Algenta MCP endpoint to connect to. Defaults to the

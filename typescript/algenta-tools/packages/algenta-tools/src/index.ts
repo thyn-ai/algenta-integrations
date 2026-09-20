@@ -1,7 +1,7 @@
 /**
  * algenta-tools -- Vercel AI SDK ("ai") tool integration for Algenta.
  *
- * `createAlgentaTools` builds an Algenta-aware `ToolSet` from a self-hosted Algenta Engine's MCP
+ * `createAlgentaTools` builds an Algenta-aware `ToolSet` from a self-hosted Algenta engine's MCP
  * tool surface: tool-profile filtering, never-model-facing field scrubbing, and `execute_decision`'s
  * typed success/denial contract -- a typed `ExecutionReceipt` on success, or a typed
  * `ExecutionBlockedError` (carrying the engine's real named gate) thrown from `execute()` when

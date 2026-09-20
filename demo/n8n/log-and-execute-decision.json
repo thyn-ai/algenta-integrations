@@ -141,7 +141,7 @@
       "points at a placeholder (https://your-automation.example.com/hooks/renewal). Replace it with",
       "your own downstream automation endpoint before running for real.",
       "",
-      "1. Create an 'Algenta API' credential pointing at your own self-hosted Algenta Engine's base",
+      "1. Create an 'Algenta API' credential pointing at your own self-hosted Algenta engine's base",
       "   URL (e.g. http://localhost:8000), with an API key if your engine requires one.",
       "2. Log Decision runs under the 'govern' profile and persists a decision record.",
       "3. Execute Decision runs under the 'execute' profile. 'Continue on Fail' is enabled on this",

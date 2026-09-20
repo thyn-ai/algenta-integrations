@@ -13,7 +13,7 @@ Runs on its own background thread with its own event loop, not on whatever threa
 (synchronous) `MCPToolset`/`Agent` calls happen to run on: `MCPToolset`'s public API is
 synchronous and blocks the calling thread on its own internal `AsyncExecutor` -- if the stub
 server were served on that same thread, it could never accept the connection, exactly like a real,
-separately-running Algenta Engine process would need its own thread/process regardless.
+separately-running Algenta engine process would need its own thread/process regardless.
 
 **Corrected against the real engine contract.** An earlier version of this stub modeled
 `execute_decision(plan_hash, idempotency_key, force)` returning a generic envelope with an async

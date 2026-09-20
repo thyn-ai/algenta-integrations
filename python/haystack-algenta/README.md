@@ -7,7 +7,7 @@
 
 Haystack tool integration for [Algenta](https://algenta.ai): `create_algenta_tools`, a
 governed-execution-aware `haystack.tools.toolset.Toolset` wrapping your own self-hosted Algenta
-Engine's MCP tool surface via Haystack's own real
+engine's MCP tool surface via Haystack's own real
 [`MCPToolset`](https://docs.haystack.deepset.ai/docs/mcptoolset) (a separate PyPI package,
 `mcp-haystack` -- see [Why `mcp-haystack`, not just `haystack-ai`](#why-mcp-haystack-not-just-haystack-ai)),
 plus `build_algenta_governance_hooks`, an `Agent` `after_tool` hook that raises a typed
@@ -34,7 +34,7 @@ plus `build_algenta_governance_hooks`, an `Agent` `after_tool` hook that raises 
 
 Before you install anything, you need:
 
-- **A running self-hosted Algenta Engine**, reachable over MCP. There is no Algenta-hosted cloud
+- **A running self-hosted Algenta engine**, reachable over MCP. There is no Algenta-hosted cloud
   service to point at instead -- see [Self-hosted-first](#self-hosted-first) below. No engine
   running yet? Skip to [Try it locally](#try-it-locally-no-live-engine-required) below, which
   needs nothing but this package's own test dependencies.
@@ -56,7 +56,7 @@ dependencies) and deliberately **not** on `algenta-sdk` -- see
 
 ## Self-hosted-first
 
-`create_algenta_tools` talks to **your own self-hosted Algenta Engine** over its MCP endpoint --
+`create_algenta_tools` talks to **your own self-hosted Algenta engine** over its MCP endpoint --
 never a hosted-by-Algenta cloud service. The endpoint resolves, in order, from:
 
 1. `base_url=` passed to the function,
@@ -66,7 +66,7 @@ never a hosted-by-Algenta cloud service. The endpoint resolves, in order, from:
 ## Quick start
 
 Requires `OPENAI_API_KEY` in your environment (see [Prerequisites](#prerequisites)) and a running
-self-hosted Algenta Engine at the `base_url` below:
+self-hosted Algenta engine at the `base_url` below:
 
 ```python
 from haystack.components.agents import Agent
@@ -102,7 +102,7 @@ you've stood up an engine or an LLM API key? This package's own test suite carri
 real, non-mocked pieces you can drive yourself:
 
 - `tests/stub_server.py` -- a real `mcp.server.fastmcp.FastMCP` server, on a real local HTTP
-  socket, implementing the same MCP tool surface a real Algenta Engine exposes.
+  socket, implementing the same MCP tool surface a real Algenta engine exposes.
 - `tests/fake_chat_generator.py` -- a real Haystack `ChatGenerator` component whose replies come
   from a scripted queue instead of a network call, so no model API key is needed either.
 

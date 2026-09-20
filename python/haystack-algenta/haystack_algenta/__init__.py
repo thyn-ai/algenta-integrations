@@ -1,6 +1,6 @@
 """Haystack tool integration for Algenta.
 
-Wraps a self-hosted Algenta Engine's MCP tool surface as a governed-execution-aware
+Wraps a self-hosted Algenta engine's MCP tool surface as a governed-execution-aware
 `haystack.tools.toolset.Toolset` (`create_algenta_tools`) -- built on Haystack's own real
 `haystack_integrations.tools.mcp.MCPToolset` -- with tool-profile filtering and two-layer
 `force`/`override_safety` scrubbing, plus an `Agent` `after_tool` hook

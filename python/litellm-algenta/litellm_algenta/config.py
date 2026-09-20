@@ -458,7 +458,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="python -m litellm_algenta.config",
         description="Generate (or idempotently merge) a LiteLLM mcp_servers: entry for a "
-        "self-hosted Algenta Engine.",
+        "self-hosted Algenta engine.",
     )
     parser.add_argument("--profile", choices=sorted(TOOL_PROFILES), default=DEFAULT_PROFILE)
     parser.add_argument("--server-name", default=DEFAULT_SERVER_NAME)

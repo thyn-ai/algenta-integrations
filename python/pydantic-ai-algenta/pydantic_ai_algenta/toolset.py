@@ -1,5 +1,5 @@
 """`AlgentaToolset` -- a governed-execution-aware `pydantic_ai.toolsets.wrapper.WrapperToolset`
-wrapping an `MCPToolset` pointed at the caller's own self-hosted Algenta Engine.
+wrapping an `MCPToolset` pointed at the caller's own self-hosted Algenta engine.
 
 `execute_decision` is fully synchronous: a call either succeeds (a typed `ExecutionReceipt`) or
 is blocked in the same call by exactly one of three named policy gates (a 409-shaped
@@ -78,7 +78,7 @@ def _strip_never_model_facing_tool(tool: ToolsetTool[AgentDepsT]) -> ToolsetTool
 
 @dataclass
 class AlgentaToolset(WrapperToolset[AgentDepsT]):
-    """Wraps an `MCPToolset` pointed at a self-hosted Algenta Engine with governed-execution awareness.
+    """Wraps an `MCPToolset` pointed at a self-hosted Algenta engine with governed-execution awareness.
 
     Constructs its own inner `MCPToolset` -- you don't build one yourself and hand it over (pass
     `base_url=`/`auth=`/`headers=`/`http_client=` to configure it instead) -- and layers three

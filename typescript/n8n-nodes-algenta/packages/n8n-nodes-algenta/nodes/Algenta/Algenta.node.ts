@@ -45,7 +45,7 @@ export class Algenta implements INodeType {
 		version: 1,
 		subtitle: '={{$parameter["operation"]}}',
 		description:
-			"Call your own self-hosted Algenta Engine's governed-execution MCP tools (query, simulate, recommend, plan, log, and execute a decision)",
+			"Call your own self-hosted Algenta engine's governed-execution MCP tools (query, simulate, recommend, plan, log, and execute a decision)",
 		defaults: { name: 'Algenta' },
 		inputs: [NodeConnectionTypes.Main],
 		outputs: [NodeConnectionTypes.Main],

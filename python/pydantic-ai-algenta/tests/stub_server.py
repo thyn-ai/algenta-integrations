@@ -7,7 +7,7 @@ real `AlgentaToolset` -> real `pydantic_ai.mcp.MCPToolset` -> real `fastmcp.Clie
 structured-content round-tripping) would actually be caught here, unlike a test that mocks
 `call_tool` directly.
 
-Nothing here talks to any real Algenta Engine -- none is reachable from this test environment.
+Nothing here talks to any real Algenta engine -- none is reachable from this test environment.
 Every tool below is a hand-built fake shaped like the real, documented decision lifecycle:
 `plan_decision` / `log_decision` return their own freeform results, and `execute_decision` is
 the one tool with a real typed envelope -- a successful `ExecutionReceipt` (HTTP 200) or a named

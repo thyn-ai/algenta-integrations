@@ -1,6 +1,6 @@
 """LangChain / LangGraph tool integration for Algenta.
 
-Wraps a self-hosted Algenta Engine's MCP tool surface as a governed-execution-aware list of
+Wraps a self-hosted Algenta engine's MCP tool surface as a governed-execution-aware list of
 LangChain `BaseTool`s (`create_algenta_tools`) with tool-profile filtering, typed execution
 receipts/denials, and a real `execute_decision` denial mapping: the engine decides
 success-vs-blocked *synchronously, in the same call* (never a separate "pending approval" round

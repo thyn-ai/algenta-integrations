@@ -1,6 +1,6 @@
 """pydantic-ai tool integration for Algenta.
 
-Wraps a self-hosted Algenta Engine's MCP tool surface as a `pydantic_ai.toolsets.wrapper.WrapperToolset`
+Wraps a self-hosted Algenta engine's MCP tool surface as a `pydantic_ai.toolsets.wrapper.WrapperToolset`
 (`AlgentaToolset`) with tool-profile filtering, a typed `execute_decision` success/denial mapping
 (`ExecutionReceipt` / `ExecutionDenial` onto pydantic-ai's `ToolReturnPart.outcome`), and two-layer
 `force`/`override_safety` scrubbing.

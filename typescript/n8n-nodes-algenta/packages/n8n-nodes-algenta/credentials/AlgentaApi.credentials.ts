@@ -1,7 +1,7 @@
 import type { Icon, ICredentialTestRequest, ICredentialType, INodeProperties } from 'n8n-workflow';
 
 /**
- * Connection details for a self-hosted Algenta Engine's MCP endpoint. There is no
+ * Connection details for a self-hosted Algenta engine's MCP endpoint. There is no
  * hosted-by-Algenta option here on purpose -- see the package README's Self-hosted-first section
  * and `contracts/integration-tool-contract.json`'s `self_hosted_only_note`: every tool call this
  * package makes goes to the caller's own engine, over the caller's own network, at request time.
@@ -23,7 +23,7 @@ export class AlgentaApi implements ICredentialType {
 			default: 'http://localhost:8000',
 			placeholder: 'http://localhost:8000',
 			description:
-				'The base URL of your own self-hosted Algenta Engine. The node appends /mcp itself -- do not include it here.',
+				'The base URL of your own self-hosted Algenta engine. The node appends /mcp itself -- do not include it here.',
 		},
 		{
 			displayName: 'API Key',

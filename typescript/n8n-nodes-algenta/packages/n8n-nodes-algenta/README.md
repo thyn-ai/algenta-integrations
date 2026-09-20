@@ -6,7 +6,7 @@
 > **Docs:** [docs.algenta.ai](https://docs.algenta.ai) · [All integrations](../../../../README.md)
 
 An [n8n](https://n8n.io) community node for [Algenta](https://algenta.ai): a governed-execution-aware
-node exposing your own self-hosted Algenta Engine's MCP tool surface as typed n8n operations —
+node exposing your own self-hosted Algenta engine's MCP tool surface as typed n8n operations —
 `Get Contract`, `Query Data`, `Simulate`, `Recommend`, `Plan Decision`, `Log Decision`, and
 `Execute Decision` — with a real `ExecutionReceipt` / named-safety-gate contract on the last one.
 
@@ -24,7 +24,7 @@ Before doing anything below, have these ready:
 
 - **Node.js 18.10+** — and **pnpm 9+** as well, only if you build or develop this package from
   source instead of installing the published npm package.
-- **A running self-hosted Algenta Engine**, reachable over HTTP — for example `http://localhost:8000`.
+- **A running self-hosted Algenta engine**, reachable over HTTP — for example `http://localhost:8000`.
   This node never talks to an Algenta-hosted cloud endpoint; there isn't one to point it at. If you
   don't have an engine running yet, see [Self-host the engine](https://docs.algenta.ai/deploy-and-operate/self-hosting).
 - **An API key**, only if your engine enforces authentication. Engines running with auth disabled
@@ -47,7 +47,7 @@ connecting it to an engine — see the [Quickstart](#quickstart) below.
 
 ## Quickstart
 
-### Try it locally (no Algenta Engine required)
+### Try it locally (no Algenta engine required)
 
 This gets the real node loaded into a real, local n8n editor so you can see its operations, typed
 fields, and Tool Profile selector — no self-hosted engine needed yet, since nothing here calls one:
@@ -69,7 +69,7 @@ expected, correct result with no engine running yet, not a bug.
 
 ### Run the full example (needs a running engine)
 
-Once you have a self-hosted Algenta Engine reachable (see [Prerequisites](#prerequisites)), import
+Once you have a self-hosted Algenta engine reachable (see [Prerequisites](#prerequisites)), import
 [`demo/n8n/log-and-execute-decision.json`](../../../../demo/n8n/log-and-execute-decision.json) —
 a real workflow that logs a decision and executes it, branching on whether the engine's policy
 allowed or blocked the execution. See [`demo/n8n/README.md`](../../../../demo/n8n/README.md) for
@@ -77,7 +77,7 @@ the exact import steps and what each node in it does.
 
 ## Self-hosted-first
 
-This node talks to **your own self-hosted Algenta Engine** over its MCP endpoint (`{baseUrl}/mcp`)
+This node talks to **your own self-hosted Algenta engine** over its MCP endpoint (`{baseUrl}/mcp`)
 — never a hosted-by-Algenta cloud service. Configure `Base URL` (default
 `http://localhost:8000`, no `/mcp` suffix — the node appends it) and, if your engine requires one,
 an `API Key` (sent as a bearer token) on the `Algenta API` credential.

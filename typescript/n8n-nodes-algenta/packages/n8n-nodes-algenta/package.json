@@ -1,7 +1,7 @@
 {
   "name": "n8n-nodes-algenta",
   "version": "0.1.1",
-  "description": "n8n community node for Algenta: a governed-execution-aware node exposing your own self-hosted Algenta Engine's MCP tool surface (get_contract, query_data, simulate, recommend, plan_decision, log_decision, execute_decision) as typed n8n operations, with a real ExecutionReceipt/ExecutionBlockedError contract on execute_decision.",
+  "description": "n8n community node for Algenta: a governed-execution-aware node exposing your own self-hosted Algenta engine's MCP tool surface (get_contract, query_data, simulate, recommend, plan_decision, log_decision, execute_decision) as typed n8n operations, with a real ExecutionReceipt/ExecutionBlockedError contract on execute_decision.",
   "keywords": [
     "n8n-community-node-package",
     "n8n",

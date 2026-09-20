@@ -6,7 +6,7 @@
 > **Docs:** [docs.algenta.ai](https://docs.algenta.ai) · [All integrations](../../../../README.md)
 
 Vercel AI SDK (`ai` v7) tool integration for [Algenta](https://algenta.ai): `createAlgentaTools`,
-a factory that connects to your own self-hosted Algenta Engine's MCP endpoint (via
+a factory that connects to your own self-hosted Algenta engine's MCP endpoint (via
 [`@ai-sdk/mcp`](https://www.npmjs.com/package/@ai-sdk/mcp)'s real MCP client) and returns an
 Algenta-aware AI SDK [`ToolSet`](https://ai-sdk.dev/docs/ai-sdk-core/tools-and-tool-calling)
 ready to pass to `generateText` / `streamText` / an `Agent`. It layers on:
@@ -26,7 +26,7 @@ ready to pass to `generateText` / `streamText` / an `Agent`. It layers on:
 ## Prerequisites
 
 - **Node.js 22 or later.**
-- **Your own running, self-hosted Algenta Engine**, reachable over HTTP — `createAlgentaTools`
+- **Your own running, self-hosted Algenta engine**, reachable over HTTP — `createAlgentaTools`
   never talks to any Algenta-hosted service (see [Self-hosted-only](#self-hosted-only) below). If
   you don't have one running yet, skip to [Try it locally](#try-it-locally-no-live-engine-required)
   below — it exercises this package's real tool listing, schemas, and receipt shapes against a
@@ -55,7 +55,7 @@ so it has nothing this package's MCP-protocol tool-calling path would use (see [
 `algenta-sdk`'s `MCP_ENDPOINT`/`DEFAULT_BASE_URL`
 constants](#why-not-reuse-algenta-sdks-mcp_endpointdefault_base_url-constants) below for the one
 overlap that was considered and rejected). This package never depends on, imports, or bundles any
-part of the Algenta Engine itself.
+part of the Algenta engine itself.
 
 ### Building from source
 
@@ -73,7 +73,7 @@ below for how to run its tests from there.
 
 ## Self-hosted-only
 
-`createAlgentaTools` talks to **your own self-hosted Algenta Engine** over its MCP endpoint. There
+`createAlgentaTools` talks to **your own self-hosted Algenta engine** over its MCP endpoint. There
 is no Algenta-hosted cloud service for it to fall back to — the endpoint always resolves to
 somewhere you run, in this order:
 
@@ -112,7 +112,7 @@ decision](#executing-a-decision) below.
 ## Try it locally (no live engine required)
 
 Everything in this package except an actual model turn can be exercised without a live Algenta
-Engine, using the same stub MCP server this package's own test suite runs against
+engine, using the same stub MCP server this package's own test suite runs against
 (`src/test-support/stub-server.ts`). This needs a clone of this repository (see [Building from
 source](#building-from-source) above) — the stub server isn't part of the published package.
 

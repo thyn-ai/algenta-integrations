@@ -1,4 +1,4 @@
-"""litellm-algenta: LiteLLM MCP Gateway config generation for a self-hosted Algenta Engine.
+"""litellm-algenta: LiteLLM MCP Gateway config generation for a self-hosted Algenta engine.
 
 There is no in-process toolset to import here -- LiteLLM's MCP Gateway is a proxy/gateway
 *server process* configured by YAML, not a library your application imports and calls (see

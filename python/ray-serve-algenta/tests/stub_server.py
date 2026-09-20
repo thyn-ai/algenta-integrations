@@ -10,7 +10,7 @@ this package's design, not assumed. A stateful stub would silently make this pac
 multi-replica proxy conformance test easier to pass than the real deployment target actually is,
 which would defeat the entire point of this package existing.
 
-Nothing here talks to any real Algenta Engine -- none is reachable from this test environment.
+Nothing here talks to any real Algenta engine -- none is reachable from this test environment.
 """
 
 from __future__ import annotations
