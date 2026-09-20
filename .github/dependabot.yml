@@ -11,6 +11,13 @@
 # here (Dependabot's own default is 3 days). Security updates are never delayed by cooldown. The
 # entries that exist only to track our own `algenta-sdk` (`allow: algenta-sdk`, daily) exclude it
 # from the cooldown: those are our releases, and the point of the entry is to pick them up at once.
+#
+# Every group is restricted to `update-types: [minor, patch]`. Without that key a group also
+# swallows semver-major bumps, and the first grouped PRs did exactly that: thyn-ai/thyn-site#60
+# bundled typescript 5 -> 7, @types/node 22 -> 26, @sanity/client 7 -> 8 and marked 15 -> 18 in
+# with nine patch/minor bumps, and its preview build failed as one unit that could be neither
+# reviewed nor reverted one dependency at a time. A major now opens as its own PR, judged on its
+# own build and revertible on its own; nothing is ignored on that account.
 version: 2
 updates:
 - package-ecosystem: pip
@@ -77,6 +84,10 @@ updates:
     deps:
       patterns:
       - '*'
+      # minor + patch only: a major opens as its own PR (see the header).
+      update-types:
+      - minor
+      - patch
   ignore:
   - dependency-name: mcp
     update-types:
@@ -95,6 +106,10 @@ updates:
     deps:
       patterns:
       - '*'
+      # minor + patch only: a major opens as its own PR (see the header).
+      update-types:
+      - minor
+      - patch
   ignore:
   - dependency-name: mcp
     update-types:
@@ -122,6 +137,10 @@ updates:
     deps:
       patterns:
       - '*'
+      # minor + patch only: a major opens as its own PR (see the header).
+      update-types:
+      - minor
+      - patch
   ignore:
   - dependency-name: mcp
     update-types:
@@ -140,6 +159,10 @@ updates:
     deps:
       patterns:
       - '*'
+      # minor + patch only: a major opens as its own PR (see the header).
+      update-types:
+      - minor
+      - patch
   ignore:
   - dependency-name: mcp
     update-types:
@@ -158,6 +181,10 @@ updates:
     deps:
       patterns:
       - '*'
+      # minor + patch only: a major opens as its own PR (see the header).
+      update-types:
+      - minor
+      - patch
   ignore:
   - dependency-name: mcp
     update-types:
@@ -213,12 +240,18 @@ updates:
   - dependency-name: typescript
     update-types:
     - version-update:semver-major
+    versions:
+    - '>=6.0.0'
   - dependency-name: '@types/node'
     update-types:
     - version-update:semver-major
+    versions:
+    - '>=23.0.0'
   - dependency-name: zod
     update-types:
     - version-update:semver-major
+    versions:
+    - '>=4.0.0'
 - package-ecosystem: pip
   # The hash-pinned tool requirements (.in -> .txt via `uv pip compile --generate-hashes`) that the
   # workflows pip-install with --require-hashes. Weekly and grouped so a pin and its hashes are
@@ -233,6 +266,10 @@ updates:
     ci-tools:
       patterns:
       - '*'
+      # minor + patch only: a major opens as its own PR (see the header).
+      update-types:
+      - minor
+      - patch
   commit-message:
     prefix: chore(ci)
 - package-ecosystem: github-actions
@@ -245,5 +282,9 @@ updates:
     codeql-action:
       patterns:
       - github/codeql-action/*
+      # minor + patch only: a major opens as its own PR (see the header).
+      update-types:
+      - minor
+      - patch
   commit-message:
     prefix: chore(ci)
