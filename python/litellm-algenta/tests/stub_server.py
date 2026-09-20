@@ -15,7 +15,7 @@ carrying one of the three real gate names (`"idempotency"`/`"confidence"`/`"risk
 no `plan_hash`, no `approval_state`, and no pending/rejected async state anywhere in this file --
 an earlier version of this stub modeled one; it was fictional.
 
-Nothing here talks to any real Algenta Engine -- none is reachable from this test environment.
+Nothing here talks to any real Algenta engine -- none is reachable from this test environment.
 """
 
 from __future__ import annotations

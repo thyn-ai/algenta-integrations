@@ -8,7 +8,7 @@
 LangChain / LangGraph tool integration for [Algenta](https://algenta.ai): `create_algenta_tools`,
 a function that builds a governed-execution-aware list of
 [`BaseTool`](https://python.langchain.com/api_reference/core/tools/langchain_core.tools.base.BaseTool.html)s
-from your own self-hosted Algenta Engine's MCP tool surface, and layers on:
+from your own self-hosted Algenta engine's MCP tool surface, and layers on:
 
 - **Tool-profile filtering** -- expose only `observe` (read-only, the default), `govern`,
   `execute`, or the opt-in `full` registry, per
@@ -55,7 +55,7 @@ tools `create_algenta_tools` returns are plain `BaseTool`s that work anywhere La
 
 ## Self-hosted-first
 
-`create_algenta_tools` talks to **your own self-hosted Algenta Engine** over its MCP endpoint --
+`create_algenta_tools` talks to **your own self-hosted Algenta engine** over its MCP endpoint --
 never a hosted-by-Algenta cloud service. The endpoint resolves, in order, from:
 
 1. `base_url=` passed to the function,
@@ -66,7 +66,7 @@ never a hosted-by-Algenta cloud service. The endpoint resolves, in order, from:
 
 Before running the Quick start below, you need:
 
-- **A running self-hosted Algenta Engine**, reachable over MCP -- see
+- **A running self-hosted Algenta engine**, reachable over MCP -- see
   [Self-hosted-first](#self-hosted-first) above for how the endpoint resolves. Don't have one
   running yet? Skip to [Try it locally](#try-it-locally-no-live-engine-required), which needs
   nothing but this package and its test dependencies.
@@ -102,7 +102,7 @@ executes anything. See [Tool profiles](#tool-profiles) to opt into more.
 
 ## Try it locally (no live engine required)
 
-The Quick start above needs a real self-hosted Algenta Engine. To see `create_algenta_tools`
+The Quick start above needs a real self-hosted Algenta engine. To see `create_algenta_tools`
 actually work without one, run it against this package's own stub Algenta MCP server --
 `tests/stub_server.py`, a real (not mocked) `mcp.server.fastmcp.FastMCP` server over a real HTTP
 socket, the same fixture this package's 55-test suite runs against:

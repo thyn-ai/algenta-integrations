@@ -1,6 +1,6 @@
 """Microsoft Agent Framework (MAF) tool integration for Algenta.
 
-Wraps a self-hosted Algenta Engine's MCP tool surface as a governed-execution-aware list of
+Wraps a self-hosted Algenta engine's MCP tool surface as a governed-execution-aware list of
 `agent_framework.FunctionTool`s (`create_algenta_tools`) with tool-profile filtering, a typed
 `execute_decision` receipt/denial mapping, and `agent_framework.MiddlewareFailure` (MAF's one
 fail-closed abort primitive) for the real, synchronous 409 denial `execute_decision` can raise.

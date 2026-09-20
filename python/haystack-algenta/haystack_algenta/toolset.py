@@ -1,5 +1,5 @@
 """`create_algenta_tools` -- a governed-execution-aware `haystack.tools.toolset.Toolset` wrapping a
-self-hosted Algenta Engine's MCP tool surface, built on Haystack's own real
+self-hosted Algenta engine's MCP tool surface, built on Haystack's own real
 `haystack_integrations.tools.mcp.MCPToolset` (a real, separate PyPI package, `mcp-haystack` --
 confirmed by grepping an installed `haystack-ai` 3.0.0 tree for any `mcp` module: none exists
 there. See the package README's "Why `mcp-haystack`, not just `haystack-ai`" section).
@@ -185,7 +185,7 @@ def create_algenta_tools(
     invocation_timeout: float = 30.0,
     **mcp_toolset_kwargs: Any,
 ) -> AlgentaToolset:
-    """Build a governed-execution-aware `AlgentaToolset` from a self-hosted Algenta Engine.
+    """Build a governed-execution-aware `AlgentaToolset` from a self-hosted Algenta engine.
 
     ```python
     from haystack.components.agents import Agent

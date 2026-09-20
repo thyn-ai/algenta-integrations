@@ -7,7 +7,7 @@
 
 LlamaIndex tool integration for [Algenta](https://algenta.ai): `create_algenta_tools`, an
 outcome-aware `list[llama_index.core.tools.FunctionTool]` wrapping your own self-hosted Algenta
-Engine's MCP tool surface via `llama-index-tools-mcp`'s own real
+engine's MCP tool surface via `llama-index-tools-mcp`'s own real
 [`BasicMCPClient`](https://docs.llamaindex.ai/en/stable/api_reference/tools/mcp/) (a separate PyPI
 package -- see [Why `llama-index-tools-mcp`, not the `llama-index`
 metapackage](#why-llama-index-tools-mcp-not-the-llama-index-metapackage)), plus a real,
@@ -32,7 +32,7 @@ real contract.
 Before running the example below, you need:
 
 - **Python 3.10+**.
-- **A running self-hosted Algenta Engine**, reachable over MCP. Algenta is self-hosted only --
+- **A running self-hosted Algenta engine**, reachable over MCP. This package is self-hosted only --
   there is no Algenta-operated cloud API to fall back to. Point this package at your engine with
   the `ALGENTA_BASE_URL` environment variable, or pass `base_url=` directly; it defaults to
   `http://localhost:8000/mcp`. Don't have an engine running yet? Skip to [Try it
@@ -56,7 +56,7 @@ dependency](#why-no-algenta-sdk-dependency).
 
 ## Self-hosted-first
 
-`create_algenta_tools` talks to **your own self-hosted Algenta Engine** over its MCP endpoint --
+`create_algenta_tools` talks to **your own self-hosted Algenta engine** over its MCP endpoint --
 never a hosted-by-Algenta cloud service. The endpoint resolves, in order, from:
 
 1. `base_url=` passed to the function,
@@ -103,9 +103,9 @@ lifecycle of its own to manage either.
 
 ## Try it locally (no live engine required)
 
-No Algenta Engine handy yet? `tests/stub_server.py` in this package's own checkout is a real,
+No Algenta engine handy yet? `tests/stub_server.py` in this package's own checkout is a real,
 local `fastmcp.FastMCP` server -- not a mock -- that speaks the same MCP wire protocol a real
-Algenta Engine does, backed by small, deterministic fake data. It's part of this repository's own
+Algenta engine does, backed by small, deterministic fake data. It's part of this repository's own
 test suite, not the published `pip install llamaindex-algenta` wheel, so this section assumes a
 checkout of [`algenta-integrations`](https://github.com/thyn-ai/algenta-integrations):
 

@@ -1,5 +1,5 @@
 """`create_algenta_tools` -- a governed-execution-aware `list[FunctionTool]` wrapping a
-self-hosted Algenta Engine's MCP tool surface, built on `llama-index-tools-mcp`'s own real
+self-hosted Algenta engine's MCP tool surface, built on `llama-index-tools-mcp`'s own real
 `BasicMCPClient` (a real, separate PyPI package -- confirmed directly from its installed
 `.dist-info/METADATA` that its only dependencies are `llama-index-core`, `mcp`, and `pydantic`;
 the full `llama-index` metapackage is never required). Per the plan's own "LlamaIndex consumes MCP
@@ -195,7 +195,7 @@ async def create_algenta_tools(
     denial_model: type[ExecutionDenial] = ExecutionDenial,
     **client_kwargs: Any,
 ) -> list[FunctionTool]:
-    """Build the outcome-aware `FunctionTool` list for a self-hosted Algenta Engine.
+    """Build the outcome-aware `FunctionTool` list for a self-hosted Algenta engine.
 
     ```python
     from llama_index.core.agent.workflow import FunctionAgent

@@ -7,7 +7,7 @@ this server round trip, so a wire-shape regression (e.g. the receipt envelope no
 `structuredContent` round-tripping) would actually be caught here, unlike a test that mocks
 `call_tool` directly.
 
-Nothing here talks to any real Algenta Engine -- none is reachable from this test environment.
+Nothing here talks to any real Algenta engine -- none is reachable from this test environment.
 Every tool below is a hand-built fake shaped like the real, documented tool contract (see
 `llamaindex_algenta.receipts` for `execute_decision`'s two real shapes -- `ExecutionReceipt` on
 success, `ExecutionDenial` on a named-gate block), plus one deliberately-crashing tool

@@ -12,7 +12,7 @@
  * regression (e.g. a receipt not surviving `structuredContent` round-tripping) would actually be
  * caught here, unlike a test that mocks `callTool` directly.
  *
- * Nothing here talks to any real Algenta Engine -- none is reachable in this test environment.
+ * Nothing here talks to any real Algenta engine -- none is reachable in this test environment.
  * `execute_decision` below is a hand-built fake shaped like the real, documented
  * `ExecutionReceipt` success shape and the real three-named-gate denial shape (see
  * `../../src/receipts.ts`); every other tool is a freeform passthrough to its own plain fake

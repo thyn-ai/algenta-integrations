@@ -1,6 +1,6 @@
 /**
  * `createAlgentaTools` -- builds an Algenta-aware Vercel AI SDK `ToolSet` from a self-hosted
- * Algenta Engine's MCP tool surface.
+ * Algenta engine's MCP tool surface.
  *
  * Layers three things on top of the wrapped MCP tools' real calls:
  *
@@ -220,7 +220,7 @@ function connectionOptionsGiven(options: CreateAlgentaToolsOptions): boolean {
 }
 
 /**
- * Builds an Algenta-aware `ToolSet` from a self-hosted Algenta Engine's MCP tool surface,
+ * Builds an Algenta-aware `ToolSet` from a self-hosted Algenta engine's MCP tool surface,
  * filtered to `profile` (default `"observe"`) and scrubbed of never-model-facing fields.
  *
  * Connects to the caller's own self-hosted engine (`baseUrl`, `ALGENTA_BASE_URL`, or

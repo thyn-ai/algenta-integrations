@@ -24,7 +24,7 @@ once each is independently corrected against the same real facts -- deliberately
 per package, so a behavioral difference across the three Python integrations would show up as a
 real test divergence, not get lost in three different fixture shapes.
 
-Nothing here talks to any real Algenta Engine -- none is reachable from this test environment.
+Nothing here talks to any real Algenta engine -- none is reachable from this test environment.
 """
 
 from __future__ import annotations

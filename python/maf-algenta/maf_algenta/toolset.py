@@ -1,5 +1,5 @@
 """`create_algenta_tools` -- an async context manager yielding a governed-execution-aware list of
-`agent_framework.FunctionTool`s from a self-hosted Algenta Engine's MCP tool surface.
+`agent_framework.FunctionTool`s from a self-hosted Algenta engine's MCP tool surface.
 
 Structural template: `agent_framework.MCPStreamableHTTPTool` itself, used the same way MAF's own
 research examples and docs use it -- `async with MCPStreamableHTTPTool(name=..., url=...) as
@@ -272,7 +272,7 @@ async def create_algenta_tools(
     receipt_model: type[ExecutionReceipt] = ExecutionReceipt,
     **mcp_kwargs: Any,
 ) -> AsyncIterator[list[FunctionTool]]:
-    """Build a governed-execution-aware list of `FunctionTool`s from a self-hosted Algenta Engine.
+    """Build a governed-execution-aware list of `FunctionTool`s from a self-hosted Algenta engine.
 
     An **async context manager**, not a plain async function -- deliberately mirroring
     `agent_framework.MCPStreamableHTTPTool`'s own `async with ... as mcp_tool:` idiom, since this

@@ -1,7 +1,7 @@
 """`ExecutionReceipt` / `ExecutionBlocked` -- the two, and only two, typed shapes a real
 `execute_decision` MCP tool call can produce.
 
-Verified directly against the real, running Algenta Engine's public MCP tool surface (observed
+Verified directly against the real, running Algenta engine's public MCP tool surface (observed
 over the wire from this package) -- not assumed from this package's own prior README or any
 planning document, both of which turned out to describe a fictional contract.
 `execute_decision(decision_id,

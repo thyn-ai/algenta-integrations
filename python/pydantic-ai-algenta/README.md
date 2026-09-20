@@ -8,7 +8,7 @@
 pydantic-ai tool integration for [Algenta](https://algenta.ai): `AlgentaToolset`, a
 [`WrapperToolset`](https://ai.pydantic.dev/toolsets/#wrapping-a-toolset) that wraps a
 [`pydantic_ai.mcp.MCPToolset`](https://ai.pydantic.dev/mcp/client/) pointed at your own
-self-hosted Algenta Engine, and layers on:
+self-hosted Algenta engine, and layers on:
 
 - **Tool-profile filtering** -- expose only `observe` (read-only, the default), `govern`,
   `execute`, or the opt-in `full` registry, per
@@ -38,11 +38,11 @@ This package depends on exactly two things: the published
 [`algenta-sdk`](https://pypi.org/project/algenta-sdk/) and
 [`pydantic-ai-slim[mcp]`](https://pypi.org/project/pydantic-ai-slim/) (which pulls in
 [`fastmcp`](https://gofastmcp.com)'s client, since that's what pydantic-ai's own MCP support is
-built on). It never depends on, imports, or bundles any part of the Algenta Engine itself.
+built on). It never depends on, imports, or bundles any part of the Algenta engine itself.
 
 ## Self-hosted-first
 
-`AlgentaToolset` talks to **your own self-hosted Algenta Engine** over its MCP endpoint --
+`AlgentaToolset` talks to **your own self-hosted Algenta engine** over its MCP endpoint --
 never a hosted-by-Algenta cloud service. The endpoint resolves, in order, from:
 
 1. `base_url=` passed to the constructor,
@@ -53,7 +53,7 @@ never a hosted-by-Algenta cloud service. The endpoint resolves, in order, from:
 
 **Prerequisites:**
 
-- A running self-hosted Algenta Engine, reachable over MCP -- defaults to
+- A running self-hosted Algenta engine, reachable over MCP -- defaults to
   `http://localhost:8000/mcp`; point elsewhere via `ALGENTA_BASE_URL` or the constructor's
   `base_url=`. No Algenta account or Algenta-issued API key is ever needed: Algenta isn't a
   hosted service you sign up for.

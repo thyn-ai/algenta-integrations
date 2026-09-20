@@ -8,7 +8,7 @@
 Microsoft Agent Framework (MAF) tool integration for [Algenta](https://algenta.ai):
 `create_algenta_tools`, an async context manager that builds a governed-execution-aware list of
 [`agent_framework.FunctionTool`](https://github.com/microsoft/agent-framework)s from your own
-self-hosted Algenta Engine's MCP tool surface, and layers on:
+self-hosted Algenta engine's MCP tool surface, and layers on:
 
 - **Tool-profile filtering** -- expose only `observe` (read-only, the default), `govern`,
   `execute`, or the opt-in `full` registry, per
@@ -45,7 +45,7 @@ below, rather than assuming any of the three is an oversight.
 
 ## Self-hosted-first
 
-`create_algenta_tools` talks to **your own self-hosted Algenta Engine** over its MCP endpoint --
+`create_algenta_tools` talks to **your own self-hosted Algenta engine** over its MCP endpoint --
 never a hosted-by-Algenta cloud service. The endpoint resolves, in order, from:
 
 1. `base_url=` passed to the function,
@@ -56,7 +56,7 @@ never a hosted-by-Algenta cloud service. The endpoint resolves, in order, from:
 
 Before running the Quick start below, you need:
 
-- **A running self-hosted Algenta Engine**, reachable at the URL you'll pass as `base_url=` (or
+- **A running self-hosted Algenta engine**, reachable at the URL you'll pass as `base_url=` (or
   set via `ALGENTA_BASE_URL`) -- see [Self-hosted-first](#self-hosted-first) above. This package
   is an MCP *client* only: it never starts, bundles, or proxies to an engine of its own, and it
   never talks to any Algenta-hosted cloud service.
@@ -331,7 +331,7 @@ except AlgentaToolDenied as exc:
 
 ## Try it locally (no live engine required)
 
-Everything in [Quick start](#quick-start) above needs a running self-hosted Algenta Engine and a
+Everything in [Quick start](#quick-start) above needs a running self-hosted Algenta engine and a
 real chat-client API key. To see the whole thing work end to end without either, this package's
 own test suite already includes a real, deterministic, local stand-in for a self-hosted Algenta
 MCP endpoint -- `tests/stub_server.py`'s `StubServerFixture`, a real

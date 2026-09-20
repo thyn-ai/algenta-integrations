@@ -1,6 +1,6 @@
 """LlamaIndex tool integration for Algenta.
 
-Wraps a self-hosted Algenta Engine's MCP tool surface as an outcome-aware
+Wraps a self-hosted Algenta engine's MCP tool surface as an outcome-aware
 `list[llama_index.core.tools.FunctionTool]` (`create_algenta_tools`) -- built on
 `llama-index-tools-mcp`'s own real `BasicMCPClient`/`McpToolSpec` primitives -- with tool-profile
 filtering, two-layer `force`/`override_safety` scrubbing, and a real, synchronous

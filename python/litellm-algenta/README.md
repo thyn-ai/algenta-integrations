@@ -9,7 +9,7 @@ LiteLLM MCP Gateway integration for [Algenta](https://algenta.ai): config templa
 generator/linter, and a real-proxy conformance test suite that map
 [`contracts/integration-tool-contract.json`](../../contracts/integration-tool-contract.json)'s
 tool-profile boundary onto LiteLLM's real `mcp_servers:` gateway config, pointed at your own
-self-hosted Algenta Engine.
+self-hosted Algenta engine.
 
 **This package is not shaped like its `pydantic-ai-algenta` / `langchain-algenta` /
 `algenta-tools` (Vercel AI SDK) siblings, on purpose.** LiteLLM's MCP Gateway
@@ -33,7 +33,7 @@ What this package ships instead:
 
 ## Prerequisites
 
-- **A self-hosted Algenta Engine, already running and reachable.** This package only generates
+- **A self-hosted Algenta engine, already running and reachable.** This package only generates
   and validates a config fragment that points at it -- it never runs an engine for you, and it
   never talks to any Algenta-operated service. There is no Algenta-hosted API and no Algenta
   account to sign up for.
@@ -67,7 +67,7 @@ to install, not a mistake or a hang.
 
 ## Self-hosted-first
 
-Every config this package generates points at **your own self-hosted Algenta Engine**, resolved
+Every config this package generates points at **your own self-hosted Algenta engine**, resolved
 at `litellm` proxy *startup* time from an environment variable (`ALGENTA_MCP_URL` by default) --
 never a literal, hardcoded, or Algenta-hosted endpoint. `lint_mcp_server_entry` flags a URL that
 looks Algenta-hosted (`algenta.ai`) even in a config you wrote by hand.
@@ -125,7 +125,7 @@ gateway is configured; there is nothing left for it to do at request time.
 
 ## Try it locally (no engine, no LLM provider key required)
 
-Don't have a self-hosted Algenta Engine running yet? [`examples/try_it_locally.py`](./examples/try_it_locally.py)
+Don't have a self-hosted Algenta engine running yet? [`examples/try_it_locally.py`](./examples/try_it_locally.py)
 is the closest thing to a zero-setup demo. It starts a real `litellm` proxy in front of a real
 (but fake-data) stub Algenta MCP server -- the same fixtures this package's own test suite uses
 (`tests/stub_server.py`, `tests/proxy_fixture.py`) -- and drives both over real HTTP, so you can

@@ -1,10 +1,10 @@
 """A real, runnable demo of `AlgentaToolset` that needs neither a live self-hosted Algenta
-Engine nor a model provider API key.
+engine nor a model provider API key.
 
 See the "Try it locally" section of README.md for context. This script:
 
 1. Starts `tests/stub_server.py`'s stub Algenta MCP server -- a real `fastmcp.FastMCP` server
-   over a real local HTTP socket, standing in for a self-hosted Algenta Engine.
+   over a real local HTTP socket, standing in for a self-hosted Algenta engine.
 2. Points a real `AlgentaToolset` at it.
 3. Drives a real `pydantic_ai.Agent` turn against it using
    `pydantic_ai.models.test.TestModel`, which scripts tool-calling deterministically without

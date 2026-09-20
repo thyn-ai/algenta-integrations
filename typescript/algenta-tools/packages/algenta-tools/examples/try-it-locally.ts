@@ -1,5 +1,5 @@
 /**
- * Try it locally -- no live Algenta Engine, no model provider, no API key.
+ * Try it locally -- no live Algenta engine, no model provider, no API key.
  *
  * Runs `createAlgentaTools` against this package's own stub Algenta MCP server (the same
  * one its test suite uses -- see `../src/test-support/stub-server.ts`) to show real tool
