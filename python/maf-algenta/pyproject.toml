@@ -65,7 +65,7 @@ classifiers = [
 # `ModuleNotFoundError: No module named 'httpx'` this package's own `pyproject.toml` should have
 # prevented -- see the README's "Why `httpx`" section.
 dependencies = [
-    "agent-framework-core>=1.15.0",
+    "agent-framework-core>=1.18.0",
     "mcp>=1.29.0,<2",
     "httpx>=0.28.1",
 ]
