@@ -72,7 +72,7 @@ concept, and the package version you tested.
 **Out of scope for this repository** (redirect privately to
 `security@algenta.ai`, same as above, rather than filing here):
 
-- The Algenta Engine itself, its entitlement/license enforcement, or any of
+- The Algenta engine itself, its entitlement/license enforcement, or any of
   its closed-source implementation (lives in a separate private repository)
 - The `algenta-sdk` client libraries' own transport/auth code (that's
   `thyn-ai/algenta-sdk`'s `SECURITY.md`, not this repository's)
