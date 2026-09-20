@@ -268,15 +268,15 @@ source = { editable = "." }
 
 [[package]]
 name = "algenta-sdk"
-version = "1.0.11"
+version = "1.0.17"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx" },
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/4c/52/c4621554b86cf9a20b8d8c8d488765901669cf80306e5aab17e9919ea631/algenta_sdk-1.0.11.tar.gz", hash = "sha256:86f37edbfbd0c72a14400da7878fbd89a3cae66677060d33c5941d50b2a0920f", size = 112040, upload-time = "2026-08-20T07:22:46.999Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/d9/61/5aa36f4c500d55035b721b1b0c0629bac9a4bc739c488d730baf450676bb/algenta_sdk-1.0.17.tar.gz", hash = "sha256:aa181b50b6d1bf7149e9d3282a987f92bd3e87bf9097b7cb3a21bbe9deaa0ba8", size = 202266, upload-time = "2026-09-19T23:36:46.925Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/4c/55/1f02f6fad26c8405f41b4702a1d8b82672ca3ffceda7cd1b8fe4aa614e21/algenta_sdk-1.0.11-py3-none-any.whl", hash = "sha256:8b1d08297763baa1e8929933a3d734089b343db96de14e5992b49d6a0b6576fb", size = 168930, upload-time = "2026-08-20T07:22:45.773Z" },
+    { url = "https://files.pythonhosted.org/packages/1d/c9/dfbc0650711059aad0ce432498497fb0f63648e55a6f1f50e09da2f7f1bb/algenta_sdk-1.0.17-py3-none-any.whl", hash = "sha256:64a0a9a530f155dea3d1672287b5ce3d15352d23cbf3237fa8bb64889385c5aa", size = 174152, upload-time = "2026-09-19T23:36:45.699Z" },
 ]
 
 [[package]]
@@ -2664,7 +2664,7 @@ quickstart = [
 
 [package.metadata]
 requires-dist = [
-    { name = "algenta-sdk", specifier = ">=1.0.11" },
+    { name = "algenta-sdk", specifier = ">=1.0.17" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.27" },
     { name = "langchain", marker = "extra == 'quickstart'", specifier = ">=1.4.0" },
     { name = "langchain-core", specifier = ">=1.6.0" },
@@ -4737,7 +4737,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "algenta-sdk", specifier = ">=1.0.11" },
+    { name = "algenta-sdk", specifier = ">=1.0.17" },
     { name = "anyio", marker = "extra == 'dev'" },
     { name = "fastmcp", marker = "extra == 'dev'", specifier = ">=3" },
     { name = "pydantic-ai-slim", extras = ["mcp"], specifier = ">=2.33.0" },
@@ -5258,7 +5258,7 @@ wheels = [
 
 [[package]]
 name = "ray-serve-algenta"
-version = "0.1.3"
+version = "0.1.4"
 source = { editable = "ray-serve-algenta" }
 dependencies = [
     { name = "fastapi" },
