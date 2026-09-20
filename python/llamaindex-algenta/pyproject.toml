@@ -68,7 +68,7 @@ Repository = "https://github.com/thyn-ai/algenta-integrations"
 # versions to find 3.x; a stricter resolver, or a private index that doesn't mirror older
 # releases, has nothing to backtrack to and fails outright. Pinning `<4` makes that resolution
 # explicit instead of relying on invisible backtracking.
-dev = ["pytest", "pytest-asyncio", "pytest-cov", "fastmcp>=3,<4"]
+dev = ["pytest", "pytest-asyncio", "pytest-cov", "fastmcp>=3.4.7,<4"]
 
 [build-system]
 requires = ["setuptools>=84.0.0", "wheel"]
