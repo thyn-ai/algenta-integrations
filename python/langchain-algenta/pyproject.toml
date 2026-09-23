@@ -30,7 +30,7 @@ classifiers = [
 # package's real, current APIs while building it (see the research notes referenced in this
 # package's PR): langchain-core 1.6.0, langchain-mcp-adapters 0.3.2.
 dependencies = [
-    "algenta-sdk>=1.0.24",
+    "algenta-sdk>=1.0.26",
     "langchain-core>=1.6.0",
     "langchain-mcp-adapters>=0.3.2",
 ]
