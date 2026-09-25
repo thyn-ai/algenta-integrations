@@ -23,7 +23,7 @@ classifiers = [
 # needs the agent/toolset/MCP-client surface, not every model provider SDK `pydantic-ai` also
 # depends on.
 dependencies = [
-    "algenta-sdk>=1.0.28",
+    "algenta-sdk>=1.0.30",
     "pydantic-ai-slim[mcp]>=2.33.0",
 ]
 
