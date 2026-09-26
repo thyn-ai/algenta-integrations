@@ -135,6 +135,16 @@ That runs [`examples/try-it-locally.ts`](./examples/try-it-locally.ts), which:
 
 Swap the stub's URL for your own engine's and the same code talks to the real thing.
 
+## Recipes
+
+Ten runnable, tested recipes for the most popular AI SDK patterns — governed agents, typed
+denials, receipt-typed results, BM25 retrieval with decision-memory logging, decision
+simulation as a tool, profile-filtered toolsets, streaming governed turns, human-in-the-loop
+approvals, `generateObject` decision schemas, and audit-logging middleware — live in
+[`../../recipes`](../../recipes/README.md), each with its own test suite and a zero-credential
+run command (`pnpm --filter algenta-tools-recipes recipe:NN`). See the
+[recipe index](../../recipes/README.md#index).
+
 ## Tool profiles
 
 | Profile | Adds | Notes |

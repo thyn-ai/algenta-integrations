@@ -1,0 +1,45 @@
+{
+  "name": "algenta-tools-recipes",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Runnable, tested Vercel AI SDK recipes built on the algenta-tools governed ToolSet factory. Not published — see ../packages/algenta-tools for the real package.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/thyn-ai/algenta-integrations.git",
+    "directory": "typescript/algenta-tools/recipes"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run --coverage",
+    "recipe:01": "tsx src/01-governed-agent.ts",
+    "recipe:02": "tsx src/02-structured-denial-as-typed-error.ts",
+    "recipe:03": "tsx src/03-receipt-typed-results.ts",
+    "recipe:04": "tsx src/04-bm25-retrieval-tool.ts",
+    "recipe:05": "tsx src/05-decision-simulation-tool.ts",
+    "recipe:06": "tsx src/06-profile-filtered-toolset.ts",
+    "recipe:07": "tsx src/07-streaming-governed-turns.ts",
+    "recipe:08": "tsx src/08-approval-flow-with-receipts.ts",
+    "recipe:09": "tsx src/09-generate-object-decision-schema.ts",
+    "recipe:10": "tsx src/10-audit-logging-middleware.ts"
+  },
+  "dependencies": {
+    "ai": "^7.0.102",
+    "algenta-tools": "workspace:*",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@ai-sdk/provider": "^4.0.15",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@types/node": "^26.6.1",
+    "@vitest/coverage-v8": "^5.0.0",
+    "tsx": "^4.23.13",
+    "typescript": "~5.6.3",
+    "vitest": "^5.0.1"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
