@@ -158,6 +158,20 @@ see a harmless shutdown traceback printed to stderr when the script exits -- an 
 `asyncio.CancelledError` during the stub server's own teardown, not a real error; it's the same
 thing this package's test suite triggers on every run.)
 
+## Recipes
+
+Ten runnable, test-covered recipes putting Algenta at the center of LangChain's most-used
+patterns -- governed RAG, approval-gated agents, simulation-first agent loops, BM25
+retrieval tools, structured-denial handling, decision memory, policy-gated LangGraph
+nodes, idempotent retries, audit-trailed chains, and deterministic scoring. Each one runs
+against the same stub server as the local quickstart above (zero credentials), as both a
+script and an importable function. Index and run commands:
+[`recipes/README.md`](./recipes/README.md).
+
+```bash
+uv run python -m recipes.governed_rag   # run from this package's directory
+```
+
 ## Tool profiles
 
 | Profile | Adds | Notes |
