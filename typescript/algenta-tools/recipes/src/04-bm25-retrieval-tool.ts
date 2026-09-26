@@ -13,7 +13,7 @@
  *
  *   cd typescript/algenta-tools && pnpm --filter algenta-tools-recipes recipe:04
  */
-import { generateText, stepCountIs, tool, type LanguageModel } from "ai";
+import { generateText, stepCountIs, tool, type LanguageModel, type Tool } from "ai";
 import { pathToFileURL } from "node:url";
 import { z } from "zod";
 import { createAlgentaTools, LOG_DECISION, type AlgentaToolSet } from "algenta-tools";
@@ -140,7 +140,7 @@ export function createGovernedBm25SearchTool(options: {
   tools: AlgentaToolSet;
   /** Default hit cap when the model doesn't pass `topK`. */
   defaultTopK?: number;
-}) {
+}): Tool {
   const index = buildBm25Index(options.corpus);
   const textById = new Map(options.corpus.map(doc => [doc.id, doc.text]));
   const defaultTopK = options.defaultTopK ?? 3;
