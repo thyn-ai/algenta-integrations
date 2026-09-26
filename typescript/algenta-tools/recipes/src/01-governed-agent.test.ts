@@ -33,7 +33,7 @@ describe("recipe 01 -- governed agent", () => {
       });
 
       expect(summary.profile).toBe("observe");
-      expect(summary.stepCount).toBe(2);
+      expect(summary.stepCount).toBe(3);
       expect(summary.text).toBe("EV 42.0, hold at 0.87.");
       // The tool payloads are the stub engine's real wire responses, not fakes:
       expect(summary.toolCalls).toEqual([
