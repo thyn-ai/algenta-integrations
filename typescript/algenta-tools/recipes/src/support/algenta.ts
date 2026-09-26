@@ -33,7 +33,11 @@ export async function withStubAlgenta<T>(fn: (deps: StubAlgentaDeps) => Promise<
 /** The `ToolExecutionOptions` the AI SDK's own loop would pass to a tool's `execute()`, for when
  * a recipe calls a governed tool directly (route-handler / server-action style) instead of from
  * inside a model loop. `toolCallId` is required by the real type; `messages` is the conversation
- * so far, empty here because a direct call has none. */
-export function directToolCallOptions(toolCallId: string): ToolExecutionOptions<unknown> {
-  return { toolCallId, messages: [], context: undefined };
+ * so far, empty here because a direct call has none; `context` is `undefined` because a direct
+ * call carries no tool-context schema -- the generic lets the call site's own `CONTEXT`
+ * (`Context` for `tool()`-built tools, `any` for MCP-wrapped ones) infer through. */
+export function directToolCallOptions<CONTEXT extends Record<string, unknown> | unknown | never = never>(
+  toolCallId: string,
+): ToolExecutionOptions<CONTEXT> {
+  return { toolCallId, messages: [], context: undefined as CONTEXT };
 }
