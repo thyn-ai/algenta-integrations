@@ -96,7 +96,7 @@ async def test_parallel_and_sequential_variants_produce_identical_reports(tempor
     assert report.kernel_source == KERNEL_SOURCE
 
 
-def test_bm25_ranking_is_deterministic_and_theme_relevant() -> None:
+async def test_bm25_ranking_is_deterministic_and_theme_relevant() -> None:
     briefs = [SCENARIO_BRIEFS[s] for s in SCENARIOS]
     first = rank_documents("forex currency overnight", briefs)
     second = rank_documents("forex currency overnight", briefs)
