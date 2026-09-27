@@ -7,6 +7,7 @@ from __future__ import annotations
 import asyncio
 import uuid
 
+import pytest
 from recipes.scheduled_governed_simulation import (
     ScheduledSimulationResult,
     ScheduledSimulationWorkflow,
@@ -15,12 +16,14 @@ from temporalio.client import Schedule, ScheduleActionStartWorkflow, ScheduleSpe
 
 from .helpers import workflow_worker
 
+pytestmark = pytest.mark.asyncio(loop_scope="module")
 
-async def test_schedule_fires_the_governed_simulation_workflow(temporal_env_realtime, stub_server) -> None:
+
+async def test_schedule_fires_the_governed_simulation_workflow(temporal_env_realtime, stub_server_mod) -> None:
     # The real-time dev server: the time-skipping test server does not implement the schedule
     # RPCs ("CreateSchedule is unimplemented"), and `trigger_immediately` means the run fires
     # in real seconds anyway, so no time skipping is needed here.
-    base_url, engine = stub_server
+    base_url, engine = stub_server_mod
     async with workflow_worker(
         temporal_env_realtime, [ScheduledSimulationWorkflow], base_url=base_url, profile="govern"
     ) as (client, task_queue):
@@ -69,8 +72,8 @@ async def test_schedule_fires_the_governed_simulation_workflow(temporal_env_real
     assert engine.delivered_decision_ids == set()  # govern profile: nothing executed
 
 
-async def test_simulation_workflow_runs_standalone_too(temporal_env, stub_server) -> None:
-    base_url, _engine = stub_server
+async def test_simulation_workflow_runs_standalone_too(temporal_env, stub_server_mod) -> None:
+    base_url, _engine = stub_server_mod
     async with workflow_worker(
         temporal_env, [ScheduledSimulationWorkflow], base_url=base_url, profile="govern"
     ) as (client, task_queue):

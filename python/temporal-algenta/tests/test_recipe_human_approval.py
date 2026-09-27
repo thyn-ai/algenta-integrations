@@ -19,6 +19,8 @@ from temporalio.exceptions import ApplicationError
 
 from .helpers import workflow_worker
 
+pytestmark = pytest.mark.asyncio(loop_scope="module")
+
 
 async def _wait_for_state(handle: WorkflowHandle, wanted: str, *, timeout: float = 30.0) -> ApprovalStatus:
     from temporalio.service import RPCError
@@ -53,8 +55,8 @@ async def _start(client, task_queue: str, input: ApprovalGatedInput) -> Workflow
     )
 
 
-async def test_denial_parks_workflow_and_operator_approval_completes_it(temporal_env_realtime, stub_server) -> None:
-    base_url, engine = stub_server
+async def test_denial_parks_workflow_and_operator_approval_completes_it(temporal_env_realtime, stub_server_mod) -> None:
+    base_url, engine = stub_server_mod
     async with workflow_worker(
         temporal_env_realtime, [HumanApprovalExecutionWorkflow], base_url=base_url, profile="execute"
     ) as (client, task_queue):
@@ -82,8 +84,8 @@ async def test_denial_parks_workflow_and_operator_approval_completes_it(temporal
     assert final.decided_by == "jane.doe@example.com"
 
 
-async def test_operator_rejection_fails_the_workflow_without_delivering(temporal_env_realtime, stub_server) -> None:
-    base_url, engine = stub_server
+async def test_operator_rejection_fails_the_workflow_without_delivering(temporal_env_realtime, stub_server_mod) -> None:
+    base_url, engine = stub_server_mod
     async with workflow_worker(
         temporal_env_realtime, [HumanApprovalExecutionWorkflow], base_url=base_url, profile="execute"
     ) as (client, task_queue):
@@ -107,8 +109,8 @@ async def test_operator_rejection_fails_the_workflow_without_delivering(temporal
     assert engine.delivered_decision_ids == set()
 
 
-async def test_approval_timeout_abandons_the_execution(temporal_env, stub_server) -> None:
-    base_url, engine = stub_server
+async def test_approval_timeout_abandons_the_execution(temporal_env, stub_server_mod) -> None:
+    base_url, engine = stub_server_mod
     async with workflow_worker(
         temporal_env, [HumanApprovalExecutionWorkflow], base_url=base_url, profile="execute"
     ) as (client, task_queue):
@@ -128,8 +130,8 @@ async def test_approval_timeout_abandons_the_execution(temporal_env, stub_server
     assert engine.delivered_decision_ids == set()
 
 
-async def test_clean_execution_never_parks(temporal_env_realtime, stub_server) -> None:
-    base_url, _engine = stub_server
+async def test_clean_execution_never_parks(temporal_env_realtime, stub_server_mod) -> None:
+    base_url, _engine = stub_server_mod
     async with workflow_worker(
         temporal_env_realtime, [HumanApprovalExecutionWorkflow], base_url=base_url, profile="execute"
     ) as (client, task_queue):

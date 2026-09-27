@@ -7,6 +7,7 @@ from __future__ import annotations
 import asyncio
 import uuid
 
+import pytest
 from recipes.idempotent_activity_receipt_dedup import (
     IdempotentDecisionWorkflow,
     IdempotentExecutionResult,
@@ -15,11 +16,13 @@ from temporal_algenta.types import GovernedDecisionInput
 
 from .helpers import with_session_resilient, workflow_worker
 
+pytestmark = pytest.mark.asyncio(loop_scope="module")
+
 INPUT = GovernedDecisionInput(action="hold", webhook_url="https://ops.example.com/hooks/hold")
 
 
-async def test_first_delivery_is_not_deduplicated(temporal_env, stub_server) -> None:
-    base_url, engine = stub_server
+async def test_first_delivery_is_not_deduplicated(temporal_env, stub_server_mod) -> None:
+    base_url, engine = stub_server_mod
     async with workflow_worker(
         temporal_env, [IdempotentDecisionWorkflow], base_url=base_url, profile="execute"
     ) as (client, task_queue):
@@ -37,12 +40,12 @@ async def test_first_delivery_is_not_deduplicated(temporal_env, stub_server) -> 
     assert engine.delivered_decision_ids == {"decision-hold"}
 
 
-async def test_prior_delivery_is_reported_as_deduplicated_success(temporal_env, stub_server) -> None:
+async def test_prior_delivery_is_reported_as_deduplicated_success(temporal_env, stub_server_mod) -> None:
     """Simulate the crash window: a previous attempt delivered the decision but its completion
     never made it back (here: a direct engine call standing in for that lost attempt). The
     workflow's retry re-attempts the delivery, the idempotency gate blocks it, and the workflow
     reports a deduplicated success -- not a double delivery, not a failure."""
-    base_url, engine = stub_server
+    base_url, engine = stub_server_mod
     prior = await with_session_resilient(
         base_url=base_url,
         profile="execute",
@@ -71,11 +74,10 @@ async def test_prior_delivery_is_reported_as_deduplicated_success(temporal_env, 
     assert engine.execute_attempts["decision-hold"] == 2  # one delivered, one gate-blocked
 
 
-async def test_other_denials_are_not_swallowed_by_the_dedup_mapping(temporal_env, stub_server) -> None:
-    import pytest
+async def test_other_denials_are_not_swallowed_by_the_dedup_mapping(temporal_env, stub_server_mod) -> None:
     from temporalio.client import WorkflowFailureError
 
-    base_url, _engine = stub_server
+    base_url, _engine = stub_server_mod
     async with workflow_worker(
         temporal_env, [IdempotentDecisionWorkflow], base_url=base_url, profile="execute"
     ) as (client, task_queue):

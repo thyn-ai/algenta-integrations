@@ -7,9 +7,12 @@ from __future__ import annotations
 import asyncio
 import uuid
 
+import pytest
 from recipes.agent_workflow_governed_tools import AgentRunReport, GovernedAgentWorkflow
 
 from .helpers import workflow_worker
+
+pytestmark = pytest.mark.asyncio(loop_scope="module")
 
 SCENARIO = "spx-rebalance"
 WEBHOOK = "https://ops.example.com/hooks/rebalance"
@@ -28,8 +31,8 @@ async def _run_agent(client, task_queue: str, profile: str) -> AgentRunReport:
     )
 
 
-async def test_agent_under_execute_profile_completes_the_full_plan(temporal_env, stub_server) -> None:
-    base_url, engine = stub_server
+async def test_agent_under_execute_profile_completes_the_full_plan(temporal_env, stub_server_mod) -> None:
+    base_url, engine = stub_server_mod
     async with workflow_worker(
         temporal_env, [GovernedAgentWorkflow], base_url=base_url, profile="execute"
     ) as (client, task_queue):
@@ -46,8 +49,8 @@ async def test_agent_under_execute_profile_completes_the_full_plan(temporal_env,
     assert engine.delivered_decision_ids == {f"decision-agent-{SCENARIO}"}
 
 
-async def test_agent_under_govern_profile_plans_but_never_acts(temporal_env, stub_server) -> None:
-    base_url, engine = stub_server
+async def test_agent_under_govern_profile_plans_but_never_acts(temporal_env, stub_server_mod) -> None:
+    base_url, engine = stub_server_mod
     async with workflow_worker(
         temporal_env, [GovernedAgentWorkflow], base_url=base_url, profile="execute"
     ) as (client, task_queue):
@@ -69,8 +72,8 @@ async def test_agent_under_govern_profile_plans_but_never_acts(temporal_env, stu
     assert [d["decision_id"] for d in engine.logged_decisions] == [f"decision-agent-{SCENARIO}"]
 
 
-async def test_agent_under_observe_profile_only_reads(temporal_env, stub_server) -> None:
-    base_url, engine = stub_server
+async def test_agent_under_observe_profile_only_reads(temporal_env, stub_server_mod) -> None:
+    base_url, engine = stub_server_mod
     async with workflow_worker(
         temporal_env, [GovernedAgentWorkflow], base_url=base_url, profile="observe"
     ) as (client, task_queue):

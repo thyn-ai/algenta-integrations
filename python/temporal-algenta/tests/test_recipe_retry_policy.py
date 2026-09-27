@@ -22,11 +22,13 @@ from temporalio.client import WorkflowFailureError
 
 from .helpers import workflow_worker
 
+pytestmark = pytest.mark.asyncio(loop_scope="module")
+
 WORKFLOWS = [TransientTolerantQueryWorkflow, DenialFailsFastWorkflow]
 
 
-async def test_transient_engine_errors_are_retried_until_success(temporal_env, stub_server) -> None:
-    base_url, engine = stub_server
+async def test_transient_engine_errors_are_retried_until_success(temporal_env, stub_server_mod) -> None:
+    base_url, engine = stub_server_mod
     async with workflow_worker(temporal_env, WORKFLOWS, base_url=base_url, profile="execute") as (
         client,
         task_queue,
@@ -43,8 +45,8 @@ async def test_transient_engine_errors_are_retried_until_success(temporal_env, s
     assert engine.query_attempts[FLAKY_DATASET] == FLAKY_DATASET_FAILURES + 1
 
 
-async def test_policy_denial_fails_fast_with_zero_wasted_retries(temporal_env, stub_server) -> None:
-    base_url, engine = stub_server
+async def test_policy_denial_fails_fast_with_zero_wasted_retries(temporal_env, stub_server_mod) -> None:
+    base_url, engine = stub_server_mod
     async with workflow_worker(temporal_env, WORKFLOWS, base_url=base_url, profile="execute") as (
         client,
         task_queue,

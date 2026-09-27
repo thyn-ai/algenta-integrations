@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import uuid
 
+import pytest
 from recipes._kernels import KERNEL_SOURCE, naive_rank_documents, rank_documents
 from recipes.batch_simulation_pipeline import (
     SCENARIO_BRIEFS,
@@ -20,6 +21,8 @@ from temporal_algenta.types import BatchSimulationReport
 
 from .helpers import workflow_worker
 
+pytestmark = pytest.mark.asyncio(loop_scope="module")
+
 SCENARIOS = list(SCENARIO_BRIEFS)
 
 
@@ -28,8 +31,8 @@ def _expected_value(scenario: str) -> float:
     return float((len(scenario) * 13) % 97)
 
 
-async def test_batch_simulation_fans_out_and_aggregates(temporal_env, stub_server) -> None:
-    base_url, _engine = stub_server
+async def test_batch_simulation_fans_out_and_aggregates(temporal_env, stub_server_mod) -> None:
+    base_url, _engine = stub_server_mod
     async with workflow_worker(
         temporal_env, [BatchSimulationWorkflow], base_url=base_url, profile="observe"
     ) as (client, task_queue):
@@ -48,8 +51,8 @@ async def test_batch_simulation_fans_out_and_aggregates(temporal_env, stub_serve
     assert report.mean_expected_value == expected_mean
 
 
-async def test_batch_simulation_empty_input_is_deterministic(temporal_env, stub_server) -> None:
-    base_url, _engine = stub_server
+async def test_batch_simulation_empty_input_is_deterministic(temporal_env, stub_server_mod) -> None:
+    base_url, _engine = stub_server_mod
     async with workflow_worker(
         temporal_env, [BatchSimulationWorkflow], base_url=base_url, profile="observe"
     ) as (client, task_queue):
@@ -66,11 +69,11 @@ async def test_batch_simulation_empty_input_is_deterministic(temporal_env, stub_
     assert report.mean_expected_value == 0.0
 
 
-async def test_parallel_and_sequential_variants_produce_identical_reports(temporal_env, stub_server) -> None:
+async def test_parallel_and_sequential_variants_produce_identical_reports(temporal_env, stub_server_mod) -> None:
     """The speed harness: both workflow variants must return the same deterministic report
     (the speedup claim is only meaningful if the results are identical), and the ranking stage
     must be fully deterministic."""
-    base_url, _engine = stub_server
+    base_url, _engine = stub_server_mod
     workflows = [BatchSimulationWorkflow, SequentialSimulationWorkflow]
     async with workflow_worker(temporal_env, workflows, base_url=base_url, profile="observe") as (
         client,
