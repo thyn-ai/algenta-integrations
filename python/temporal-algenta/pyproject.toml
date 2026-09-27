@@ -43,7 +43,7 @@ Repository = "https://github.com/thyn-ai/algenta-integrations"
 # listed explicitly since the test suite's stub Algenta MCP server (tests/stub_server.py) and
 # the recipes' demo engine (recipes/demo_engine.py) both serve FastMCP's ASGI app through a
 # real `uvicorn.Server` on `127.0.0.1` -- a real socket, not an in-memory transport shortcut.
-dev = ["pytest", "pytest-asyncio", "pytest-cov", "uvicorn>=0.30"]
+dev = ["pytest", "pytest-asyncio", "pytest-cov", "pytest-timeout", "uvicorn>=0.30"]
 
 [build-system]
 requires = ["setuptools>=68.0", "wheel"]
@@ -54,6 +54,13 @@ include = ["temporal_algenta*"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+# Hard per-test ceiling: every individual wait in this suite is already bounded (env
+# startup/shutdown, worker lifecycle, MCP session establishment/reads, workflow results), but
+# the *sum* of bounded waits must also be bounded -- a healthy test finishes in seconds, so
+# anything past 240s is by definition a stall and must fail loudly (thread method, the only
+# one that interrupts a running coroutine reliably).
+timeout = 240
+timeout_method = "thread"
 # Default (function-scoped) event loops, matching the sibling suites: a fresh loop per test
 # means server-side MCP session tasks that outlive a fixture teardown die with the loop instead
 # of contaminating the next server on a shared session loop (a real, reproduced hang: the
