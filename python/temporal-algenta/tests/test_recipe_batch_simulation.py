@@ -96,6 +96,7 @@ async def test_parallel_and_sequential_variants_produce_identical_reports(tempor
     assert report.kernel_source == KERNEL_SOURCE
 
 
+@pytest.mark.asyncio(loop_scope="function")
 def test_bm25_ranking_is_deterministic_and_theme_relevant() -> None:
     briefs = [SCENARIO_BRIEFS[s] for s in SCENARIOS]
     first = rank_documents("forex currency overnight", briefs)
