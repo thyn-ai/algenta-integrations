@@ -47,6 +47,12 @@ SCENARIO_BRIEFS: Final[dict[str, str]] = {
     "crypto-weekend-gap": "crypto bitcoin weekend liquidity gap volatility digital assets",
     "gold-hedge": "gold commodities hedge inflation safe haven metals",
     "oil-inventory": "crude oil inventory energy commodities supply demand",
+    "jpy-carry": "yen carry trade unwind currency rates japan bonds forex",
+    "em-debt": "emerging market sovereign debt bonds currency risk",
+    "natgas-storage": "natural gas storage energy commodities winter demand",
+    "copper-china": "copper china industrial metals commodities demand growth",
+    "vol-term": "volatility term structure VIX futures contango backwardation",
+    "brexit-gbp": "sterling pound currency political risk forex gap",
 }
 PORTFOLIO_THEME: Final = "rates volatility gap forex currency overnight"
 

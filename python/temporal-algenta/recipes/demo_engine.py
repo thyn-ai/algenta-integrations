@@ -65,6 +65,14 @@ FLAKY_DATASET_FAILURES = 2
 #: The fixed clock every demo-engine timestamp uses -- determinism for reproducible recipes.
 DEMO_CLOCK = "2026-09-01T00:00:00Z"
 
+#: Fixed per-call latency of the demo `simulate` tool: a real engine's Monte Carlo simulation
+#: takes real milliseconds, and the batch recipe's parallel-fan-out speedup measurement is only
+#: meaningful against a call that actually costs something. Deterministic (a fixed value, not
+#: a random delay), so recipe output stays reproducible. Implemented as an async sleep inside
+#: the async tool -- a blocking sync sleep would serialize the whole server (this MCP SDK runs
+#: sync tools inline on the serving event loop, verified by direct measurement).
+SIMULATE_LATENCY_SECONDS = 0.1
+
 
 class DemoAlgentaEngine:
     """One isolated demo engine: its own FastMCP server plus the state its tools close over.
@@ -162,9 +170,10 @@ class DemoAlgentaEngine:
             return {"dataset": dataset, "rows": [{"value": 1}, {"value": 2}]}
 
         @mcp.tool()
-        def simulate(scenario: str) -> dict:
+        async def simulate(scenario: str) -> dict:
             """Deterministic demo simulation: the expected value is derived from the scenario
             string (never random), so identical input always yields identical output."""
+            await asyncio.sleep(SIMULATE_LATENCY_SECONDS)
             expected_value = float((len(scenario) * 13) % 97)
             return {
                 "scenario": scenario,
@@ -325,6 +334,7 @@ __all__ = [
     "IDEMPOTENCY_GATE_CODE",
     "LOW_CONFIDENCE_DECISION_ID",
     "RISK_FLOOR_GATE_CODE",
+    "SIMULATE_LATENCY_SECONDS",
     "DemoAlgentaEngine",
     "serve_demo_engine",
 ]
