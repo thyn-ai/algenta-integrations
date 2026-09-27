@@ -17,6 +17,7 @@ members = [
     "llamaindex-algenta",
     "ray-serve-algenta",
     "vllm-algenta",
+    "temporal-algenta",
 ]
 
 [build-system]

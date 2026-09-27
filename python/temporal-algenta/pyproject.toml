@@ -68,7 +68,8 @@ asyncio_mode = "auto"
 source = ["temporal_algenta"]
 
 [tool.coverage.report]
-# Gate for the CI python job (enforced via pytest-cov): measured at 93% on Python 3.12
-# (2026-09-26), floored 3 points lower for headroom. Raise the floor as coverage grows.
+# Gate for the CI python job (enforced via pytest-cov): measured at 94% on Python 3.12
+# (2026-09-26, full suite), floored 4 points lower for headroom. Raise the floor as coverage
+# grows.
 fail_under = 90
 show_missing = true
