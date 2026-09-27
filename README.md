@@ -30,7 +30,7 @@ by the engine server-side, never delegated to the model. Everything runs against
 
 ## Packages
 
-All ten packages are published — eight on PyPI, two on npm — and each carries its own
+All eleven packages are published — nine on PyPI, two on npm — and each carries its own
 passing test suite that runs against a real local stub server, never a mock of the
 framework's internals.
 
@@ -44,6 +44,7 @@ framework's internals.
 | [`llamaindex-algenta`](./python/llamaindex-algenta) | LlamaIndex | `pip install llamaindex-algenta` | Governed `FunctionTool`s with typed `ExecutionReceipt` outputs and named-gate denials. |
 | [`ray-serve-algenta`](./python/ray-serve-algenta) | Ray Serve / KubeRay | `pip install ray-serve-algenta` | A byte-transparent, multi-replica reverse proxy for the engine's `/mcp` surface, with a ready-to-adapt `RayService` manifest. |
 | [`vllm-algenta`](./python/vllm-algenta) | vLLM / OpenAI-compatible clients | `pip install vllm-algenta` | Thin helpers pointing the standard `openai` client at the engine's `/v1/chat/completions` and `/v1/responses` API. |
+| [`temporal-algenta`](./python/temporal-algenta) | Temporal.io | `pip install temporal-algenta` | Governed engine calls as durable Temporal activities: typed `ExecutionReceiptData` results, structured denials as non-retryable typed `ApplicationError`s, profile enforcement, and ten runnable recipes (approval workflows, sagas, schedules, agent loops). |
 | [`algenta-tools`](./typescript/algenta-tools/packages/algenta-tools) | Vercel AI SDK (`ai`) | `npm install algenta-tools` | A governed `ToolSet` factory with typed `ExecutionReceipt` results and `ExecutionBlockedError` denials. |
 | [`n8n-nodes-algenta`](./typescript/n8n-nodes-algenta/packages/n8n-nodes-algenta) | n8n | `npm install n8n-nodes-algenta` | A community node exposing the governed tools as typed n8n operations, with profile enforcement before any network call. |
 

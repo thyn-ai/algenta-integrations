@@ -1,0 +1,82 @@
+[project]
+name = "temporal-algenta"
+version = "0.1.0"
+description = "Temporal.io integration for Algenta: governed decision execution as durable activities with typed receipts, structured denials as non-retryable typed failures, and profile enforcement on a self-hosted Algenta Engine's MCP tool surface"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+keywords = ["algenta", "temporal", "temporalio", "durable-execution", "workflow", "activities", "decision", "mcp", "agent-governance", "ai-agents", "guardrails", "audit-trail", "idempotency", "saga", "human-in-the-loop"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Typing :: Typed",
+]
+# No `algenta-sdk` dependency -- this package never imports it: `AlgentaActivities` talks to the
+# caller's OWN self-hosted Algenta Engine over MCP (streamable HTTP), the same integration shape
+# as haystack-algenta / maf-algenta / llamaindex-algenta (see the README's "Why no `algenta-sdk`
+# dependency" section). The real runtime dependencies are `temporalio` (the Temporal Python SDK
+# this package's activities/workflows run on), `mcp` (the base Model Context Protocol SDK used
+# for the engine's tool surface -- the same SDK `tests/stub_server.py`'s FastMCP server and
+# `recipes/demo_engine.py` are built on), and `pydantic` (imported directly by
+# `temporal_algenta.receipts` for the shared receipt/denial models). Version floors are the
+# exact versions verified against this package's real APIs while building it: temporalio
+# 1.33.0, mcp 1.29.x, pydantic 2.x.
+dependencies = [
+    "temporalio>=1.33.0",
+    "mcp>=1.29.0,<2.0.0",
+    "pydantic>=2.7",
+]
+
+[project.urls]
+Homepage = "https://algenta.ai"
+Documentation = "https://docs.algenta.ai"
+Repository = "https://github.com/thyn-ai/algenta-integrations"
+
+[project.optional-dependencies]
+# `uvicorn` is already a transitive dependency of `mcp`'s streamable-HTTP server support but is
+# listed explicitly since the test suite's stub Algenta MCP server (tests/stub_server.py) and
+# the recipes' demo engine (recipes/demo_engine.py) both serve FastMCP's ASGI app through a
+# real `uvicorn.Server` on `127.0.0.1` -- a real socket, not an in-memory transport shortcut.
+dev = ["pytest", "pytest-asyncio", "pytest-cov", "pytest-timeout", "uvicorn>=0.30"]
+
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["temporal_algenta*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+# Hard per-test ceiling: every individual wait in this suite is already bounded (env
+# startup/shutdown, worker lifecycle, MCP session establishment/reads, workflow results), but
+# the *sum* of bounded waits must also be bounded -- a healthy test finishes in seconds, so
+# anything past 240s is by definition a stall and must fail loudly (thread method, the only
+# one that interrupts a running coroutine reliably).
+timeout = 240
+timeout_method = "thread"
+# Default (function-scoped) event loops, matching the sibling suites: a fresh loop per test
+# means server-side MCP session tasks that outlive a fixture teardown die with the loop instead
+# of contaminating the next server on a shared session loop (a real, reproduced hang: the
+# second sequential uvicorn server's lifespan never completes while a previous server's
+# stateful MCP session tasks linger). The time-skipping WorkflowEnvironment is therefore
+# function-scoped too (see tests/conftest.py) -- slightly slower, exactly isolated.
+
+[tool.coverage.run]
+# The workspace runs one pytest process per package (see .github/workflows/ci.yml), so each
+# run measures this package's own module only -- never the tests, the recipes, or sibling
+# packages.
+source = ["temporal_algenta"]
+
+[tool.coverage.report]
+# Gate for the CI python job (enforced via pytest-cov): measured at 94% on Python 3.12
+# (2026-09-26, full suite), floored 4 points lower for headroom. Raise the floor as coverage
+# grows.
+fail_under = 90
+show_missing = true
