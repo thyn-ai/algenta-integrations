@@ -8,18 +8,24 @@ import pytest_asyncio
 from recipes.demo_engine import DemoAlgentaEngine
 from temporalio.testing import WorkflowEnvironment
 
-from .stub_server import StubServerFixture, ThreadedEngineServer
+from .stub_server import ThreadedEngineServer
 
 
 @pytest.fixture
-async def stub_server() -> AsyncIterator[tuple[str, DemoAlgentaEngine]]:
-    """Run a fresh stub Algenta engine for the duration of one test (unit tests' loop scope).
+def stub_server() -> Iterator[tuple[str, DemoAlgentaEngine]]:
+    """Run a fresh stub Algenta engine for the duration of one test, on its own thread and
+    event loop (see `stub_server_mod` for why an in-loop server is not safe in this suite --
+    the same intermittent wedge applies to unit tests, observed in a CI rerun where
+    test_client/test_activities stalled identically to the recipe tests).
 
     Yields `(base_url, engine)`: the URL for `AlgentaActivities(base_url=...)` and the engine
     itself for asserting on delivered ids, logged decisions, and per-tool attempt counts.
     """
-    async with StubServerFixture() as server:
+    server = ThreadedEngineServer().start()
+    try:
         yield server.base_url, server.engine
+    finally:
+        server.stop()
 
 
 @pytest.fixture(scope="module")
