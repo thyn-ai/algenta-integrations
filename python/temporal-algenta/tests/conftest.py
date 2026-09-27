@@ -34,19 +34,19 @@ async def stub_server_mod() -> AsyncIterator[tuple[str, DemoAlgentaEngine]]:
 
 @pytest_asyncio.fixture(scope="module", loop_scope="module")
 async def temporal_env() -> AsyncIterator[WorkflowEnvironment]:
-    """One time-skipping `WorkflowEnvironment` per test FILE.
+    """One real-time `WorkflowEnvironment` (the SDK's local dev server) per test FILE.
 
-    Starting the local test server spawns a subprocess; doing it per test (the previous
-    arrangement) measurably degraded the process for later tests in a long suite -- after
-    enough server lifecycles, every subsequent start stalled on both macOS and Linux CI
-    runners (reproduced in CI logs: the first ~10 env-backed tests fly, then every further one
-    times out). One env per file keeps the lifecycle count flat while tests stay isolated via
-    unique task queues and workflow ids (see tests/helpers.py). Time skipping means durable
-    timers (the approval timeout in `recipes/human_approval_workflow.py`) fire without real
-    waiting. Startup and shutdown are bounded so a wedged lifecycle surfaces as a loud error,
-    never a silent hang.
+    Real-time, not time-skipping, on purpose: the time-skipping test server fast-forwards
+    durable timers the instant a workflow goes idle, which is exactly what a workflow waiting
+    on an activity (every recipe workflow) is doing -- under load, the skip intermittently
+    beats the activity's completion and the activity's own start_to_close timeout fires
+    instead (reproduced in CI logs as workflows that stall until the test's bound fires). A
+    real-time server has no skip semantics to race: activities take their real milliseconds.
+    One env per file (module scope) keeps server lifecycles flat while tests stay isolated via
+    unique task queues and workflow ids (see tests/helpers.py). Startup and shutdown are
+    bounded so a wedged lifecycle surfaces as a loud error, never a silent hang.
     """
-    env = await asyncio.wait_for(WorkflowEnvironment.start_time_skipping(), timeout=90)
+    env = await asyncio.wait_for(WorkflowEnvironment.start_local(), timeout=90)
     try:
         yield env
     finally:
@@ -54,21 +54,13 @@ async def temporal_env() -> AsyncIterator[WorkflowEnvironment]:
 
 
 @pytest_asyncio.fixture(scope="module", loop_scope="module")
-async def temporal_env_realtime() -> AsyncIterator[WorkflowEnvironment]:
-    """One real-time `WorkflowEnvironment` (the SDK's local dev server) per test FILE.
-
-    Needed for signal-driven tests whose workflow parks on a *long, armed* durable timer: on a
-    time-skipping server the skip fires that timer the instant the workflow goes idle, so an
-    operator signal sent afterwards always arrives "too late" (observed directly: the query
-    races the skip, the workflow times out first, and the query RPC then hangs). A real-time
-    server leaves the hour-long approval deadline alone while the test signals in real
-    seconds. Durable-deadline behavior itself is still covered on the time-skipping
-    environment (see `test_approval_timeout_abandons_the_execution`). Also required for the
-    schedule recipe test: the time-skipping test server does not implement the schedule RPCs
-    ("CreateSchedule is unimplemented"). Module-scoped for the same lifecycle reason as
-    `temporal_env`.
+async def temporal_env_skipping() -> AsyncIterator[WorkflowEnvironment]:
+    """One time-skipping `WorkflowEnvironment` per test FILE, for the one test that needs
+    time fast-forwarded: `test_approval_timeout_abandons_the_execution` (a one-second durable
+    approval deadline, fired instantly by the skip instead of a real wait). Nothing else
+    should use this -- see `temporal_env` for why.
     """
-    env = await asyncio.wait_for(WorkflowEnvironment.start_local(), timeout=90)
+    env = await asyncio.wait_for(WorkflowEnvironment.start_time_skipping(), timeout=90)
     try:
         yield env
     finally:

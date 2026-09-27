@@ -55,10 +55,10 @@ async def _start(client, task_queue: str, input: ApprovalGatedInput) -> Workflow
     )
 
 
-async def test_denial_parks_workflow_and_operator_approval_completes_it(temporal_env_realtime, stub_server_mod) -> None:
+async def test_denial_parks_workflow_and_operator_approval_completes_it(temporal_env, stub_server_mod) -> None:
     base_url, engine = stub_server_mod
     async with workflow_worker(
-        temporal_env_realtime, [HumanApprovalExecutionWorkflow], base_url=base_url, profile="execute"
+        temporal_env, [HumanApprovalExecutionWorkflow], base_url=base_url, profile="execute"
     ) as (client, task_queue):
         handle = await _start(
             client, task_queue, ApprovalGatedInput(action="low-confidence", webhook_url="http://ops/hook")
@@ -84,10 +84,10 @@ async def test_denial_parks_workflow_and_operator_approval_completes_it(temporal
     assert final.decided_by == "jane.doe@example.com"
 
 
-async def test_operator_rejection_fails_the_workflow_without_delivering(temporal_env_realtime, stub_server_mod) -> None:
+async def test_operator_rejection_fails_the_workflow_without_delivering(temporal_env, stub_server_mod) -> None:
     base_url, engine = stub_server_mod
     async with workflow_worker(
-        temporal_env_realtime, [HumanApprovalExecutionWorkflow], base_url=base_url, profile="execute"
+        temporal_env, [HumanApprovalExecutionWorkflow], base_url=base_url, profile="execute"
     ) as (client, task_queue):
         handle = await _start(
             client, task_queue, ApprovalGatedInput(action="risky", webhook_url="http://ops/hook")
@@ -109,17 +109,17 @@ async def test_operator_rejection_fails_the_workflow_without_delivering(temporal
     assert engine.delivered_decision_ids == set()
 
 
-async def test_approval_timeout_abandons_the_execution(temporal_env, stub_server_mod) -> None:
+async def test_approval_timeout_abandons_the_execution(temporal_env_skipping, stub_server_mod) -> None:
     base_url, engine = stub_server_mod
     async with workflow_worker(
-        temporal_env, [HumanApprovalExecutionWorkflow], base_url=base_url, profile="execute"
+        temporal_env_skipping, [HumanApprovalExecutionWorkflow], base_url=base_url, profile="execute"
     ) as (client, task_queue):
         handle = await _start(
             client,
             task_queue,
             # One-second durable deadline; the time-skipping environment fast-forwards to it.
             # No pre-query of the parked state here: on a time-skipping server the query races
-            # the skip and loses (see temporal_env_realtime's docstring).
+            # the skip and loses (see temporal_env's docstring).
             ApprovalGatedInput(action="risky", webhook_url="http://ops/hook", approval_timeout_seconds=1.0),
         )
         with pytest.raises(WorkflowFailureError) as exc_info:
@@ -130,10 +130,10 @@ async def test_approval_timeout_abandons_the_execution(temporal_env, stub_server
     assert engine.delivered_decision_ids == set()
 
 
-async def test_clean_execution_never_parks(temporal_env_realtime, stub_server_mod) -> None:
+async def test_clean_execution_never_parks(temporal_env, stub_server_mod) -> None:
     base_url, _engine = stub_server_mod
     async with workflow_worker(
-        temporal_env_realtime, [HumanApprovalExecutionWorkflow], base_url=base_url, profile="execute"
+        temporal_env, [HumanApprovalExecutionWorkflow], base_url=base_url, profile="execute"
     ) as (client, task_queue):
         receipt = await client.execute_workflow(
             HumanApprovalExecutionWorkflow.run,
