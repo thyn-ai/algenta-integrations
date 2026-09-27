@@ -16,8 +16,8 @@ from .helpers import workflow_worker
 pytestmark = pytest.mark.asyncio(loop_scope="module")
 
 
-async def test_governed_decision_workflow_returns_the_execution_receipt(temporal_env, stub_server_mod) -> None:
-    base_url, engine = stub_server_mod
+async def test_governed_decision_workflow_returns_the_execution_receipt(temporal_env, engine_state) -> None:
+    base_url, engine = engine_state
     async with workflow_worker(
         temporal_env, [GovernedDecisionWorkflow], base_url=base_url, profile="execute"
     ) as (client, task_queue):

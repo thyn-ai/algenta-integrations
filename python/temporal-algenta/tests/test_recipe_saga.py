@@ -20,8 +20,8 @@ RISKY = SagaStep(action="risky", webhook_url="https://ops.example.com/hooks/yolo
 SETTLE = SagaStep(action="settle", webhook_url="https://ops.example.com/hooks/settle")
 
 
-async def test_denial_triggers_reverse_order_compensation(temporal_env, stub_server_mod) -> None:
-    base_url, engine = stub_server_mod
+async def test_denial_triggers_reverse_order_compensation(temporal_env, engine_state) -> None:
+    base_url, engine = engine_state
     async with workflow_worker(
         temporal_env, [PolicyGatedSagaWorkflow], base_url=base_url, profile="execute"
     ) as (client, task_queue):
@@ -46,8 +46,8 @@ async def test_denial_triggers_reverse_order_compensation(temporal_env, stub_ser
     assert any("decision-risky was denied" in note for note in compensation_notes)
 
 
-async def test_clean_saga_completes_without_compensations(temporal_env, stub_server_mod) -> None:
-    base_url, engine = stub_server_mod
+async def test_clean_saga_completes_without_compensations(temporal_env, engine_state) -> None:
+    base_url, engine = engine_state
     async with workflow_worker(
         temporal_env, [PolicyGatedSagaWorkflow], base_url=base_url, profile="execute"
     ) as (client, task_queue):
@@ -65,7 +65,7 @@ async def test_clean_saga_completes_without_compensations(temporal_env, stub_ser
     assert engine.delivered_decision_ids == {"decision-hold", "decision-settle"}
 
 
-async def test_non_denial_failures_fail_the_saga_loudly(temporal_env, stub_server_mod) -> None:
+async def test_non_denial_failures_fail_the_saga_loudly(temporal_env, engine_state) -> None:
     """A failure that isn't a policy denial must not be compensated around: the saga fails.
 
     Here the worker runs under `govern`, so `execute_decision` is refused client-side with a
@@ -73,7 +73,7 @@ async def test_non_denial_failures_fail_the_saga_loudly(temporal_env, stub_serve
     `denial_from_activity_error` correctly finds nothing, and the workflow re-raises instead of
     compensating around an unknown state.
     """
-    base_url, engine = stub_server_mod
+    base_url, engine = engine_state
     async with workflow_worker(
         temporal_env, [PolicyGatedSagaWorkflow], base_url=base_url, profile="govern"
     ) as (client, task_queue):

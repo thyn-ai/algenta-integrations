@@ -22,14 +22,28 @@ async def stub_server() -> AsyncIterator[tuple[str, DemoAlgentaEngine]]:
         yield server.base_url, server.engine
 
 
-@pytest_asyncio.fixture(loop_scope="module")
+@pytest_asyncio.fixture(scope="module", loop_scope="module")
 async def stub_server_mod() -> AsyncIterator[tuple[str, DemoAlgentaEngine]]:
-    """The same fresh-per-test stub engine, but running on the *module* loop so recipe tests
-    (which use the module-scoped Temporal environments below) can use it. Function-scoped:
-    every test still gets its own isolated engine state.
+    """ONE stub engine server per test FILE, on the module loop (recipe tests only).
+
+    Starting a second uvicorn server on an already-used event loop intermittently wedges
+    request handling (reproduced on CI and locally: the first env-backed test on a loop
+    passes, every later one stalls), so per-test server lifecycles are avoided entirely; the
+    module-scoped Temporal environments already follow the same one-per-file rule. Tests get
+    their isolation from `engine_state` below, which resets the engine's plain-data state
+    before each test -- exactly equivalent to a fresh engine, since the tools read state at
+    call time.
     """
     async with StubServerFixture() as server:
         yield server.base_url, server.engine
+
+
+@pytest.fixture
+def engine_state(stub_server_mod: tuple[str, DemoAlgentaEngine]) -> tuple[str, DemoAlgentaEngine]:
+    """Per-test pristine engine state against the module's running stub server."""
+    base_url, engine = stub_server_mod
+    engine.reset()
+    return base_url, engine
 
 
 @pytest_asyncio.fixture(scope="module", loop_scope="module")

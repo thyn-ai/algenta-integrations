@@ -81,6 +81,16 @@ class DemoAlgentaEngine:
         self.execute_attempts: dict[str, int] = {}
         self.server = self._build_server()
 
+    def reset(self) -> None:
+        """Clear all mutable state, giving the next test a pristine engine against the same
+        running server. The tools read these attributes at call time (closures over `self`),
+        so clearing them here is exactly equivalent to a fresh engine.
+        """
+        self.delivered_decision_ids.clear()
+        self.logged_decisions.clear()
+        self.query_attempts.clear()
+        self.execute_attempts.clear()
+
     def _receipt(
         self,
         decision_id: str,
