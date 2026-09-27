@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterator
 
 import pytest
 import pytest_asyncio
 from recipes.demo_engine import DemoAlgentaEngine
 from temporalio.testing import WorkflowEnvironment
 
-from .stub_server import StubServerFixture
+from .stub_server import StubServerFixture, ThreadedEngineServer
 
 
 @pytest.fixture
@@ -22,20 +22,29 @@ async def stub_server() -> AsyncIterator[tuple[str, DemoAlgentaEngine]]:
         yield server.base_url, server.engine
 
 
-@pytest_asyncio.fixture(scope="module", loop_scope="module")
-async def stub_server_mod() -> AsyncIterator[tuple[str, DemoAlgentaEngine]]:
-    """ONE stub engine server per test FILE, on the module loop (recipe tests only).
+@pytest.fixture(scope="module")
+def stub_server_mod() -> Iterator[tuple[str, DemoAlgentaEngine]]:
+    """ONE stub engine server per test FILE, on its own thread and event loop.
 
-    Starting a second uvicorn server on an already-used event loop intermittently wedges
-    request handling (reproduced on CI and locally: the first env-backed test on a loop
-    passes, every later one stalls), so per-test server lifecycles are avoided entirely; the
-    module-scoped Temporal environments already follow the same one-per-file rule. Tests get
-    their isolation from `engine_state` below, which resets the engine's plain-data state
-    before each test -- exactly equivalent to a fresh engine, since the tools read state at
-    call time.
+    An in-loop server is not safe here: this suite runs several sequential servers per pytest
+    process, and each test file's loop also hosts a Temporal dev-server client and per-test
+    workers. On a shared loop a slow graceful shutdown forces `serve_demo_engine`'s cancel
+    fallback, stranding FastMCP's lifespan half-shut -- the NEXT server then accepts
+    connections but never completes responses (reproduced in CI and in local Linux containers
+    as `initialize()` read timeouts plus uvicorn's "ASGI callable returned without completing
+    response"; the first recipe test passes, every later one stalls). A dedicated thread per
+    server removes the shared-loop mechanism entirely -- see `tests/stub_server.py`.
+
+    Tests get their isolation from `engine_state` below, which resets the engine's plain-data
+    state before each test -- exactly equivalent to a fresh engine, since the tools read state
+    at call time. Being a plain sync fixture, this also carries no pytest-asyncio loop-scope
+    constraints at all.
     """
-    async with StubServerFixture() as server:
+    server = ThreadedEngineServer().start()
+    try:
         yield server.base_url, server.engine
+    finally:
+        server.stop()
 
 
 @pytest.fixture
