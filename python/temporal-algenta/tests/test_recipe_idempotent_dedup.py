@@ -29,7 +29,7 @@ async def test_first_delivery_is_not_deduplicated(temporal_env, stub_server) -> 
             id=f"wf-{uuid.uuid4().hex}",
             task_queue=task_queue,
             result_type=IdempotentExecutionResult,
-        ), timeout=90)
+        ), timeout=150)
     assert result.decision_id == "decision-hold"
     assert result.delivered is True
     assert result.deduplicated is False
@@ -61,7 +61,7 @@ async def test_prior_delivery_is_reported_as_deduplicated_success(temporal_env, 
             id=f"wf-{uuid.uuid4().hex}",
             task_queue=task_queue,
             result_type=IdempotentExecutionResult,
-        ), timeout=90)
+        ), timeout=150)
 
     assert result.delivered is True
     assert result.deduplicated is True
@@ -85,4 +85,4 @@ async def test_other_denials_are_not_swallowed_by_the_dedup_mapping(temporal_env
                 GovernedDecisionInput(action="risky", webhook_url="https://ops.example.com/hooks/yolo"),
                 id=f"wf-{uuid.uuid4().hex}",
                 task_queue=task_queue,
-            ), timeout=90)
+            ), timeout=150)

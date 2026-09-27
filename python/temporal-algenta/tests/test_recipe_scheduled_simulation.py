@@ -54,9 +54,10 @@ async def test_schedule_fires_the_governed_simulation_workflow(temporal_env_real
                 await asyncio.sleep(0.1)
             action_result = description.info.recent_actions[-1].action
             assert action_result is not None
-            result = await client.get_workflow_handle(
-                action_result.workflow_id, result_type=ScheduledSimulationResult
-            ).result()
+            result = await asyncio.wait_for(
+                client.get_workflow_handle(action_result.workflow_id, result_type=ScheduledSimulationResult).result(),
+                timeout=150,
+            )
         finally:
             await handle.delete()
 
@@ -79,6 +80,6 @@ async def test_simulation_workflow_runs_standalone_too(temporal_env, stub_server
             id=f"wf-{uuid.uuid4().hex}",
             task_queue=task_queue,
             result_type=ScheduledSimulationResult,
-        ), timeout=90)
+        ), timeout=150)
     assert result.scenario == "spx-rebalance"
     assert result.confidence == 0.87

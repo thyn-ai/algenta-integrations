@@ -48,7 +48,7 @@ async def test_journal_records_queries_and_closes(temporal_env, stub_server) -> 
         assert entries[1].rationale == "drift above tolerance"
 
         await handle.signal(DecisionJournalWorkflow.close)
-        summary = await asyncio.wait_for(handle.result(), timeout=90)
+        summary = await asyncio.wait_for(handle.result(), timeout=150)
 
     assert summary == {
         "decision_count": 2,

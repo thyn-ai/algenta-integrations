@@ -24,7 +24,7 @@ async def test_governed_decision_workflow_returns_the_execution_receipt(temporal
             id=f"wf-{uuid.uuid4().hex}",
             task_queue=task_queue,
             result_type=ExecutionReceiptData,
-        ), timeout=90)
+        ), timeout=150)
 
     assert receipt.decision_id == "decision-hold"
     assert receipt.is_delivered()

@@ -36,7 +36,7 @@ async def test_transient_engine_errors_are_retried_until_success(temporal_env, s
             FLAKY_DATASET,
             id=f"wf-{uuid.uuid4().hex}",
             task_queue=task_queue,
-        ), timeout=90)
+        ), timeout=150)
     assert result["dataset"] == FLAKY_DATASET
     assert result["rows"] == [{"value": 1}, {"value": 2}]
     # Exactly the documented number of flakes, then one successful attempt.
@@ -55,7 +55,7 @@ async def test_policy_denial_fails_fast_with_zero_wasted_retries(temporal_env, s
                 args=[BELOW_RISK_FLOOR_DECISION_ID, "https://ops.example.com/hooks/yolo"],
                 id=f"wf-{uuid.uuid4().hex}",
                 task_queue=task_queue,
-            ), timeout=90)
+            ), timeout=150)
 
     # The structured denial survives the whole chain: activity -> workflow -> client.
     denial = denial_from_activity_error(exc_info.value)

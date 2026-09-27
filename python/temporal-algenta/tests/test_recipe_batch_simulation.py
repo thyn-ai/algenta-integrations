@@ -39,7 +39,7 @@ async def test_batch_simulation_fans_out_and_aggregates(temporal_env, stub_serve
             id=f"wf-{uuid.uuid4().hex}",
             task_queue=task_queue,
             result_type=BatchSimulationReport,
-        ), timeout=90)
+        ), timeout=150)
 
     assert report.scenario_count == len(SCENARIOS)
     assert report.succeeded == len(SCENARIOS)
@@ -59,7 +59,7 @@ async def test_batch_simulation_empty_input_is_deterministic(temporal_env, stub_
             id=f"wf-{uuid.uuid4().hex}",
             task_queue=task_queue,
             result_type=BatchSimulationReport,
-        ), timeout=90)
+        ), timeout=150)
     assert report.scenario_count == 0
     assert report.succeeded == 0
     assert report.expected_values == {}

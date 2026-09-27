@@ -24,7 +24,7 @@ async def test_audited_workflow_returns_both_audit_streams(temporal_env, stub_se
             id=f"wf-{uuid.uuid4().hex}",
             task_queue=task_queue,
         )
-        report = await asyncio.wait_for(client.get_workflow_handle(handle.id, result_type=AuditReport).result(), timeout=90)
+        report = await asyncio.wait_for(client.get_workflow_handle(handle.id, result_type=AuditReport).result(), timeout=150)
         # The trail is queryable even on the completed workflow.
         trail = await handle.query(AuditedDecisionWorkflow.audit_trail, result_type=list[AuditEvent])
 

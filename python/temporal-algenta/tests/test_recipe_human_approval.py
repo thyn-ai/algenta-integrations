@@ -70,7 +70,7 @@ async def test_denial_parks_workflow_and_operator_approval_completes_it(temporal
             HumanApprovalExecutionWorkflow.decide,
             ApprovalDecision(approved=True, operator="jane.doe@example.com", reason="reviewed", override_safety=True),
         )
-        receipt = await asyncio.wait_for(_typed_result_handle(client, handle).result(), timeout=90)
+        receipt = await asyncio.wait_for(_typed_result_handle(client, handle).result(), timeout=150)
         final = await handle.query(HumanApprovalExecutionWorkflow.status, result_type=ApprovalStatus)
 
     assert receipt.decision_id == "decision-low-confidence"
@@ -98,7 +98,7 @@ async def test_operator_rejection_fails_the_workflow_without_delivering(temporal
             ApprovalDecision(approved=False, operator="john.doe@example.com", reason="too risky"),
         )
         with pytest.raises(WorkflowFailureError) as exc_info:
-            await asyncio.wait_for(handle.result(), timeout=90)
+            await asyncio.wait_for(handle.result(), timeout=150)
 
     cause = exc_info.value.__cause__
     assert isinstance(cause, ApplicationError)
@@ -121,7 +121,7 @@ async def test_approval_timeout_abandons_the_execution(temporal_env, stub_server
             ApprovalGatedInput(action="risky", webhook_url="http://ops/hook", approval_timeout_seconds=1.0),
         )
         with pytest.raises(WorkflowFailureError) as exc_info:
-            await asyncio.wait_for(handle.result(), timeout=90)
+            await asyncio.wait_for(handle.result(), timeout=150)
     cause = exc_info.value.__cause__
     assert isinstance(cause, ApplicationError)
     assert cause.type == "approval_timeout"

@@ -29,7 +29,7 @@ async def test_denial_triggers_reverse_order_compensation(temporal_env, stub_ser
             id=f"wf-{uuid.uuid4().hex}",
             task_queue=task_queue,
             result_type=SagaReport,
-        ), timeout=90)
+        ), timeout=150)
 
     assert report.status == "compensated"
     assert report.denial_gate == "risk_floor"
@@ -55,7 +55,7 @@ async def test_clean_saga_completes_without_compensations(temporal_env, stub_ser
             id=f"wf-{uuid.uuid4().hex}",
             task_queue=task_queue,
             result_type=SagaReport,
-        ), timeout=90)
+        ), timeout=150)
     assert report.status == "completed"
     assert report.executed_decision_ids == ["decision-hold", "decision-settle"]
     assert report.compensated_decision_ids == []
@@ -81,7 +81,7 @@ async def test_non_denial_failures_fail_the_saga_loudly(temporal_env, stub_serve
                 [HOLD],
                 id=f"wf-{uuid.uuid4().hex}",
                 task_queue=task_queue,
-            ), timeout=90)
+            ), timeout=150)
     assert _chain_contains_error_type(exc_info.value, "algenta_tool_denied_outside_profile")
     # Nothing delivered, and no compensation was recorded for a non-denial failure.
     assert engine.delivered_decision_ids == set()

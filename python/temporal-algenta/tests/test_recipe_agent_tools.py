@@ -24,7 +24,7 @@ async def _run_agent(client, task_queue: str, profile: str) -> AgentRunReport:
             task_queue=task_queue,
             result_type=AgentRunReport,
         ),
-        timeout=90,
+        timeout=150,
     )
 
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 from contextlib import asynccontextmanager
@@ -23,7 +24,7 @@ from temporalio.worker import Worker
 #: response read) must fail fast so the retry wrappers below -- and Temporal's own retry
 #: policy in workflow tests -- can heal it on a fresh session instead of stalling the suite
 #: for the SDK's 60s default.
-TEST_READ_TIMEOUT = timedelta(seconds=10)
+TEST_READ_TIMEOUT = timedelta(seconds=5)
 
 #: How many times the resilient wrappers retry a session-level MCP failure. Retries here cover
 #: exactly one failure class -- `McpError` from session establishment -- never governed-call
@@ -52,13 +53,19 @@ async def workflow_worker(
     """
     algenta = AlgentaActivities(base_url=base_url, profile=profile, read_timeout=TEST_READ_TIMEOUT)
     task_queue = f"tq-{uuid.uuid4().hex}"
-    async with Worker(
+    # Bounded like every other wait in this suite: a wedged worker startup must surface as a
+    # loud test error, never a silent stall (observed on CI).
+    worker = Worker(
         env.client,
         task_queue=task_queue,
         workflows=list(workflows),
         activities=[*algenta.all_activities(), *extra_activities],
-    ):
+    )
+    await asyncio.wait_for(worker.__aenter__(), timeout=60)
+    try:
         yield env.client, task_queue
+    finally:
+        await asyncio.wait_for(worker.__aexit__(None, None, None), timeout=60)
 
 
 async def with_session_resilient(
