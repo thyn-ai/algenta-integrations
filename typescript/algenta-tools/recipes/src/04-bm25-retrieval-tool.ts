@@ -6,8 +6,11 @@
  * `tool` and puts Algenta at the center of it: every retrieval the agent makes is recorded in
  * Algenta's decision memory via `log_decision` (govern tier), so "what did the agent look up,
  * and why" is an auditable decision record, not a lost log line. The BM25 scorer here is plain,
- * deterministic TypeScript (the sibling `bm25_mojo` kernel is the Python/Mojo accelerator; no
- * published TS kernel package exists to call from here).
+ * deterministic TypeScript that runs anywhere. On the Python side the same retrieval hot path
+ * is served by `bm25-mojo` (Algenta's published Mojo kernel, live on PyPI -- see the sibling
+ * `python/langchain-algenta` BM25 recipe, which uses it transparently when installed); a
+ * TS-side kernel is a separate kernel-program track, so this recipe keeps the dependency-free
+ * scorer.
  *
  * Run it (zero credentials -- stub engine + scripted stand-in model):
  *
