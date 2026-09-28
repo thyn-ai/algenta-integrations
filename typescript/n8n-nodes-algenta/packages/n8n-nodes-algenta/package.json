@@ -14,10 +14,7 @@
   ],
   "license": "Apache-2.0",
   "homepage": "https://docs.algenta.ai",
-  "author": {
-    "name": "Thyn AI",
-    "email": "security@algenta.ai"
-  },
+  "author": { "name": "Thyn", "url": "https://thyn.ai" },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/thyn-ai/algenta-integrations.git",
