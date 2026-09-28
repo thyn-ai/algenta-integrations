@@ -3,6 +3,8 @@ name = "vllm-algenta"
 version = "0.1.2"
 description = "Point vLLM (or any OpenAI-client-based consumer) at Algenta's own OpenAI-compatible /v1/chat/completions and /v1/responses surface -- a thin base-url/api-key helper plus a real, honest capability-fidelity conformance suite"
 readme = "README.md"
+authors = [{ name = "Thyn" }]
+maintainers = [{ name = "Thyn" }]
 requires-python = ">=3.12"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
@@ -29,6 +31,7 @@ dependencies = [
 Homepage = "https://algenta.ai"
 Documentation = "https://docs.algenta.ai"
 Repository = "https://github.com/thyn-ai/algenta-integrations"
+Company = "https://thyn.ai"
 
 [project.optional-dependencies]
 # `fastapi` + `uvicorn` back the test suite's stub Algenta HTTP server (tests/stub_server.py) --

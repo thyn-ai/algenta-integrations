@@ -3,6 +3,8 @@ name = "langchain-algenta"
 version = "0.2.0"
 description = "LangChain / LangGraph tool integration for Algenta: a governed-execution-aware toolset wrapping a self-hosted Algenta engine's MCP tool surface"
 readme = "README.md"
+authors = [{ name = "Thyn" }]
+maintainers = [{ name = "Thyn" }]
 requires-python = ">=3.12"
 license = "Apache-2.0"
 license-files = ["LICENSE"]
@@ -39,6 +41,7 @@ dependencies = [
 Homepage = "https://algenta.ai"
 Documentation = "https://docs.algenta.ai"
 Repository = "https://github.com/thyn-ai/algenta-integrations"
+Company = "https://thyn.ai"
 
 [project.optional-dependencies]
 # `mcp` (the base Model Context Protocol SDK) is already a transitive dependency of
