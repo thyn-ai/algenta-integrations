@@ -1,6 +1,6 @@
 [project]
 name = "maf-algenta"
-version = "0.1.3"
+version = "0.1.4"
 description = "Microsoft Agent Framework (MAF) tool integration for Algenta: a governed-execution-aware FunctionTool list wrapping a self-hosted Algenta engine's MCP tool surface"
 readme = "README.md"
 authors = [{ name = "Thyn" }]
