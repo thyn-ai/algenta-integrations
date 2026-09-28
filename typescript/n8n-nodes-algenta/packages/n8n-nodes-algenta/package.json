@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-algenta",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "n8n community node for Algenta: a governed-execution-aware node exposing your own self-hosted Algenta engine's MCP tool surface (get_contract, query_data, simulate, recommend, plan_decision, log_decision, execute_decision) as typed n8n operations, with a real ExecutionReceipt/ExecutionBlockedError contract on execute_decision.",
   "keywords": [
     "n8n-community-node-package",
@@ -15,8 +15,9 @@
   "license": "Apache-2.0",
   "homepage": "https://docs.algenta.ai",
   "author": {
-    "name": "Thyn AI",
-    "email": "security@algenta.ai"
+    "name": "Thyn",
+    "email": "eng@thyn.ai",
+    "url": "https://thyn.ai"
   },
   "repository": {
     "type": "git",
