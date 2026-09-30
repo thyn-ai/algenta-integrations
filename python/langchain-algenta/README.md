@@ -38,6 +38,26 @@ explicitly. The tools `create_algenta_tools` returns are ordinary LangChain `Bas
 usable inside a `langgraph` agent if that's how you build yours -- that's your own dependency to
 add, not this package's.
 
+## LangChain MCP compatibility
+
+LangChain 1.4.0 (2026-09-03) shipped a built-in `langchain.mcp` namespace
+(`MCPAdapter`, `as_langchain_tool`), and the standalone `langchain-mcp-adapters` repository is
+now archived. This package deliberately remains on `langchain-mcp-adapters` (≥0.3.2) for now:
+
+- `langchain.mcp` is **beta** and raises `LangChainBetaWarning` on import; its API is explicitly
+  subject to change.
+- The new namespace has **no equivalent** to the `ToolCallInterceptor` seam this package relies on
+  for profile enforcement, `force`/`override_safety` scrubbing, and the real `execute_decision`
+  denial mapping without re-wrapping every returned `StructuredTool`.
+- Migrating would make the full `langchain` metapackage a **runtime dependency**, replacing this
+  package's deliberate `langchain-core`-only footprint.
+- `langchain-mcp-adapters` 0.3.2 remains compatible with the current `langchain-core` floor and
+  continues to pass this package's full test suite.
+
+We will revisit this decision each quarter (next review: 2026-12-31) or when `langchain.mcp`
+leaves beta, whichever comes first. See [#112](https://github.com/thyn-ai/algenta-integrations/issues/112)
+for the full evaluation.
+
 **The Quick start below needs one more package.** `create_algenta_tools` itself only needs the
 lightweight `langchain-core` (the same reason this repository's `pydantic-ai-algenta` depends on
 `pydantic-ai-slim` rather than the full `pydantic-ai` metapackage) -- but building an agent with
@@ -203,7 +223,9 @@ Unlike this repository's `pydantic-ai-algenta` and `algenta-tools` (Vercel AI SD
 which both wrap each tool object's own call method directly, because that's the natural seam in
 those frameworks -- `langchain-algenta` is built on
 [`langchain_mcp_adapters`'s `ToolCallInterceptor`](https://github.com/langchain-ai/langchain-mcp-adapters)
-protocol instead. `create_algenta_tools` builds a
+protocol instead. `langchain-mcp-adapters` is archived, but its final 0.3.2 release is still the
+best fit for this package because the built-in `langchain.mcp` namespace (LangChain 1.4.0+) is
+beta and does not expose an equivalent interceptor seam. `create_algenta_tools` builds a
 `langchain_mcp_adapters.client.MultiServerMCPClient` with an `AlgentaToolCallInterceptor`
 registered in `tool_interceptors=`; every real tool call that client's tools make is routed
 through it before the real MCP network call happens.

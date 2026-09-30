@@ -31,6 +31,16 @@ classifiers = [
 # not this package's. Version floors below are the exact versions verified against this
 # package's real, current APIs while building it (see the research notes referenced in this
 # package's PR): langchain-core 1.6.0, langchain-mcp-adapters 0.3.2.
+#
+# Why not `langchain[mcp]` / `langchain.mcp`? LangChain 1.4.0 moved MCP support into the built-in
+# `langchain.mcp` namespace, but that namespace is beta (it raises `LangChainBetaWarning` on
+# import) and lacks the `ToolCallInterceptor` seam this package uses for profile enforcement,
+# never-model-facing scrubbing, and the real `execute_decision` denial mapping. Migrating would
+# also force a runtime dependency on the full `langchain` metapackage, replacing this package's
+# deliberate `langchain-core`-only footprint. `langchain-mcp-adapters` is archived, yet its final
+# 0.3.2 release remains compatible with the current `langchain-core` floor and continues to pass
+# the full test suite. We revisit this decision quarterly; see the package README's
+# "LangChain MCP compatibility" section and issue #112.
 dependencies = [
     "algenta-sdk>=1.0.31",
     "langchain-core>=1.6.0",
