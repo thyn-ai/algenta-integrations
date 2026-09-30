@@ -156,6 +156,17 @@ Swap the scripted `tool_call_reply`/`text_reply` calls for your own scenario, or
 `create_algenta_tools` at `stub.base_url` from your own script, to explore the rest of this
 package (including `profile="execute"` and the denial gates below) without touching a real engine.
 
+## Recipes
+
+Runnable, test-covered Haystack `Pipeline` recipes that put Algenta at the center of Haystack's
+component-graph patterns. Each one runs against the same stub server as the local quickstart above
+(zero credentials), as both a script and an importable function. Index and run commands:
+[`recipes/README.md`](./recipes/README.md).
+
+```bash
+uv run python -m recipes.governed_pipeline   # run from this package's directory
+```
+
 ## Tool profiles
 
 | Profile | Adds | Notes |
