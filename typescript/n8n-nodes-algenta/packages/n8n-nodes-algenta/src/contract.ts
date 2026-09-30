@@ -24,7 +24,7 @@ export const PLAN_DECISION = 'plan_decision';
 export const LOG_DECISION = 'log_decision';
 export const EXECUTE_DECISION = 'execute_decision';
 
-const OBSERVE_TOOLS: ReadonlySet<string> = new Set([GET_CONTRACT, QUERY_DATA, SIMULATE, RECOMMEND]);
+export const OBSERVE_TOOLS: ReadonlySet<string> = new Set([GET_CONTRACT, QUERY_DATA, SIMULATE, RECOMMEND]);
 const GOVERN_TOOLS: ReadonlySet<string> = new Set([...OBSERVE_TOOLS, PLAN_DECISION, LOG_DECISION]);
 const EXECUTE_TOOLS: ReadonlySet<string> = new Set([...GOVERN_TOOLS, EXECUTE_DECISION]);
 
