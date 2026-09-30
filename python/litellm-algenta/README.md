@@ -148,6 +148,11 @@ Calling execute_decision anyway (bypassing the filtered tool list) -> HTTP 403 (
 It stops there -- there is no real engine or LLM in this loop, so it cannot run an actual chat
 completion. Point `ALGENTA_MCP_URL` at your own running engine (Quick start, above) to go further.
 
+For a step-by-step, command-by-command tour from the shared contract JSON to the
+generated YAML to the live `403` at the proxy, see
+[`docs/gateway-profile-enforcement.md`](./docs/gateway-profile-enforcement.md).
+Every command on that page is executed in CI.
+
 ## Tool profiles
 
 | Profile | `allowed_tools` | Notes |
