@@ -30,7 +30,7 @@ by the engine server-side, never delegated to the model. Everything runs against
 
 ## Packages
 
-All twelve packages are published — ten on PyPI, two on npm — and each carries its own
+All thirteen packages are published — eleven on PyPI, two on npm — and each carries its own
 passing test suite that runs against a real local stub server, never a mock of the
 framework's internals.
 
@@ -38,6 +38,7 @@ framework's internals.
 |---|---|---|---|
 | [`pydantic-ai-algenta`](./python/pydantic-ai-algenta) | pydantic-ai | `pip install pydantic-ai-algenta` | A governed `WrapperToolset` over pydantic-ai's own `MCPToolset`; denials surface through the native `ToolDenied` primitive. |
 | [`google-adk-algenta`](./python/google-adk-algenta) | Google ADK | `pip install google-adk-algenta` | A governed `McpToolset` wrapper for the Google Agent Development Kit; typed `ExecutionReceipt` results and `AlgentaExecutionBlocked` denials. |
+| [`smolagents-algenta`](./python/smolagents-algenta) | smolagents | `pip install smolagents-algenta` | A governed smolagents `Tool` collection with typed receipts and policy-gate denials surfaced through `AgentToolExecutionError`. |
 | [`langchain-algenta`](./python/langchain-algenta) | LangChain / LangGraph | `pip install langchain-algenta` | A governed tool list built on `langchain-mcp-adapters`, with typed receipts and a catchable `AlgentaExecutionBlocked` denial. |
 | [`litellm-algenta`](./python/litellm-algenta) | LiteLLM (MCP Gateway) | `pip install litellm-algenta` | A config generator, linter, and per-profile YAML templates mapping the contract onto LiteLLM's real `allowed_tools` / `allowed_params` enforcement. |
 | [`maf-algenta`](./python/maf-algenta) | Microsoft Agent Framework | `pip install maf-algenta` | A governed `FunctionTool` list with two-layer safety-field scrubbing and typed denials built on MAF's `MiddlewareFailure`. |

@@ -20,6 +20,7 @@ members = [
     "pydantic-ai-algenta",
     "ray-serve-algenta",
     "support-triage",
+    "smolagents-algenta",
     "temporal-algenta",
     "vllm-algenta",
 ]
@@ -4797,6 +4798,51 @@ sdist = { url = "https://files.pythonhosted.org/packages/76/53/9c513747547fd595d
 wheels = [
     { url = "https://files.pythonhosted.org/packages/c3/96/325b8c507ccecc50421fecc0345a502ee6e4a44785af3c4e6ecbadad624a/smart_open-8.0.1-py3-none-any.whl", hash = "sha256:3e97f90e92a952cb57863dfe132082c400a52eeeb27c067692fb51dbcc5b0089", size = 73504, upload-time = "2026-07-15T13:56:09.033Z" },
 ]
+
+[[package]]
+name = "smolagents"
+version = "1.26.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "huggingface-hub" },
+    { name = "jinja2" },
+    { name = "pillow" },
+    { name = "python-dotenv" },
+    { name = "requests" },
+    { name = "rich" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/bd/85/3ca67bb57743434ac321821ea54cbdbf0d3dcc8d55f37199709e83141340/smolagents-1.26.0.tar.gz", hash = "sha256:4ec92313265f9cfbcabfc88e192b4bc4505f8475dc5f33dc872062fc567037bd", size = 239034, upload-time = "2026-05-29T05:08:44.732Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/89/8c/72bd5edc13288e3f27d4d9c1ef65adc0a68c950ee1fc6d3be270e1110f6c/smolagents-1.26.0-py3-none-any.whl", hash = "sha256:70e1cfb1576f782da93190ee31d9bb2659e5ca4bd84fda0c412e1f20498f28b6", size = 161466, upload-time = "2026-05-29T05:08:43.28Z" },
+]
+
+[[package]]
+name = "smolagents-algenta"
+version = "0.1.0"
+source = { editable = "smolagents-algenta" }
+dependencies = [
+    { name = "algenta-sdk" },
+    { name = "fastmcp-slim", extra = ["client"] },
+    { name = "smolagents" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "fastmcp" },
+    { name = "pytest" },
+    { name = "pytest-cov" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "algenta-sdk", specifier = ">=1.0.31" },
+    { name = "fastmcp", marker = "extra == 'dev'", specifier = ">=3" },
+    { name = "fastmcp-slim", extras = ["client"], specifier = ">=3.4.0" },
+    { name = "pytest", marker = "extra == 'dev'" },
+    { name = "pytest-cov", marker = "extra == 'dev'" },
+    { name = "smolagents", specifier = ">=1.26.0" },
+]
+provides-extras = ["dev"]
 
 [[package]]
 name = "sniffio"

@@ -1,0 +1,60 @@
+[project]
+name = "smolagents-algenta"
+version = "0.1.0"
+description = "smolagents tool integration for Algenta: a governed-execution-aware tool collection wrapping a self-hosted Algenta engine's MCP tool surface"
+readme = "README.md"
+authors = [{ name = "Thyn" }]
+maintainers = [{ name = "Thyn" }]
+requires-python = ">=3.12"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+keywords = ["algenta", "smolagents", "agent", "tools", "decision", "mcp", "agent-governance", "ai-agents", "llm", "guardrails", "audit-trail", "receipts"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Typing :: Typed",
+]
+# The ONLY Algenta dependency any package in this repo may declare. See
+# scripts/check-no-engine-dependency.py, which enforces this on every PR. The other
+# dependencies are smolagents (the framework this integration targets) and
+# fastmcp-slim[client] (the published, lightweight MCP client used directly for
+# reliable HTTP MCP transport; see the README and PR body for the current-state
+# evaluation of smolagents' own ToolCollection.from_mcp HTTP path).
+dependencies = [
+    "algenta-sdk>=1.0.31",
+    "smolagents>=1.26.0",
+    "fastmcp-slim[client]>=3.4.0",
+]
+
+[project.urls]
+Homepage = "https://algenta.ai"
+Documentation = "https://docs.algenta.ai"
+Repository = "https://github.com/thyn-ai/algenta-integrations"
+Company = "https://thyn.ai"
+
+[project.optional-dependencies]
+# `fastmcp` is a test-only dependency: the test suite's stub Algenta MCP server
+# (tests/stub_server.py) is a real `fastmcp.FastMCP` *server*, which needs fastmcp's
+# server-side support. Never imported by any non-test module in this package.
+dev = ["pytest", "pytest-cov", "fastmcp>=3"]
+
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["smolagents_algenta*"]
+
+[tool.coverage.run]
+# The workspace runs one pytest process per package (see .github/workflows/ci.yml), so each
+# run measures this package's own module only -- never the tests or sibling packages.
+source = ["smolagents_algenta"]
+
+[tool.coverage.report]
+# Gate for the CI python job (enforced via pytest-cov). Floored a little below the
+# measured value to leave headroom as the suite grows.
+fail_under = 95
+show_missing = true

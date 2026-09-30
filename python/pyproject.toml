@@ -20,6 +20,7 @@ members = [
     "temporal-algenta",
     "examples/support-triage",
     "google-adk-algenta",
+    "smolagents-algenta",
 ]
 
 [build-system]
