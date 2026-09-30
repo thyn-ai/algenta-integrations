@@ -26,12 +26,12 @@
     "recipe:10": "tsx src/10-audit-logging-middleware.ts"
   },
   "dependencies": {
-    "ai": "^7.0.102",
+    "ai": "^7.0.107",
     "algenta-tools": "workspace:*",
     "zod": "^4.6.5"
   },
   "devDependencies": {
-    "@ai-sdk/provider": "^4.0.15",
+    "@ai-sdk/provider": "^4.0.17",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@types/node": "^26.6.2",
     "@vitest/coverage-v8": "^5.0.0",
