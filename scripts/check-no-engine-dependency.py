@@ -97,14 +97,10 @@ ALLOWED_ALGENTA_PACKAGE_NAMES = {"algenta-sdk"}
 # special-cased separately — these prefixes are never fine.
 LOCAL_PATH_PREFIXES = ("file:", "link:", "../", "./")
 
-PY_IMPORT_RE = re.compile(
-    r"^\s*(?:import|from)\s+([A-Za-z0-9_.]+)", re.MULTILINE
-)
+PY_IMPORT_RE = re.compile(r"^\s*(?:import|from)\s+([A-Za-z0-9_.]+)", re.MULTILINE)
 # Recognizes `import x from "spec"`, `import "spec"`, `export ... from "spec"`,
 # and `require("spec")` — single or double quoted.
-JS_IMPORT_RE = re.compile(
-    r"""(?:from\s+|require\(\s*)['"]([^'"]+)['"]"""
-)
+JS_IMPORT_RE = re.compile(r"""(?:from\s+|require\(\s*)['"]([^'"]+)['"]""")
 
 BANNED_PY_MODULE_PREFIXES = ("mojo", "apps.api_server", "apps.mcp_server")
 
@@ -124,7 +120,9 @@ class Violation:
         return f"  {loc}: {self.reason}"
 
 
-def iter_files(root: Path, names: tuple[str, ...] | None = None, suffixes: tuple[str, ...] | None = None):
+def iter_files(
+    root: Path, names: tuple[str, ...] | None = None, suffixes: tuple[str, ...] | None = None
+):
     for path in root.rglob("*"):
         if not path.is_file():
             continue
@@ -161,30 +159,48 @@ def _is_local_path_source(value: str) -> bool:
     return False
 
 
-def check_dependency_pair(name: str, source: str, location: Path, line: int | None) -> list[Violation]:
+def check_dependency_pair(
+    name: str, source: str, location: Path, line: int | None
+) -> list[Violation]:
     violations: list[Violation] = []
     norm_name = _norm(name)
 
     banned_in_name = _contains_banned(name)
     if banned_in_name:
         violations.append(
-            Violation(location, line, f"dependency name '{name}' references banned target '{banned_in_name}'")
+            Violation(
+                location,
+                line,
+                f"dependency name '{name}' references banned target '{banned_in_name}'",
+            )
         )
 
     if norm_name in {"algenta", "algenta-engine", "algenta_engine"}:
         violations.append(
-            Violation(location, line, f"dependency name '{name}' looks like an attempt to depend on the engine, not the published SDK ('algenta-sdk')")
+            Violation(
+                location,
+                line,
+                f"dependency name '{name}' looks like an attempt to depend on the engine, not the published SDK ('algenta-sdk')",
+            )
         )
 
     if source:
         banned_in_source = _contains_banned(source)
         if banned_in_source:
             violations.append(
-                Violation(location, line, f"dependency '{name}' source '{source}' references banned target '{banned_in_source}'")
+                Violation(
+                    location,
+                    line,
+                    f"dependency '{name}' source '{source}' references banned target '{banned_in_source}'",
+                )
             )
         elif _is_local_path_source(source):
             violations.append(
-                Violation(location, line, f"dependency '{name}' resolves to a local/relative filesystem path ('{source}') — only the published registry package is allowed")
+                Violation(
+                    location,
+                    line,
+                    f"dependency '{name}' resolves to a local/relative filesystem path ('{source}') — only the published registry package is allowed",
+                )
             )
 
     # If this dependency claims to BE the Algenta SDK (by containing
@@ -204,7 +220,13 @@ def check_dependency_pair(name: str, source: str, location: Path, line: int | No
 
 def check_pyproject(path: Path) -> list[Violation]:
     if tomllib is None:
-        return [Violation(path, None, "tomllib/tomli unavailable — cannot parse pyproject.toml (Python 3.11+ required to run this check)")]
+        return [
+            Violation(
+                path,
+                None,
+                "tomllib/tomli unavailable — cannot parse pyproject.toml (Python 3.11+ required to run this check)",
+            )
+        ]
     try:
         data = tomllib.loads(path.read_text(encoding="utf-8"))
     except Exception as exc:  # noqa: BLE001 - surface any parse error as a finding
@@ -218,40 +240,23 @@ def check_pyproject(path: Path) -> list[Violation]:
         return []
 
     project = data.get("project", {})
-    for dep in dep_strings(project.get("dependencies")):
-        pkg_name = re.split(r"[\s<>=!\[;]", dep, maxsplit=1)[0]
-        violations.extend(check_dependency_pair(pkg_name, dep, path, None))
-
-    for _group, deps in (project.get("optional-dependencies") or {}).items():
-        for dep in dep_strings(deps):
-            pkg_name = re.split(r"[\s<>=!\[;]", dep, maxsplit=1)[0]
-            violations.extend(check_dependency_pair(pkg_name, dep, path, None))
-
-    for _group, deps in (data.get("dependency-groups") or {}).items():
-        for dep in dep_strings(deps):
-            pkg_name = re.split(r"[\s<>=!\[;]", dep, maxsplit=1)[0]
-            violations.extend(check_dependency_pair(pkg_name, dep, path, None))
 
     poetry_deps = (
         data.get("tool", {}).get("poetry", {}).get("dependencies", {})
         if isinstance(data.get("tool", {}).get("poetry", {}), dict)
         else {}
     )
-    for name, spec in poetry_deps.items():
-        if isinstance(spec, dict):
-            source = spec.get("path") or spec.get("git") or spec.get("url") or ""
-            violations.extend(check_dependency_pair(name, str(source), path, None))
-        elif isinstance(spec, str):
-            violations.extend(check_dependency_pair(name, spec, path, None))
 
     # uv's dependency-source overrides: [tool.uv.sources.<name>]
     uv_sources = data.get("tool", {}).get("uv", {}).get("sources", {})
+    uv_workspace_refs = set()
     if isinstance(uv_sources, dict):
         for name, spec in uv_sources.items():
             if not isinstance(spec, dict):
                 continue
             if spec.get("workspace") is True:
                 # Intra-repo workspace member reference — never leaves this repo.
+                uv_workspace_refs.add(name)
                 continue
             source = spec.get("path") or spec.get("git") or spec.get("url") or ""
             if source:
@@ -262,8 +267,42 @@ def check_pyproject(path: Path) -> list[Violation]:
                     resolved = (path.parent / str(spec["path"])).resolve()
                     if not _within_repo(resolved, path):
                         violations.append(
-                            Violation(path, None, f"tool.uv.sources.{name}.path='{spec['path']}' resolves outside this repository")
+                            Violation(
+                                path,
+                                None,
+                                f"tool.uv.sources.{name}.path='{spec['path']}' resolves outside this repository",
+                            )
                         )
+
+    def _is_workspace_ref(pkg_name: str) -> bool:
+        return pkg_name in uv_workspace_refs
+
+    for dep in dep_strings(project.get("dependencies")):
+        pkg_name = re.split(r"[\s<>=!\[;]", dep, maxsplit=1)[0]
+        if _is_workspace_ref(pkg_name):
+            continue
+        violations.extend(check_dependency_pair(pkg_name, dep, path, None))
+
+    for _group, deps in (project.get("optional-dependencies") or {}).items():
+        for dep in dep_strings(deps):
+            pkg_name = re.split(r"[\s<>=!\[;]", dep, maxsplit=1)[0]
+            if _is_workspace_ref(pkg_name):
+                continue
+            violations.extend(check_dependency_pair(pkg_name, dep, path, None))
+
+    for _group, deps in (data.get("dependency-groups") or {}).items():
+        for dep in dep_strings(deps):
+            pkg_name = re.split(r"[\s<>=!\[;]", dep, maxsplit=1)[0]
+            if _is_workspace_ref(pkg_name):
+                continue
+            violations.extend(check_dependency_pair(pkg_name, dep, path, None))
+
+    for name, spec in poetry_deps.items():
+        if isinstance(spec, dict):
+            source = spec.get("path") or spec.get("git") or spec.get("url") or ""
+            violations.extend(check_dependency_pair(name, str(source), path, None))
+        elif isinstance(spec, str):
+            violations.extend(check_dependency_pair(name, spec, path, None))
 
     return violations
 
@@ -300,7 +339,11 @@ def check_package_json(path: Path) -> list[Violation]:
                 # pnpm intra-workspace reference — never leaves this repo.
                 if _contains_banned(name):
                     violations.append(
-                        Violation(path, None, f"dependency name '{name}' references banned target even as a workspace: reference")
+                        Violation(
+                            path,
+                            None,
+                            f"dependency name '{name}' references banned target even as a workspace: reference",
+                        )
                     )
                 continue
             violations.extend(check_dependency_pair(name, source_str, path, None))
@@ -316,8 +359,13 @@ def check_python_imports(path: Path) -> list[Violation]:
         if not m:
             continue
         module = m.group(1)
-        if any(module == prefix or module.startswith(prefix + ".") for prefix in BANNED_PY_MODULE_PREFIXES):
-            violations.append(Violation(path, lineno, f"forbidden import of engine-internal module '{module}'"))
+        if any(
+            module == prefix or module.startswith(prefix + ".")
+            for prefix in BANNED_PY_MODULE_PREFIXES
+        ):
+            violations.append(
+                Violation(path, lineno, f"forbidden import of engine-internal module '{module}'")
+            )
     return violations
 
 
@@ -329,12 +377,24 @@ def check_js_imports(path: Path, repo_root: Path) -> list[Violation]:
             spec = m.group(1)
             banned = _contains_banned(spec)
             if banned:
-                violations.append(Violation(path, lineno, f"import/require of '{spec}' references banned target '{banned}'"))
+                violations.append(
+                    Violation(
+                        path,
+                        lineno,
+                        f"import/require of '{spec}' references banned target '{banned}'",
+                    )
+                )
                 continue
             if spec.startswith("."):
                 resolved = (path.parent / spec).resolve()
                 if not _within_repo(resolved, path):
-                    violations.append(Violation(path, lineno, f"relative import '{spec}' resolves outside this repository"))
+                    violations.append(
+                        Violation(
+                            path,
+                            lineno,
+                            f"relative import '{spec}' resolves outside this repository",
+                        )
+                    )
     return violations
 
 
@@ -358,7 +418,9 @@ def run(root: Path) -> list[Violation]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--root", type=Path, default=Path.cwd(), help="Repository root to scan (default: cwd)")
+    parser.add_argument(
+        "--root", type=Path, default=Path.cwd(), help="Repository root to scan (default: cwd)"
+    )
     args = parser.parse_args(argv)
 
     root = args.root.resolve()

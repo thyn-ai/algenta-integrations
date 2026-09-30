@@ -62,10 +62,16 @@ def test_catches_file_path_engine_dependency() -> None:
             """
         )
         result = run_checker(root)
-        expect(result.returncode == 1, "deliberately-violating package.json is REJECTED (exit code 1)")
-        expect("decision-engine" in result.stdout, "violation output names the offending dependency")
-        expect("file:../../decision-engine" in result.stdout or "banned target" in result.stdout,
-               "violation output explains why (local path / banned target)")
+        expect(
+            result.returncode == 1, "deliberately-violating package.json is REJECTED (exit code 1)"
+        )
+        expect(
+            "decision-engine" in result.stdout, "violation output names the offending dependency"
+        )
+        expect(
+            "file:../../decision-engine" in result.stdout or "banned target" in result.stdout,
+            "violation output explains why (local path / banned target)",
+        )
 
 
 def test_catches_mojo_python_import() -> None:
@@ -88,9 +94,14 @@ def test_catches_relative_path_escaping_repo() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         (root / "pkg").mkdir()
-        (root / "pkg" / "bad.ts").write_text('import { engine } from "../../../../decision-engine/mojo/engine";\n')
+        (root / "pkg" / "bad.ts").write_text(
+            'import { engine } from "../../../../decision-engine/mojo/engine";\n'
+        )
         result = run_checker(root)
-        expect(result.returncode == 1, "a TS import path that escapes the repo (and names the engine) is REJECTED")
+        expect(
+            result.returncode == 1,
+            "a TS import path that escapes the repo (and names the engine) is REJECTED",
+        )
 
 
 def test_allows_legitimate_sdk_python_import() -> None:
@@ -101,7 +112,10 @@ def test_allows_legitimate_sdk_python_import() -> None:
         root = Path(tmp)
         (root / "good.py").write_text("from decision_engine import AlgentaClient\n")
         result = run_checker(root)
-        expect(result.returncode == 0, "legitimate `from decision_engine import AlgentaClient` (the published SDK) is ALLOWED")
+        expect(
+            result.returncode == 0,
+            "legitimate `from decision_engine import AlgentaClient` (the published SDK) is ALLOWED",
+        )
 
 
 def test_allows_published_sdk_dependency() -> None:
@@ -125,7 +139,33 @@ def test_allows_published_sdk_dependency() -> None:
             """
         )
         result = run_checker(root)
-        expect(result.returncode == 0, "a clean manifest depending only on algenta-sdk (+ ordinary deps) PASSES")
+        expect(
+            result.returncode == 0,
+            "a clean manifest depending only on algenta-sdk (+ ordinary deps) PASSES",
+        )
+
+
+def test_allows_workspace_member_dependency_on_algenta_named_package() -> None:
+    """Workspace members may depend on each other by name, even when that name
+    contains 'algenta', as long as the source is declared as a workspace ref."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        (root / "pyproject.toml").write_text(
+            """
+            [project]
+            name = "fixture-example"
+            version = "0.0.0"
+            dependencies = ["langchain-algenta", "pydantic>=2.7.0"]
+
+            [tool.uv.sources]
+            langchain-algenta = { workspace = true }
+            """
+        )
+        result = run_checker(root)
+        expect(
+            result.returncode == 0,
+            "a workspace-internal reference to an Algenta-named package is ALLOWED",
+        )
 
 
 def test_real_repo_is_currently_clean() -> None:
@@ -143,6 +183,7 @@ def main() -> int:
     test_catches_relative_path_escaping_repo()
     test_allows_legitimate_sdk_python_import()
     test_allows_published_sdk_dependency()
+    test_allows_workspace_member_dependency_on_algenta_named_package()
     test_real_repo_is_currently_clean()
 
     if FAILURES:
