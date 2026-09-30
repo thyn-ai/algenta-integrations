@@ -194,6 +194,184 @@ describe("scrubNeverModelFacingArgs", () => {
   });
 });
 
+// ── wrapAlgentaTool denial-mapping edge cases (in-memory tool set, no server) ─────────────────
+
+/** Builds a fake source tool whose `execute` returns a fixed MCP result envelope. */
+function fakeToolReturning(result: unknown): Tool {
+  return tool({
+    description: "fake tool returning a configured envelope",
+    inputSchema: z.object({}),
+    execute: async () => result,
+  });
+}
+
+/** The MCP error envelopes `extractToolPayload` / `isMcpErrorResult` understand. */
+const ERROR_ENVELOPES = [
+  {
+    name: "text content block",
+    wrap: (payload: unknown) => ({
+      isError: true,
+      content: [{ type: "text" as const, text: JSON.stringify(payload) }],
+    }),
+  },
+  {
+    name: "structuredContent",
+    wrap: (payload: unknown) => ({ isError: true, structuredContent: payload }),
+  },
+];
+
+describe("wrapAlgentaTool non-denial tool errors", () => {
+  it.each([
+    ["a plain string error", "upstream timeout"],
+    ["a generic JSON error body", { error: { message: "something went wrong" } }],
+    ["a body missing the named gate", { error: { code: "execution_blocked_idempotency", message: "gate missing" } }],
+  ])("throws a plain Error for execute_decision with %s", async (_label, payload) => {
+    const source = fakeToolSet();
+    source[EXECUTE_DECISION] = fakeToolReturning({
+      isError: true,
+      content: [{ type: "text", text: JSON.stringify(payload) }],
+    });
+    const tools = await createAlgentaTools({ tools: source, profile: "execute" });
+
+    let caught: unknown;
+    try {
+      await tools[EXECUTE_DECISION]!.execute!(
+        { decision_id: "d1", webhook_url: "https://example.com/hooks/decision" },
+        noopExecOptions,
+      );
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(Error);
+    expect(caught).not.toBeInstanceOf(ExecutionBlockedError);
+    expect((caught as Error).message).toContain(`Algenta tool '${EXECUTE_DECISION}' failed`);
+  });
+
+  it.each(ERROR_ENVELOPES)("a named-gate denial on any other tool throws a plain Error ($name)", async ({ wrap }) => {
+    const denial = {
+      error: {
+        code: "execution_blocked_idempotency",
+        gate: "idempotency",
+        message: "already delivered.",
+      },
+    };
+    const source = fakeToolSet();
+    source[QUERY_DATA] = fakeToolReturning(wrap(denial));
+    const tools = await createAlgentaTools({ tools: source, profile: "observe" });
+
+    let caught: unknown;
+    try {
+      await tools[QUERY_DATA]!.execute!({ dataset: "orders" }, noopExecOptions);
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(Error);
+    expect(caught).not.toBeInstanceOf(ExecutionBlockedError);
+    expect((caught as Error).message).toContain(`Algenta tool '${QUERY_DATA}' failed`);
+  });
+});
+
+describe("wrapAlgentaTool denial body edge cases", () => {
+  it.each(ERROR_ENVELOPES)(
+    "extra fields at the top level and inside error still map to ExecutionBlockedError ($name)",
+    async ({ wrap }) => {
+      const denial = {
+        top_level_extra: "ignored",
+        error: {
+          code: "execution_blocked_confidence",
+          gate: "confidence",
+          message: "confidence too low",
+          override_hint: "Set override_safety=true.",
+          error_extra: "also ignored",
+        },
+      };
+      const source = fakeToolSet();
+      source[EXECUTE_DECISION] = fakeToolReturning(wrap(denial));
+      const tools = await createAlgentaTools({ tools: source, profile: "execute" });
+
+      let caught: unknown;
+      try {
+        await tools[EXECUTE_DECISION]!.execute!(
+          { decision_id: "d1", webhook_url: "https://example.com/hooks/decision" },
+          noopExecOptions,
+        );
+      } catch (error) {
+        caught = error;
+      }
+
+      expect(caught).toBeInstanceOf(ExecutionBlockedError);
+      const blocked = caught as ExecutionBlockedError;
+      expect(blocked.gate).toBe("confidence");
+      expect(blocked.code).toBe("execution_blocked_confidence");
+      expect(blocked.overrideHint).toBe("Set override_safety=true.");
+    },
+  );
+
+  it.each(ERROR_ENVELOPES)(
+    "a missing override_hint maps to ExecutionBlockedError with overrideHint null ($name)",
+    async ({ wrap }) => {
+      const denial = {
+        error: {
+          code: "execution_blocked_idempotency",
+          gate: "idempotency",
+          message: "already delivered.",
+        },
+      };
+      const source = fakeToolSet();
+      source[EXECUTE_DECISION] = fakeToolReturning(wrap(denial));
+      const tools = await createAlgentaTools({ tools: source, profile: "execute" });
+
+      let caught: unknown;
+      try {
+        await tools[EXECUTE_DECISION]!.execute!(
+          { decision_id: "d1", webhook_url: "https://example.com/hooks/decision" },
+          noopExecOptions,
+        );
+      } catch (error) {
+        caught = error;
+      }
+
+      expect(caught).toBeInstanceOf(ExecutionBlockedError);
+      expect((caught as ExecutionBlockedError).overrideHint).toBeNull();
+    },
+  );
+
+  it.each([
+    ["missing gate", { error: { code: "execution_blocked_idempotency", message: "already delivered." } }],
+    ["non-string gate", { error: { code: "execution_blocked_idempotency", gate: 123, message: "already delivered." } }],
+    ["missing message", { error: { code: "execution_blocked_idempotency", gate: "idempotency" } }],
+  ])("falls back to a plain Error when the denial body has %s", async (_label, payload) => {
+    const source = fakeToolSet();
+    source[EXECUTE_DECISION] = fakeToolReturning({
+      isError: true,
+      structuredContent: payload,
+    });
+    const tools = await createAlgentaTools({ tools: source, profile: "execute" });
+
+    let caught: unknown;
+    try {
+      await tools[EXECUTE_DECISION]!.execute!(
+        { decision_id: "d1", webhook_url: "https://example.com/hooks/decision" },
+        noopExecOptions,
+      );
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(Error);
+    expect(caught).not.toBeInstanceOf(ExecutionBlockedError);
+  });
+});
+
+describe("execute_decision profile filtering", () => {
+  it.each(["observe", "govern"] as const)("execute_decision is absent under the %s profile", async profile => {
+    const tools = await createAlgentaTools({ tools: fakeToolSet(), profile });
+    expect(tools[EXECUTE_DECISION]).toBeUndefined();
+  });
+});
+
 // ── End-to-end against a real stub Algenta MCP server over real HTTP ───────────────────────────
 
 describe("createAlgentaTools against a real stub MCP server", () => {
