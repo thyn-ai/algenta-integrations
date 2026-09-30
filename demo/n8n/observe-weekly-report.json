@@ -1,0 +1,140 @@
+{
+  "name": "Algenta: observe-profile weekly report",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "b2b6b8b0-1a1a-4a1a-9a1a-100000000001",
+      "name": "When clicking \"Execute workflow\"",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [-720, 0]
+    },
+    {
+      "parameters": {
+        "operation": "get_contract",
+        "profile": "observe"
+      },
+      "id": "b2b6b8b0-1a1a-4a1a-9a1a-100000000002",
+      "name": "Get Contract",
+      "type": "n8n-nodes-algenta.algenta",
+      "typeVersion": 1,
+      "position": [-500, 0],
+      "credentials": {
+        "algentaApi": {
+          "id": "1",
+          "name": "Algenta API (self-hosted)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "query_data",
+        "profile": "observe",
+        "arguments": "{\n  \"dataset\": \"weekly_renewals\"\n}"
+      },
+      "id": "b2b6b8b0-1a1a-4a1a-9a1a-100000000003",
+      "name": "Fetch Weekly Metrics",
+      "type": "n8n-nodes-algenta.algenta",
+      "typeVersion": 1,
+      "position": [-280, 0],
+      "credentials": {
+        "algentaApi": {
+          "id": "1",
+          "name": "Algenta API (self-hosted)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "simulate",
+        "profile": "observe",
+        "arguments": "{\n  \"scenario\": \"next_week_renewal_forecast\"\n}"
+      },
+      "id": "b2b6b8b0-1a1a-4a1a-9a1a-100000000004",
+      "name": "Forecast Next Week",
+      "type": "n8n-nodes-algenta.algenta",
+      "typeVersion": 1,
+      "position": [-60, 0],
+      "credentials": {
+        "algentaApi": {
+          "id": "1",
+          "name": "Algenta API (self-hosted)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "recommend",
+        "profile": "observe",
+        "arguments": "{\n  \"scenario\": \"next_week_renewal_recommendation\"\n}"
+      },
+      "id": "b2b6b8b0-1a1a-4a1a-9a1a-100000000005",
+      "name": "Recommend Action",
+      "type": "n8n-nodes-algenta.algenta",
+      "typeVersion": 1,
+      "position": [160, 0],
+      "credentials": {
+        "algentaApi": {
+          "id": "1",
+          "name": "Algenta API (self-hosted)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "b2b6b8b0-1a1a-4a1a-9a1a-100000000020",
+              "name": "report",
+              "type": "string",
+              "value": "=# Weekly Algenta Observe Report\n\nGenerated at: {{ $now }}\n\n- **Engine version:** {{ $('Get Contract').item.json.engine_version }}\n- **Capabilities:** {{ $('Get Contract').item.json.capabilities }}\n- **Weekly metrics rows:** {{ $('Fetch Weekly Metrics').item.json.rows }}\n- **Forecast scenario:** {{ $('Forecast Next Week').item.json.scenario }}\n- **Forecast expected value:** {{ $('Forecast Next Week').item.json.expected_value }}\n- **Recommendation scenario:** {{ $('Recommend Action').item.json.scenario }}\n- **Recommended action:** {{ $('Recommend Action').item.json.recommended_action }}\n- **Confidence:** {{ $('Recommend Action').item.json.confidence }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b2b6b8b0-1a1a-4a1a-9a1a-100000000006",
+      "name": "Render Weekly Report",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [380, 0]
+    }
+  ],
+  "connections": {
+    "When clicking \"Execute workflow\"": {
+      "main": [[{ "node": "Get Contract", "type": "main", "index": 0 }]]
+    },
+    "Get Contract": {
+      "main": [[{ "node": "Fetch Weekly Metrics", "type": "main", "index": 0 }]]
+    },
+    "Fetch Weekly Metrics": {
+      "main": [[{ "node": "Forecast Next Week", "type": "main", "index": 0 }]]
+    },
+    "Forecast Next Week": {
+      "main": [[{ "node": "Recommend Action", "type": "main", "index": 0 }]]
+    },
+    "Recommend Action": {
+      "main": [[{ "node": "Render Weekly Report", "type": "main", "index": 0 }]]
+    }
+  },
+  "meta": {
+    "instructions": [
+      "This workflow builds a read-only weekly report using only the 'observe' tool profile.",
+      "",
+      "1. Create an 'Algenta API' credential pointing at your own self-hosted Algenta engine's base",
+      "   URL (e.g. http://localhost:8000), with an API key if your engine requires one, and attach it",
+      "   to every Algenta node.",
+      "2. Get Contract discovers the connected engine's capabilities.",
+      "3. Fetch Weekly Metrics runs a governed query_data call against the 'weekly_renewals' dataset.",
+      "   Replace the dataset name with one that exists in your own engine.",
+      "4. Forecast Next Week runs a simulate call for the next-week renewal forecast scenario.",
+      "5. Recommend Action runs a recommend call for the next-week renewal recommendation scenario.",
+      "6. Render Weekly Report combines the outputs into a single Markdown report item.",
+      "",
+      "Every Algenta node in this workflow is pinned to the 'observe' profile, so no decision can be",
+      "logged or executed here. See typescript/n8n-nodes-algenta/packages/n8n-nodes-algenta/README.md",
+      "for the full node reference."
+    ]
+  }
+}
