@@ -106,14 +106,39 @@ One value there is worth noticing: scenario 7 (reused approval challenge) return
 so the lifecycle gate answers before the nonce is ever compared. The nonce *is* single-use; the code
 simply names the earlier gate. Asserting `invalid_nonce` there would have been asserting a guess.
 
+## Per-framework adapters
+
+The shared baseline above is exercised directly against the engine's HTTP API. Each integration
+package is expected to provide its own adapter that runs the same 12 scenarios through that
+package's own client, with the same honest reporting of blocked scenarios.
+
+| Integration | Adapter location | Status |
+|---|---|---|
+| pydantic-ai-algenta | `python/pydantic-ai-algenta/pydantic_ai_algenta/conformance.py` | **9 passed, 0 failed, 3 blocked** (stub-server tests in CI) |
+| langchain-algenta | `demo/conformance/adapters/langchain.py` | **9 passed, 0 failed, 3 blocked** (stub-server tests in CI) |
+| LiteLLM / Haystack / LlamaIndex / MAF / AI SDK / Temporal | _not implemented_ | _pending_ |
+
+Run the pydantic-ai adapter locally against your own engine:
+
+```bash
+ALGENTA_BASE_URL=http://localhost:8000 ALGENTA_API_KEY=... \\
+  uv run --package pydantic-ai-algenta python -m pydantic_ai_algenta.conformance --json evidence.json
+```
+
+Or run its stub-server test suite (no live engine required):
+
+```bash
+uv run --package pydantic-ai-algenta pytest pydantic-ai-algenta/tests/test_conformance.py -v
+```
+
 ## What is still missing
 
-- Per-framework adapters for the remaining integrations: Pydantic AI, LiteLLM, Haystack, LlamaIndex,
-  MAF, AI SDK, Temporal. The LangChain adapter now proves the pattern; each sibling package needs an
-  equivalent adapter that routes the same scenario set through its own client machinery.
+- Per-framework adapters for the remaining integrations: LiteLLM, Haystack, LlamaIndex, MAF, AI SDK,
+  Temporal. The LangChain and pydantic-ai adapters now prove the pattern; each sibling package needs
+  an equivalent adapter that routes the same scenario set through its own client machinery.
 - Cassette replay (`ALGENTA_DEMO_REPLAY=1`) for offline CI. Cassettes must be **recorded** from live
   runs — a hand-written cassette is the same fiction one layer down.
 - The nightly live tier that unblocks 9 and 12.
 
-Until all per-framework adapters exist and have live evidence, no package in this repo should be
+Until a package's adapter is implemented and its stub-server tests pass, that package should not be
 labelled "Validated integration".
