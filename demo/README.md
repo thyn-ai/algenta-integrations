@@ -21,6 +21,14 @@ ALGENTA_API_KEY=your-key \
 python -m demo.conformance.runner --json evidence.json
 ```
 
+Run the same scenarios through the LangChain adapter:
+
+```bash
+ALGENTA_BASE_URL=http://localhost:8000 \
+ALGENTA_API_KEY=your-key \
+python -m demo.conformance.runner --adapter langchain --json evidence-langchain.json
+```
+
 There is **no default base URL** on purpose. A default pointing anywhere other than your own engine
 is how "self-hosted" quietly stops being true. The runner exits `2` without one.
 
@@ -28,22 +36,22 @@ Exit codes: `0` all exercisable scenarios passed · `1` at least one failed · `
 
 ## The 12 scenarios, and which actually run
 
-Measured against a current Algenta engine build over HTTP with a real Postgres — **9 exercisable, 3 not**.
+Measured against a current Algenta engine build over HTTP with a real Postgres — **9 exercisable, 3 not**. The LangChain adapter exercises the same HTTP surface through LangChain `StructuredTool` invocations and produces the same honest breakdown.
 
-| # | Scenario | Status |
-|---|---|---|
-| 1 | Successful read-only recommendation | exercisable |
-| 2 | Execution denied by policy (409 named gate) | exercisable |
-| 3 | Execution paused for approval | **needs capability** |
-| 4 | Approval granted, execution resumed | exercisable |
-| 5 | Approval rejected | exercisable |
-| 6 | Duplicate execution prevented | exercisable |
-| 7 | Expired / reused approval rejected | exercisable |
-| 8 | Modified `plan_hash` rejected | exercisable |
-| 9 | Upstream timeout as typed retryable error | **needs infra** |
-| 10 | Execution receipt (versioned envelope) | exercisable |
-| 11 | Audit export whose `X-Content-SHA256` verifies | exercisable |
-| 12 | Replay produces the same deterministic result | **needs infra** |
+| # | Scenario | Direct HTTP | LangChain adapter |
+|---|---|---|---|
+| 1 | Successful read-only recommendation | pass | pass |
+| 2 | Execution denied by policy (409 named gate) | pass | pass |
+| 3 | Execution paused for approval | **blocked** | **blocked** |
+| 4 | Approval granted, execution resumed | pass | pass |
+| 5 | Approval rejected | pass | pass |
+| 6 | Duplicate execution prevented | pass | pass |
+| 7 | Expired / reused approval rejected | pass | pass |
+| 8 | Modified `plan_hash` rejected | pass | pass |
+| 9 | Upstream timeout as typed retryable error | **blocked** | **blocked** |
+| 10 | Execution receipt (versioned envelope) | pass | pass |
+| 11 | Audit export whose `X-Content-SHA256` verifies | pass | pass |
+| 12 | Replay produces the same deterministic result | **blocked** | **blocked** |
 
 ### Why three do not run, and what would change that
 
@@ -100,12 +108,12 @@ simply names the earlier gate. Asserting `invalid_nonce` there would have been a
 
 ## What is still missing
 
-- Per-framework adapters, so each integration executes this same fixture set through its own client
-  (LangChain, Pydantic AI, LiteLLM, Haystack, LlamaIndex, MAF, AI SDK). The suite currently exercises
-  the engine directly; that is the shared baseline those adapters must match.
+- Per-framework adapters for the remaining integrations: Pydantic AI, LiteLLM, Haystack, LlamaIndex,
+  MAF, AI SDK, Temporal. The LangChain adapter now proves the pattern; each sibling package needs an
+  equivalent adapter that routes the same scenario set through its own client machinery.
 - Cassette replay (`ALGENTA_DEMO_REPLAY=1`) for offline CI. Cassettes must be **recorded** from live
   runs — a hand-written cassette is the same fiction one layer down.
 - The nightly live tier that unblocks 9 and 12.
 
-Until the per-framework adapters exist, no package in this repo should be labelled
-"Validated integration".
+Until all per-framework adapters exist and have live evidence, no package in this repo should be
+labelled "Validated integration".
