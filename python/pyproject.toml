@@ -19,6 +19,7 @@ members = [
     "vllm-algenta",
     "temporal-algenta",
     "examples/support-triage",
+    "google-adk-algenta",
 ]
 
 [build-system]

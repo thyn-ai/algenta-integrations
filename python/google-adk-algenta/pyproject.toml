@@ -1,0 +1,60 @@
+[project]
+name = "google-adk-algenta"
+version = "0.1.0"
+description = "Google Agent Development Kit (ADK) integration for Algenta: a governed-execution-aware McpToolset wrapping a self-hosted Algenta engine's MCP tool surface"
+readme = "README.md"
+authors = [{ name = "Thyn" }]
+maintainers = [{ name = "Thyn" }]
+requires-python = ">=3.12"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+keywords = ["algenta", "google-adk", "adk", "agent", "tools", "decision", "mcp", "agent-governance", "ai-agents", "llm", "guardrails", "audit-trail", "receipts"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Typing :: Typed",
+]
+# The ONLY Algenta dependency any package in this repo may declare. See
+# scripts/check-no-engine-dependency.py, which enforces this on every PR. The other
+# dependencies here, google-adk and mcp, are the framework/SDK surface this integration
+# is allowed to depend on. `mcp` is listed explicitly because google-adk's MCP tool
+# support imports it at runtime but does not declare it as a direct dependency.
+dependencies = [
+    "algenta-sdk>=1.0.31",
+    "google-adk>=2.10.0",
+    "mcp>=1.29.0",
+]
+
+[project.urls]
+Homepage = "https://algenta.ai"
+Documentation = "https://docs.algenta.ai"
+Repository = "https://github.com/thyn-ai/algenta-integrations"
+Company = "https://thyn.ai"
+
+[project.optional-dependencies]
+# `fastmcp` (full, server-side) is a test-only dependency: the test suite's stub
+# Algenta MCP server (tests/stub_server.py) is a real `fastmcp.FastMCP` server,
+# which needs fastmcp's server-side support. Never imported by any non-test module.
+dev = ["pytest", "pytest-cov", "anyio", "fastmcp>=3"]
+
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["google_adk_algenta*"]
+
+[tool.pytest.ini_options]
+anyio_mode = "auto"
+
+[tool.coverage.run]
+source = ["google_adk_algenta"]
+
+[tool.coverage.report]
+# Gate for the CI python job (enforced via pytest-cov). Start conservative; raise as
+# the suite grows.
+fail_under = 95
+show_missing = true

@@ -30,13 +30,14 @@ by the engine server-side, never delegated to the model. Everything runs against
 
 ## Packages
 
-All eleven packages are published — nine on PyPI, two on npm — and each carries its own
+All twelve packages are published — ten on PyPI, two on npm — and each carries its own
 passing test suite that runs against a real local stub server, never a mock of the
 framework's internals.
 
 | Package | Framework | Install | What it gives you |
 |---|---|---|---|
 | [`pydantic-ai-algenta`](./python/pydantic-ai-algenta) | pydantic-ai | `pip install pydantic-ai-algenta` | A governed `WrapperToolset` over pydantic-ai's own `MCPToolset`; denials surface through the native `ToolDenied` primitive. |
+| [`google-adk-algenta`](./python/google-adk-algenta) | Google ADK | `pip install google-adk-algenta` | A governed `McpToolset` wrapper for the Google Agent Development Kit; typed `ExecutionReceipt` results and `AlgentaExecutionBlocked` denials. |
 | [`langchain-algenta`](./python/langchain-algenta) | LangChain / LangGraph | `pip install langchain-algenta` | A governed tool list built on `langchain-mcp-adapters`, with typed receipts and a catchable `AlgentaExecutionBlocked` denial. |
 | [`litellm-algenta`](./python/litellm-algenta) | LiteLLM (MCP Gateway) | `pip install litellm-algenta` | A config generator, linter, and per-profile YAML templates mapping the contract onto LiteLLM's real `allowed_tools` / `allowed_params` enforcement. |
 | [`maf-algenta`](./python/maf-algenta) | Microsoft Agent Framework | `pip install maf-algenta` | A governed `FunctionTool` list with two-layer safety-field scrubbing and typed denials built on MAF's `MiddlewareFailure`. |
@@ -204,7 +205,7 @@ not just code.
 Open-source tooling around Algenta, from the Algenta team. The Algenta engine itself is proprietary; everything listed here is Apache-2.0. Issues and discussions are welcome in whichever repository owns the code.
 
 - [thyn-ai/algenta-sdk](https://github.com/thyn-ai/algenta-sdk) — Python and TypeScript SDKs for Algenta: governed data queries, simulations, decision memory with execution receipts, agent runs with approvals.
-- [thyn-ai/algenta-integrations](https://github.com/thyn-ai/algenta-integrations) (this repository) — Framework integrations for Algenta: LangChain, LlamaIndex, pydantic-ai, MAF, Haystack, LiteLLM, Ray Serve, vLLM, Vercel AI SDK and n8n.
+- [thyn-ai/algenta-integrations](https://github.com/thyn-ai/algenta-integrations) (this repository) — Framework integrations for Algenta: LangChain, LlamaIndex, pydantic-ai, Google ADK, MAF, Haystack, LiteLLM, Ray Serve, vLLM, Vercel AI SDK and n8n.
 - [thyn-ai/mojo-kernels](https://github.com/thyn-ai/mojo-kernels) — Clean-room Mojo kernels as drop-in accelerators for popular Python/TypeScript libraries, with bit-exact parity and pure-language fallbacks.
 - [thyn-ai/security-toolchain](https://github.com/thyn-ai/security-toolchain) — The pinned, checksum-verified security toolchain (Gitleaks, Opengrep, OSV-Scanner, Trivy config, actionlint) that every thyn-ai repository runs locally and in CI.
 - [thyn-ai/feedback](https://github.com/thyn-ai/feedback) — Public issue intake for the open-source tooling around Algenta and for the Codna GitHub App.

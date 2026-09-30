@@ -1,0 +1,53 @@
+"""Google ADK tool integration for Algenta.
+
+Wraps a self-hosted Algenta engine's MCP tool surface as a governed-execution-aware
+`AlgentaToolset` with tool-profile filtering, a typed `execute_decision` success/denial mapping
+(`ExecutionReceipt` / `AlgentaExecutionBlocked`), and two-layer `force`/`override_safety`
+scrubbing.
+
+See the package README for a runnable example, and `contracts/integration-tool-contract.json`
+in the `algenta-integrations` repository root for the tool-profile contract this package
+conforms to.
+"""
+
+from importlib.metadata import PackageNotFoundError, version
+
+from .contract import DEFAULT_PROFILE, NEVER_MODEL_FACING_FIELDS, TOOL_PROFILES, ToolProfile
+from .exceptions import AlgentaExecutionBlocked, AlgentaGovernedCallError, AlgentaToolDenied
+from .receipts import (
+    EXECUTION_GATES,
+    ExecutionDenial,
+    ExecutionGate,
+    ExecutionReceipt,
+    parse_denial,
+    parse_receipt,
+)
+from .toolset import ALGENTA_BASE_URL_ENV_VAR, DEFAULT_ALGENTA_BASE_URL, AlgentaToolset
+
+try:
+    __version__ = version("google-adk-algenta")
+except PackageNotFoundError:
+    # Not installed (e.g. running from a source checkout without `pip install -e .` /
+    # `uv sync`) -- there's no installed distribution for importlib.metadata to read a version
+    # from. `pyproject.toml`'s `[project.version]` remains the single source of truth either way.
+    __version__ = "0+unknown"
+
+__all__ = [
+    "AlgentaExecutionBlocked",
+    "AlgentaGovernedCallError",
+    "AlgentaToolDenied",
+    "AlgentaToolset",
+    "ALGENTA_BASE_URL_ENV_VAR",
+    "DEFAULT_ALGENTA_BASE_URL",
+    "DEFAULT_PROFILE",
+    "EXECUTION_GATES",
+    "ExecutionDenial",
+    "ExecutionGate",
+    "ExecutionReceipt",
+    "NEVER_MODEL_FACING_FIELDS",
+    "TOOL_PROFILES",
+    "ToolProfile",
+    "__version__",
+    "parse_denial",
+    "parse_receipt",
+]
