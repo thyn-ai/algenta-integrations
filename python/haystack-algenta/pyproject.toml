@@ -55,7 +55,7 @@ classifiers = [
 # at install time -- silently drifting past the versions this package (or CI) has ever actually
 # run against.
 dependencies = [
-    "haystack-ai>=3.0.0,<3.2.0",
+    "haystack-ai>=3.0.0,<3.3.0",
     "mcp-haystack>=1.4.0,<1.6.0",
     "mcp>=1.29.0,<2.0.0",
 ]
