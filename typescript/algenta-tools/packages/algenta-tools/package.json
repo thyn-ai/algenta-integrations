@@ -60,7 +60,7 @@
   },
   "devDependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
-    "@types/node": "^26.6.2",
+    "@types/node": "^26.6.3",
     "@vitest/coverage-v8": "^5.0.2",
     "ai": "^7.0.122",
     "fast-check": "4.10.2",
