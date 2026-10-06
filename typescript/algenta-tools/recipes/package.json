@@ -26,7 +26,7 @@
     "recipe:10": "tsx src/10-audit-logging-middleware.ts"
   },
   "dependencies": {
-    "ai": "^7.0.107",
+    "ai": "^7.0.122",
     "algenta-tools": "workspace:*",
     "zod": "^4.6.5"
   },
