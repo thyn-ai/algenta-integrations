@@ -32,7 +32,7 @@
   },
   "devDependencies": {
     "@ai-sdk/provider": "^4.0.18",
-    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@modelcontextprotocol/sdk": "^1.31.0",
     "@types/node": "^26.6.3",
     "@vitest/coverage-v8": "^5.0.2",
     "tsx": "^4.23.15",
