@@ -2,4 +2,4 @@
 # pypi job, sync-on-sdk-release.yml). uv.txt is the hash-pinned form those steps actually install
 # with `--require-hashes`; regenerate it after changing this file:
 #   cd .github/requirements && uv pip compile --generate-hashes --python-version 3.12 uv.in -o uv.txt
-uv==0.12.17
+uv==0.12.20

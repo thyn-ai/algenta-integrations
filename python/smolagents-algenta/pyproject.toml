@@ -24,7 +24,7 @@ classifiers = [
 # reliable HTTP MCP transport; see the README and PR body for the current-state
 # evaluation of smolagents' own ToolCollection.from_mcp HTTP path).
 dependencies = [
-    "algenta-sdk>=1.0.31",
+    "algenta-sdk>=1.0.37",
     "smolagents>=1.26.0",
     "fastmcp-slim[client]>=3.4.0",
 ]

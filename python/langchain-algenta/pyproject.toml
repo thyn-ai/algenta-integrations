@@ -42,7 +42,7 @@ classifiers = [
 # the full test suite. We revisit this decision quarterly; see the package README's
 # "LangChain MCP compatibility" section and issue #112.
 dependencies = [
-    "algenta-sdk>=1.0.31",
+    "algenta-sdk>=1.0.37",
     "langchain-core>=1.6.0",
     "langchain-mcp-adapters>=0.3.2",
 ]

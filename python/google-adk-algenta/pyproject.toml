@@ -23,7 +23,7 @@ classifiers = [
 # is allowed to depend on. `mcp` is listed explicitly because google-adk's MCP tool
 # support imports it at runtime but does not declare it as a direct dependency.
 dependencies = [
-    "algenta-sdk>=1.0.31",
+    "algenta-sdk>=1.0.37",
     "google-adk>=2.10.0",
     "mcp>=1.29.0",
 ]

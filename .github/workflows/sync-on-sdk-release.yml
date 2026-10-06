@@ -61,8 +61,8 @@ on:
   workflow_dispatch: {} # manual trigger, e.g. to test this workflow itself
 
 # The workflow-wide token is read-only; the single job below elevates itself to exactly the
-# two writes it needs. Same permissions as before, scoped one level down: OpenSSF Scorecard's
-# Token-Permissions check zeroes the score for a top-level write and only notes job-level ones.
+# one write it needs, at job level: OpenSSF Scorecard's Token-Permissions check zeroes the score
+# for a top-level write and only notes job-level ones.
 permissions:
   contents: read
 
@@ -70,8 +70,7 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # commits + pushes the sync/algenta-sdk-v* branch
-      pull-requests: write # opens the version-bump PR via gh
+      contents: write # commits + pushes the sync/algenta-sdk-v* branch (the PR is opened by the App token)
     env:
       # Pin uv to the interpreter actions/setup-python just provisioned -- same reasoning
       # as ci.yml's python job (otherwise uv downloads its own floating "managed" CPython).
@@ -208,10 +207,24 @@ jobs:
           rm -f "$tarball"
           echo "$dest/bin" >> "$GITHUB_PATH"
 
+      # The org does not let GitHub Actions create pull requests (can_approve_pull_request_reviews is
+      # false), so `gh pr create` with github.token always failed here; every nightly run since
+      # 2026-09-29 pushed its sync branch and then died. The PR is opened as the same scoped App that
+      # auto-release.yml already uses for this repo.
+      - name: Mint a scoped App installation token
+        id: app-token
+        if: steps.diff.outputs.changed == 'true'
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.ALGENTA_SDK_SYNC_APP_ID }}
+          private-key: ${{ secrets.ALGENTA_SDK_SYNC_APP_PRIVATE_KEY }}
+          owner: thyn-ai
+          repositories: algenta-integrations
+
       - name: Open the version-bump PR
         if: steps.diff.outputs.changed == 'true'
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           VERSION: ${{ steps.version.outputs.version }}
           SOURCE: ${{ steps.version.outputs.source }}
         run: |
