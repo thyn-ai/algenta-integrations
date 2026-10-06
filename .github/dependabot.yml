@@ -224,6 +224,16 @@ updates:
     interval: weekly
   cooldown:
     default-days: 7
+  groups:
+    # @vitest/coverage-v8 peer-pins the exact vitest version, so the two move in one PR.
+    vitest:
+      patterns:
+      - vitest
+      - '@vitest/*'
+      # minor + patch only: a major opens as its own PR (see the header).
+      update-types:
+      - minor
+      - patch
   ignore:
   - dependency-name: algenta-sdk
   commit-message:
@@ -234,6 +244,16 @@ updates:
     interval: weekly
   cooldown:
     default-days: 7
+  groups:
+    # @vitest/coverage-v8 peer-pins the exact vitest version, so the two move in one PR.
+    vitest:
+      patterns:
+      - vitest
+      - '@vitest/*'
+      # minor + patch only: a major opens as its own PR (see the header).
+      update-types:
+      - minor
+      - patch
   commit-message:
     prefix: chore(deps)
   ignore:
