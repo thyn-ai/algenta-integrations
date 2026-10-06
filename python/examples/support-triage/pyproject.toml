@@ -9,7 +9,7 @@ license-files = ["LICENSE"]
 # This example app is not published; it demonstrates the langchain-algenta building block
 # end-to-end with a real LangGraph orchestration layer and a human-in-the-loop approval gate.
 dependencies = [
-    "algenta-sdk>=1.0.31",
+    "algenta-sdk>=1.0.37",
     "langchain-algenta",
     "langchain>=1.4.0",
     "langgraph>=1.2.11",
