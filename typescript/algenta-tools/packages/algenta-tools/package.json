@@ -62,7 +62,7 @@
     "@modelcontextprotocol/sdk": "^1.31.0",
     "@types/node": "^26.6.3",
     "@vitest/coverage-v8": "^5.0.2",
-    "ai": "^7.0.122",
+    "ai": "^7.0.127",
     "fast-check": "4.10.2",
     "tsup": "^8.5.1",
     "tsx": "^4.23.15",
