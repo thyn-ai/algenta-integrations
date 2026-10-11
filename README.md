@@ -4,6 +4,8 @@
 
 **Framework integrations for [Algenta](https://algenta.ai) — governed tool profiles, typed execution receipts, and policy-gated execution for the agent frameworks you already use.**
 
+> ⭐ If Algenta Integrations saved you time, a [star on GitHub](https://github.com/thyn-ai/algenta-integrations) helps others find it.
+
 [![CI](https://github.com/thyn-ai/algenta-integrations/actions/workflows/ci.yml/badge.svg)](https://github.com/thyn-ai/algenta-integrations/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/thyn-ai/algenta-integrations/actions/workflows/codeql.yml/badge.svg)](https://github.com/thyn-ai/algenta-integrations/actions/workflows/codeql.yml)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/thyn-ai/algenta-integrations/badge)](https://scorecard.dev/viewer/?uri=github.com/thyn-ai/algenta-integrations)
