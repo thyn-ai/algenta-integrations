@@ -1,7 +1,5 @@
 # algenta-tools
 
-> ⭐ If algenta-tools saved you time, a [star on GitHub](https://github.com/thyn-ai/algenta-integrations) helps others find it.
-
 [![npm](https://img.shields.io/npm/v/algenta-tools.svg)](https://www.npmjs.com/package/algenta-tools)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](../../../../LICENSE)
 
