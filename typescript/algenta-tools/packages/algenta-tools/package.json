@@ -52,7 +52,7 @@
   },
   "license": "Apache-2.0",
   "dependencies": {
-    "@ai-sdk/mcp": "^2.0.66"
+    "@ai-sdk/mcp": "^2.0.73"
   },
   "peerDependencies": {
     "ai": "^7.0.0",
