@@ -219,7 +219,7 @@ jobs:
 
       # Handed to the `sign` job below, which signs and attaches these exact bytes without
       # rebuilding anything.
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-assets
           path: ${{ needs.resolve.outputs.directory }}/dist/
@@ -325,7 +325,7 @@ jobs:
           hashes=$(base64 -w0 "$RUNNER_TEMP/subjects.sha256sum")
           echo "hashes=$hashes" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-assets
           path: ${{ runner.temp }}/release-assets/
@@ -425,7 +425,7 @@ jobs:
 
       # Kept as a workflow artifact on every run, so a dry run or a gated-off run still leaves
       # the bundles inspectable.
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: release-signatures
           path: release-assets/*.sigstore.json
