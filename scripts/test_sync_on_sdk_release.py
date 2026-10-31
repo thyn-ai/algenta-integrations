@@ -93,7 +93,7 @@ def run_version_step(
             check=False,
         )
         output_lines = output_path.read_text(encoding="utf-8").splitlines()
-        outputs = dict(line.split("=", 1) for line in output_lines)
+        outputs = dict(line.split("=", 1) for line in output_lines if line)
         return result, outputs
 
 
@@ -135,6 +135,12 @@ def test_registry_backed_steps_require_an_available_target() -> None:
         check(
             "if: steps.version.outputs.available == 'true'" in block,
             f"{name}: not gated on an available target",
+        )
+        check("SDK_VERSION: ${{ steps.version.outputs.version }}" in block, f"{name}: missing env binding")
+        run_block = block.split("run:", 1)[1]
+        check(
+            "${{ steps.version.outputs.version }}" not in run_block,
+            f"{name}: SDK version is interpolated directly into shell",
         )
 
 
