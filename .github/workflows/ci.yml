@@ -56,6 +56,8 @@ jobs:
         # The tag -> package resolver publish.yml depends on. It must agree with
         # compute_release_bumps.py on the tag format, and only that script writes tags.
         run: python scripts/test_resolve_release_target.py
+      - name: Run sync-on-sdk-release's regression tests
+        run: python scripts/test_sync_on_sdk_release.py
 
   python:
     runs-on: ubuntu-latest
