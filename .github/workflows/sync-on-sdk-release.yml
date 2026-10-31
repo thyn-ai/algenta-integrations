@@ -97,22 +97,40 @@ jobs:
             VERSION="$DISPATCH_VERSION"
             SOURCE="repository_dispatch (${DISPATCH_TAG:-no tag in payload})"
           else
+            set +e
             VERSION="$(python scripts/latest-published-algenta-sdk-version.py)"
+            STATUS=$?
+            set -e
+            if [ "$STATUS" -eq 2 ]; then
+              echo "available=false" >> "$GITHUB_OUTPUT"
+              echo "::notice::PyPI and npm disagree on the latest algenta-sdk version. Skipping this registry-backed sync; a later run will retry."
+              exit 0
+            fi
+            if [ "$STATUS" -ne 0 ]; then
+              exit "$STATUS"
+            fi
             SOURCE="scheduled check of PyPI + npm"
           fi
+          echo "available=true" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "source=$SOURCE" >> "$GITHUB_OUTPUT"
           echo "Target algenta-sdk version: $VERSION (via $SOURCE)"
 
       - name: Bump every package's algenta-sdk pin
-        run: python scripts/bump-algenta-sdk-version.py --version "${{ steps.version.outputs.version }}"
+        if: steps.version.outputs.available == 'true'
+        env:
+          SDK_VERSION: ${{ steps.version.outputs.version }}
+        run: python scripts/bump-algenta-sdk-version.py --version "$SDK_VERSION"
 
       - name: Check whether anything actually changed
         id: diff
+        if: steps.version.outputs.available == 'true'
+        env:
+          SDK_VERSION: ${{ steps.version.outputs.version }}
         run: |
           if git diff --quiet; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "Already pinned to ${{ steps.version.outputs.version }} everywhere -- nothing to do."
+            echo "Already pinned to $SDK_VERSION everywhere -- nothing to do."
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
