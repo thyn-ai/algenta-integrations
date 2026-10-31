@@ -1,6 +1,6 @@
 {
   "name": "algenta-tools",
-  "version": "0.2.1",
+  "version": "1.0.0",
   "description": "Vercel AI SDK tool integration for Algenta: a governed-execution-aware ToolSet wrapping a self-hosted Algenta engine's MCP tool surface",
   "author": {
     "name": "Thyn",
