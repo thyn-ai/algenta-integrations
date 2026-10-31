@@ -137,6 +137,9 @@ def test_registry_backed_steps_require_an_available_target() -> None:
             f"{name}: not gated on an available target",
         )
         check("SDK_VERSION: ${{ steps.version.outputs.version }}" in block, f"{name}: missing env binding")
+        if "run:" not in block:
+            check(False, f"{name}: missing run block")
+            continue
         run_block = block.split("run:", 1)[1]
         check(
             "${{ steps.version.outputs.version }}" not in run_block,
