@@ -7,13 +7,26 @@
  * own `dist/index.d.ts` no longer exports an MCP client at all, verified directly against the
  * installed package rather than assumed. `@ai-sdk/mcp` is the real, current home for it.
  */
-import { createMCPClient, type MCPClient, type MCPClientConfig } from "@ai-sdk/mcp";
+import {
+  createMCPClient,
+  type Experimental_MCPEventAdapter,
+  type MCPClient,
+  type MCPClientConfig,
+} from "@ai-sdk/mcp";
 
 /** The default endpoint for a local self-hosted Algenta engine. Never a hosted-by-Algenta cloud
  * default -- see the package README's "Self-hosted-first" section. */
 export const DEFAULT_ALGENTA_BASE_URL = "http://localhost:8000/mcp";
 
 export const ALGENTA_BASE_URL_ENV_VAR = "ALGENTA_BASE_URL";
+
+type StandardMCPEventsConfig = Exclude<
+  MCPClientConfig["experimental_events"],
+  { adapter: Experimental_MCPEventAdapter }
+>;
+type AlgentaMCPClientConfig = Omit<MCPClientConfig, "transport" | "experimental_events"> & {
+  experimental_events?: StandardMCPEventsConfig;
+};
 
 export interface ConnectAlgentaMCPClientOptions {
   /** The self-hosted Algenta engine's MCP endpoint. Falls back to `ALGENTA_BASE_URL`, then
@@ -23,8 +36,9 @@ export interface ConnectAlgentaMCPClientOptions {
    * caller's own engine deployment). */
   headers?: Record<string, string>;
   /** Advanced: any other `@ai-sdk/mcp` `createMCPClient` option (`maxRetries`, `clientName`,
-   * `onUncaughtError`, an `authProvider`, etc.), passed through unchanged. */
-  mcpClientConfig?: Omit<MCPClientConfig, "transport">;
+   * `onUncaughtError`, an `authProvider`, store-based `experimental_events`, etc.), passed through
+   * unchanged. Managed event adapters return a different client type and are not accepted here. */
+  mcpClientConfig?: AlgentaMCPClientConfig;
 }
 
 /** Resolves the base URL in the same order documented for `AlgentaToolset` in the sibling Python
