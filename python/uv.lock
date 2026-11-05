@@ -246,15 +246,15 @@ source = { editable = "." }
 
 [[package]]
 name = "algenta-sdk"
-version = "1.0.42"
+version = "1.0.45"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx" },
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/2a/5a/bb272de66576689f518307d6bdf69fdb54b0f5d7de6df20a6ec942311ffe/algenta_sdk-1.0.42.tar.gz", hash = "sha256:83697070c51f8116478f6c90b9ce1f1d462ed964929b81e9c4293c495bd97701", size = 211743, upload-time = "2026-10-31T17:53:15.289Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/c1/e4/c54195ec99ccf2b19edccf620a3a0256487cd602f33fe4f3c217ed530b23/algenta_sdk-1.0.45.tar.gz", hash = "sha256:a4b94ec5c055c8d840e441ac5658176e90777f4c9b433079a6e41f8851464d32", size = 211767, upload-time = "2026-11-02T22:07:06.212Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e7/46/448dec514bc6556d9b17bab2e93958e77f5a242e00ffeb1fdec64a69ce84/algenta_sdk-1.0.42-py3-none-any.whl", hash = "sha256:402659db628ac0c12df0bb448516fcca45f6a13385a3eda6e7d000321bd22882", size = 175242, upload-time = "2026-10-31T17:53:14.085Z" },
+    { url = "https://files.pythonhosted.org/packages/60/98/f8668f998e745fccca9e06d407de1375e311af741ca0512f225c34219ad8/algenta_sdk-1.0.45-py3-none-any.whl", hash = "sha256:242e1f373f47569248705383c8875a236b81ce33a0359dd779714f12ba1aa2cc", size = 175241, upload-time = "2026-11-02T22:07:04.999Z" },
 ]
 
 [[package]]
@@ -1337,7 +1337,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "algenta-sdk", specifier = ">=1.0.42" },
+    { name = "algenta-sdk", specifier = ">=1.0.45" },
     { name = "anyio", marker = "extra == 'dev'" },
     { name = "fastmcp", marker = "extra == 'dev'", specifier = ">=3" },
     { name = "google-adk", specifier = ">=2.10.0" },
@@ -2341,7 +2341,7 @@ quickstart = [
 
 [package.metadata]
 requires-dist = [
-    { name = "algenta-sdk", specifier = ">=1.0.42" },
+    { name = "algenta-sdk", specifier = ">=1.0.45" },
     { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.27" },
     { name = "langchain", marker = "extra == 'quickstart'", specifier = ">=1.4.0" },
     { name = "langchain-core", specifier = ">=1.6.0" },
@@ -4062,7 +4062,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "algenta-sdk", specifier = ">=1.0.42" },
+    { name = "algenta-sdk", specifier = ">=1.0.45" },
     { name = "anyio", marker = "extra == 'dev'" },
     { name = "fastmcp", marker = "extra == 'dev'", specifier = ">=3" },
     { name = "pydantic-ai-slim", extras = ["mcp"], specifier = ">=2.33.0" },
@@ -4921,7 +4921,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "algenta-sdk", specifier = ">=1.0.42" },
+    { name = "algenta-sdk", specifier = ">=1.0.45" },
     { name = "fastmcp", marker = "extra == 'dev'", specifier = ">=3" },
     { name = "fastmcp-slim", extras = ["client"], specifier = ">=3.4.0" },
     { name = "pytest", marker = "extra == 'dev'" },
@@ -5056,7 +5056,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "algenta-sdk", specifier = ">=1.0.42" },
+    { name = "algenta-sdk", specifier = ">=1.0.45" },
     { name = "langchain", specifier = ">=1.4.0" },
     { name = "langchain-algenta", editable = "langchain-algenta" },
     { name = "langgraph", specifier = ">=1.2.11" },
