@@ -39,12 +39,12 @@ classifiers = [
 #
 # Every upper bound below is a real, currently-live, verified-live pin, not a defensive guess --
 # each end of each range was actually installed and run against this package's own test suite
-# (`uv run pytest haystack-algenta -v`, 59 passed both times):
+# (`uv run pytest haystack-algenta -v`, 63 passed both times):
 #   * `haystack-ai` 3.0.0 (this repository's own CI-pinned floor) and 3.1.1 (the newest release
 #     at time of writing) both pass.
-#   * `mcp-haystack` 1.4.1 (CI-pinned floor) and 1.5.1 (newest) both pass.
-#   * `mcp` 1.29.0 (CI-pinned floor) and 1.30.0 (newest 1.x) both pass -- but `mcp==2.0.0` (what
-#     `pip install mcp` resolves to today with no upper bound at all) genuinely breaks this
+#   * `mcp-haystack` 1.4.1 with `mcp` 1.29.0 and 2.1.1 with `mcp` 1.30.0 both pass.
+#   * `mcp==2.0.0` (what `pip install mcp` resolves to today with no upper bound at all)
+#     genuinely breaks this
 #     package's own test suite: `mcp.server.fastmcp.FastMCP` was renamed to
 #     `mcp.server.mcpserver.MCPServer` in that release, so `tests/stub_server.py`'s
 #     `from mcp.server.fastmcp import FastMCP` raises `ModuleNotFoundError` before a single test
