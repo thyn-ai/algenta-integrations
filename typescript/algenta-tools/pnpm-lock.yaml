@@ -71,8 +71,8 @@ importers:
         version: 4.6.7
     devDependencies:
       '@ai-sdk/provider':
-        specifier: ^4.0.35
-        version: 4.0.35
+        specifier: ^4.0.37
+        version: 4.0.37
       '@modelcontextprotocol/sdk':
         specifier: ^1.32.2
         version: 1.32.2(zod@4.6.7)
