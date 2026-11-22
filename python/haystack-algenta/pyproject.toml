@@ -42,6 +42,9 @@ classifiers = [
 # (`uv run pytest haystack-algenta -v`, 59 passed both times):
 #   * `haystack-ai` 3.0.0 (this repository's own CI-pinned floor) and 3.1.1 (the newest release
 #     at time of writing) both pass.
+#   * Every stable `haystack-ai` release from 3.2.0 through 3.5.0 (3.2.0, 3.3.0, 3.4.0, 3.4.1,
+#     and 3.5.0) also passes all 63 tests, including direct verification of the private `State` /
+#     `Agent._run_step` / `_run_hooks` / `_validate_hooks` compatibility seam.
 #   * `mcp-haystack` 1.4.1 (CI-pinned floor) and 1.5.1 (newest) both pass.
 #   * `mcp` 1.29.0 (CI-pinned floor) and 1.30.0 (newest 1.x) both pass -- but `mcp==2.0.0` (what
 #     `pip install mcp` resolves to today with no upper bound at all) genuinely breaks this
