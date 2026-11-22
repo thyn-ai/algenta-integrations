@@ -160,7 +160,7 @@ it proves, both caught and correctly allowed.
 ## Status & roadmap
 
 Every package above is published on PyPI or npm and covered by its own real test
-suite. Two things are still honestly pending:
+suite. Two items are not yet complete:
 
 - **Per-framework conformance adapters** — see [Conformance demo](#conformance-demo).
 - **A small number of engine capabilities whose verification needs a live deployment
