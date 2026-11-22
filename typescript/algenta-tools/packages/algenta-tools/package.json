@@ -52,7 +52,7 @@
   },
   "license": "Apache-2.0",
   "dependencies": {
-    "@ai-sdk/mcp": "^2.0.84"
+    "@ai-sdk/mcp": "^2.0.88"
   },
   "peerDependencies": {
     "ai": "^7.0.0",
@@ -62,7 +62,7 @@
     "@modelcontextprotocol/sdk": "^1.32.2",
     "@types/node": "^26.6.6",
     "@vitest/coverage-v8": "^5.0.5",
-    "ai": "^7.0.165",
+    "ai": "^7.0.173",
     "fast-check": "4.10.2",
     "tsup": "^8.5.1",
     "tsx": "^4.23.15",
