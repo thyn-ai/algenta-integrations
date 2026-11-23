@@ -217,7 +217,7 @@ and this package makes no claim otherwise.
 ## Denial mapping
 
 Verified live against both ends of the version range this package's `pyproject.toml` permits --
-`haystack-ai` 3.0.0 and 3.1.1, `mcp-haystack` 1.4.1 and 1.5.1 (a real `mcp.server.fastmcp.FastMCP`
+`haystack-ai` 3.0.0 and 3.1.1, `mcp-haystack` 1.4.1 and 2.1.1 (a real `mcp.server.fastmcp.FastMCP`
 stub server, real HTTP wire, real `Agent` run loop -- see `tests/test_toolset_scenarios.py`), not
 assumed from documentation.
 
