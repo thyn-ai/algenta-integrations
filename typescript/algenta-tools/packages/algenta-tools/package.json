@@ -1,6 +1,6 @@
 {
   "name": "algenta-tools",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Vercel AI SDK tool integration for Algenta: a governed-execution-aware ToolSet wrapping a self-hosted Algenta engine's MCP tool surface",
   "author": {
     "name": "Thyn",
@@ -61,16 +61,16 @@
   "devDependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",
     "@types/node": "^26.6.6",
-    "@vitest/coverage-v8": "^5.0.5",
+    "@vitest/coverage-v8": "^5.1.0",
     "ai": "^7.0.173",
     "fast-check": "4.10.2",
-    "tsup": "^8.5.1",
+    "tsup": "^9.0.0",
     "tsx": "^4.23.15",
     "typescript": "~5.6.3",
-    "vitest": "^5.0.5",
+    "vitest": "^5.1.0",
     "zod": "^4.6.7"
   },
   "engines": {
-    "node": ">=22"
+    "node": "^22.18.0 || ^24.11.0 || >=26.0.0"
   }
 }
